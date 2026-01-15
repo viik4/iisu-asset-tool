@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 )
 
-from app_paths import get_app_dir, get_logo_path, get_theme_path, get_fonts_dir, get_src_dir, get_config_path
+from app_paths import get_app_dir, get_logo_path, get_theme_path, get_fonts_dir, get_src_dir, get_config_path, verify_required_assets
 
 
 class DotPatternWidget(QWidget):
@@ -591,6 +591,23 @@ def main():
         print(f"Note: Could not load saved API keys: {e}")
 
     app = QApplication(sys.argv)
+
+    # Check for missing required assets and warn user
+    asset_check = verify_required_assets()
+    if asset_check['missing']:
+        from PySide6.QtWidgets import QMessageBox
+        missing_list = "\n".join(f"  - {item}" for item in asset_check['missing'])
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Missing Assets")
+        msg.setText("Some required asset files are missing.")
+        msg.setInformativeText(
+            f"The application may not work correctly.\n\n"
+            f"App directory: {asset_check['app_dir']}\n\n"
+            f"Missing:\n{missing_list}\n\n"
+            f"Please ensure you extracted all files from the release archive."
+        )
+        msg.exec()
 
     # Load Continuum Bold font if available
     fonts_dir = get_fonts_dir()

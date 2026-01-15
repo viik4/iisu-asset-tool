@@ -3,7 +3,7 @@ import os
 
 block_cipher = None
 
-# Minimal build - assets are distributed alongside the executable
+# Minimal build - assets are distributed alongside the executable by GitHub Actions
 a = Analysis(
     ['run_gui.py'],
     pathex=[],

@@ -37,5 +37,9 @@ if __name__ == "__main__":
     # Set working directory before importing other modules
     setup_working_directory()
 
+    # Print asset diagnostics to help debug path issues
+    from app_paths import print_asset_diagnostics
+    print_asset_diagnostics()
+
     from ui_app_with_tabs import main
     main()

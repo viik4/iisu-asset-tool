@@ -432,19 +432,38 @@ class CoverPreview(QLabel):
         self._dragging = False
         self._last_pos = None
 
+        # Track if PSD is available
+        self._psd_available = False
+        self._psd_error = None
+        self._check_psd_availability()
+
         # Debounce timer
         self._update_timer = QTimer()
         self._update_timer.setSingleShot(True)
         self._update_timer.timeout.connect(self._do_update)
 
         # Don't schedule update on init - wait for user to upload artwork
-        # Show a placeholder text instead
-        self.setText("Upload artwork to generate cover preview")
+        # Show a placeholder text or error
+        if self._psd_available:
+            self.setText("Upload artwork to generate cover preview")
+        else:
+            self.setText(f"Template Error:\n{self._psd_error}")
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
             "border: 2px solid #3A4048; border-radius: 8px; "
             "color: #666; font-size: 14px;"
         )
+
+    def _check_psd_availability(self):
+        """Check if the PSD template file exists and is accessible."""
+        psd_path = get_templates_dir() / "iisuTemplates.psd"
+        if psd_path.exists():
+            self._psd_available = True
+            self._psd_error = None
+        else:
+            self._psd_available = False
+            self._psd_error = f"PSD template not found at: {psd_path}"
+            print(f"[CoverPreview] {self._psd_error}")
 
     def set_artwork(self, image: Image.Image):
         self.artwork_image = image
@@ -474,6 +493,11 @@ class CoverPreview(QLabel):
         if self.artwork_image is None:
             return
 
+        # Check if PSD is available
+        if not self._psd_available:
+            self._show_error_preview(self._psd_error or "PSD template not available")
+            return
+
         try:
             # Clear placeholder text and reset style
             self.setText("")
@@ -498,9 +522,33 @@ class CoverPreview(QLabel):
             self.setPixmap(pixmap)
 
         except Exception as e:
-            print(f"Preview update error: {e}")
+            error_msg = f"Error: {e}"
+            print(f"[CoverPreview] {error_msg}")
             import traceback
             traceback.print_exc()
+            self._show_error_preview(error_msg)
+
+    def _show_error_preview(self, message: str):
+        """Display an error message in the preview area."""
+        from PySide6.QtGui import QImage
+        # Create a simple error image
+        error_img = Image.new("RGBA", (512, 512), (40, 44, 52, 255))
+        draw = ImageDraw.Draw(error_img)
+        # Draw error text
+        draw.text((256, 240), "Template Error", fill=(255, 100, 100, 255), anchor="mm")
+        # Wrap long messages
+        if len(message) > 50:
+            lines = [message[i:i+45] for i in range(0, len(message), 45)]
+            y = 270
+            for line in lines[:4]:  # Max 4 lines
+                draw.text((256, y), line, fill=(180, 180, 180, 255), anchor="mm")
+                y += 20
+        else:
+            draw.text((256, 270), message, fill=(180, 180, 180, 255), anchor="mm")
+
+        img_bytes = error_img.tobytes("raw", "RGBA")
+        qimage = QImage(img_bytes, 512, 512, QImage.Format_RGBA8888)
+        self.setPixmap(QPixmap.fromImage(qimage))
 
     def mousePressEvent(self, event):
         if self.artwork_image and event.button() == Qt.LeftButton:

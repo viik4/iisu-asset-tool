@@ -246,12 +246,28 @@ class BorderPreview(QLabel):
         self._dragging = False
         self._last_pos = None
 
+        # Track if PSD is available
+        self._psd_available = False
+        self._psd_error = None
+
         # Debounce timer for performance
         self._update_timer = QTimer()
         self._update_timer.setSingleShot(True)
         self._update_timer.timeout.connect(self._do_update)
 
+        self._check_psd_availability()
         self.schedule_update()
+
+    def _check_psd_availability(self):
+        """Check if the PSD template file exists and is accessible."""
+        psd_path = get_templates_dir() / "iisuTemplates.psd"
+        if psd_path.exists():
+            self._psd_available = True
+            self._psd_error = None
+        else:
+            self._psd_available = False
+            self._psd_error = f"PSD template not found at: {psd_path}"
+            print(f"[BorderPreview] {self._psd_error}")
 
     def set_color1(self, color: QColor):
         self.color1 = color
@@ -280,6 +296,11 @@ class BorderPreview(QLabel):
 
     def _do_update(self):
         """Actually perform the update."""
+        # Check if PSD is available first
+        if not self._psd_available:
+            self._show_error_preview(self._psd_error or "PSD template not available")
+            return
+
         try:
             border = create_border_from_psd(self.color1, self.color2, self.gradient_angle, self.icon_image,
                                            icon_scale=self.icon_scale, icon_centering=self.icon_centering)
@@ -299,9 +320,32 @@ class BorderPreview(QLabel):
             del border
             del qimage
         except Exception as e:
-            print(f"Error updating preview: {e}")
+            error_msg = f"Error: {e}"
+            print(f"[BorderPreview] {error_msg}")
             import traceback
             traceback.print_exc()
+            self._show_error_preview(error_msg)
+
+    def _show_error_preview(self, message: str):
+        """Display an error message in the preview area."""
+        # Create a simple error image
+        error_img = Image.new("RGBA", (512, 512), (40, 44, 52, 255))
+        draw = ImageDraw.Draw(error_img)
+        # Draw error text (simple, no custom font needed)
+        draw.text((256, 240), "Template Error", fill=(255, 100, 100, 255), anchor="mm")
+        # Wrap long messages
+        if len(message) > 50:
+            lines = [message[i:i+45] for i in range(0, len(message), 45)]
+            y = 270
+            for line in lines[:4]:  # Max 4 lines
+                draw.text((256, y), line, fill=(180, 180, 180, 255), anchor="mm")
+                y += 20
+        else:
+            draw.text((256, 270), message, fill=(180, 180, 180, 255), anchor="mm")
+
+        img_bytes = error_img.tobytes("raw", "RGBA")
+        qimage = QImage(img_bytes, 512, 512, QImage.Format_RGBA8888)
+        self.setPixmap(QPixmap.fromImage(qimage))
 
     def export_border(self, output_path: Path):
         """Export full resolution border."""

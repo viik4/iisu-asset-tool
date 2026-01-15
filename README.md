@@ -1,4 +1,3 @@
-
 # iiSU Asset Tool
 
 Create custom icons, borders, and covers for your game library. Built for the [iiSU Network](https://iisu.network/) community.
@@ -7,7 +6,12 @@ Create custom icons, borders, and covers for your game library. Built for the [i
 
 Download the latest release from the [Releases](https://github.com/viik-4/iisu-asset-tool/releases) page.
 
-Extract and run `iiSU_Asset_Tool.exe`.
+| Platform | File |
+|----------|------|
+| Windows | `iiSU_Asset_Tool.exe` |
+| macOS | `iiSU_Asset_Tool.dmg` |
+| Linux | `iiSU_Asset_Tool.AppImage` |
+| Android | `iiSU_Asset_Tool.apk` |
 
 ## Features
 
@@ -16,6 +20,7 @@ Automatically fetch game artwork from multiple sources and apply platform-specif
 - Batch process hundreds of games at once
 - Smart logo detection and cropping
 - Multiple artwork sources with fallback
+- Region detection and preference filtering
 
 ### Custom Icons
 Upload your own images and apply borders with interactive positioning.
@@ -28,6 +33,7 @@ Create gradient borders with custom colors and platform icons.
 - Color picker with gradient presets
 - Upload custom platform icons (PNG, SVG)
 - Adjustable icon positioning and scale
+- PSD template-based rendering
 
 ### Custom Covers
 Generate cover artwork with gradients, overlays, and platform branding.
@@ -35,25 +41,41 @@ Generate cover artwork with gradients, overlays, and platform branding.
 - Mouse wheel zoom
 - Gradient color customization
 
+### ROM Browser
+Browse and process ROMs from local or external drives.
+- Automatic iiSU directory detection
+- USB drive scanning
+- ADB device support for Android
+- Platform detection from folder structure
+
+### Additional Features
+- **Logo Scraping** - Generate title.png files from game logos
+- **Hero Images** - Download banner/hero artwork
+- **Screenshot Scraping** - Capture 1-10 screenshots per game
+- **Light/Dark Themes** - System-aware theme switching
+- **Interactive Artwork Selection** - Choose from multiple artwork options
+- **Custom Border Upload** - Use your own border designs
+- **Fallback Platform Icons** - Automatic fallback for missing artwork
+- **Device Copying** - Transfer assets via ADB
+- **Export Formats** - PNG or JPEG with quality control
+
 ## Artwork Sources
 
-- [SteamGridDB](https://www.steamgriddb.com/) - Community-curated game artwork
-- [IGDB](https://www.igdb.com/) - Internet Game Database
-- [TheGamesDB](https://thegamesdb.net/) - Game information database
-- [Libretro Thumbnails](https://thumbnails.libretro.com/) - RetroArch thumbnails
+| Source | Description | API Key |
+|--------|-------------|---------|
+| [SteamGridDB](https://www.steamgriddb.com/) | Community-curated game artwork | Optional |
+| [IGDB](https://www.igdb.com/) | Internet Game Database | Optional |
+| [TheGamesDB](https://thegamesdb.net/) | Game information database | Built-in |
+| [Libretro Thumbnails](https://thumbnails.libretro.com/) | RetroArch thumbnails | Built-in |
 
-## API Keys
+### API Key Setup
 
-Some artwork sources require API keys:
+| Source | How to Get |
+|--------|------------|
+| SteamGridDB | [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api) |
+| IGDB | [Twitch Developer Portal](https://dev.twitch.tv/console/apps) (Client ID + Secret) |
 
-| Source | Required | How to Get |
-|--------|----------|------------|
-| SteamGridDB | Optional | [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api) |
-| IGDB | Optional | [Twitch Developer Portal](https://dev.twitch.tv/console/apps) |
-| TheGamesDB | Built-in | No configuration needed |
-| Libretro | Built-in | No configuration needed |
-
-Configure API keys in Settings (gear icon).
+Configure API keys in Settings (gear icon). Keys are encrypted and stored securely.
 
 ## Supported Platforms
 
@@ -69,7 +91,64 @@ Configure API keys in Settings (gear icon).
 
 Generated assets are saved to:
 - **Scraped Icons:** `output/` folder (organized by platform)
-- **Custom exports:** Your chosen location
+- **Review Queue:** `review/` folder (for manual review)
+- **Custom Exports:** Your chosen location
+
+## Running from Source
+
+### Requirements
+- Python 3.8+
+- Dependencies listed in `requirements.txt`
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/viik-4/iisu-asset-tool.git
+cd iisu-asset-tool
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the GUI
+python run_gui.py
+
+# Or run the CLI
+python run.py
+```
+
+### Building Executables
+
+```bash
+# Windows
+pyinstaller build_windows.spec
+
+# macOS
+pyinstaller build_macos.spec
+
+# Linux
+pyinstaller build_linux.spec
+```
+
+## Android App
+
+The Android version is a native Kotlin app located in the `android/` directory.
+
+### Building
+1. Open `android/` in Android Studio
+2. Sync Gradle dependencies
+3. Build APK or run on device
+
+## Configuration
+
+Edit `config.yaml` to customize:
+- Output image size (default: 1024px)
+- Export format (PNG/JPEG)
+- API timeouts and delays
+- Platform definitions
+- Artwork source priorities
+- Logo detection settings
+- Theme preferences
 
 ## License
 
