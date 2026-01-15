@@ -11,6 +11,10 @@
     Text Secondary: #888888
     -->
 
+    <!-- Basic colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+
     <!-- Primary colors - matches iiSU desktop theme -->
     <color name="primary">#1A1E22</color>
     <color name="primary_variant">#212529</color>
