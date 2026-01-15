@@ -5,9 +5,18 @@ Supports iiSU ROM directory structure and manual folder selection.
 """
 import os
 import re
+import sys
 import string
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any
+
+
+def _get_subprocess_flags():
+    """Get platform-specific subprocess flags to hide console on Windows."""
+    if sys.platform == 'win32':
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
 
 # Common ROM file extensions by platform
 ROM_EXTENSIONS = {
@@ -895,10 +904,10 @@ def get_adb_devices() -> List[Tuple[str, str]]:
         return []
 
     try:
-        import subprocess
         result = subprocess.run(
             [adb_path, "devices"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=10,
+            **_get_subprocess_flags()
         )
 
         devices = []
@@ -941,7 +950,8 @@ def scan_adb_device(device_id: str = "", rom_path: str = "/sdcard/roms") -> Dict
         """Run ADB command and return stdout, handling encoding issues."""
         try:
             # Use bytes mode to handle encoding issues with special characters
-            result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+            result = subprocess.run(cmd, capture_output=True, timeout=timeout,
+                                    **_get_subprocess_flags())
             if result.returncode != 0:
                 return None
             # Try UTF-8 first, fall back to latin-1 which accepts all bytes
@@ -1183,7 +1193,8 @@ foreach ($folder in $platformFolders) {{
             print(f"MTP scan: Starting scan of {device_name}/{subfolder}...")
             result = subprocess.run(
                 ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', script_path],
-                capture_output=True, text=True, timeout=180
+                capture_output=True, text=True, timeout=180,
+                **_get_subprocess_flags()
             )
 
             if result.returncode == 0:
@@ -1326,7 +1337,8 @@ $n.Items() | ForEach-Object {
         try:
             result = subprocess.run([
                 'powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', script_path
-            ], capture_output=True, text=True, timeout=10)
+            ], capture_output=True, text=True, timeout=10,
+            **_get_subprocess_flags())
 
             if result.returncode == 0 and result.stdout.strip():
                 for line in result.stdout.strip().split('\n'):

@@ -1,11 +1,13 @@
 import os
 import re
+import sys
 import json
 import time
 import hashlib
 import zipfile
 import threading
 import unicodedata
+import subprocess
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
@@ -17,6 +19,13 @@ from urllib.parse import unquote
 import requests
 import yaml
 from PIL import Image, ImageOps, ImageChops, ImageFilter
+
+
+def _get_subprocess_flags():
+    """Get platform-specific subprocess flags to hide console on Windows."""
+    if sys.platform == 'win32':
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
 
 # Import search utilities from rom_parser
 try:
@@ -3765,7 +3774,8 @@ def copy_output_to_device(
     try:
         result = subprocess.run(
             [adb_path, "devices"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=10,
+            **_get_subprocess_flags()
         )
         lines = result.stdout.strip().split('\n')[1:]  # Skip header
         devices = [l.split('\t')[0] for l in lines if '\tdevice' in l]
@@ -3805,7 +3815,8 @@ def copy_output_to_device(
             try:
                 subprocess.run(
                     [adb_path, "shell", "mkdir", "-p", device_game_path],
-                    capture_output=True, timeout=30
+                    capture_output=True, timeout=30,
+                    **_get_subprocess_flags()
                 )
             except Exception as e:
                 _emit_log(callbacks, f"[DEVICE] Failed to create directory for {game_name}: {e}")
@@ -3822,7 +3833,8 @@ def copy_output_to_device(
                 try:
                     result = subprocess.run(
                         [adb_path, "push", str(file_path), device_file_path],
-                        capture_output=True, text=True, timeout=60
+                        capture_output=True, text=True, timeout=60,
+                        **_get_subprocess_flags()
                     )
 
                     if result.returncode == 0:

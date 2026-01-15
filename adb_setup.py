@@ -176,9 +176,12 @@ def download_platform_tools(
 
         # Test ADB
         try:
+            run_kwargs = {'capture_output': True, 'text': True, 'timeout': 10}
+            if sys.platform == 'win32':
+                run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
             result = subprocess.run(
                 [str(adb_exe), "version"],
-                capture_output=True, text=True, timeout=10
+                **run_kwargs
             )
             if result.returncode == 0:
                 version_line = result.stdout.split('\n')[0] if result.stdout else "Unknown version"

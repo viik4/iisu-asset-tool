@@ -4,6 +4,7 @@ Allows browsing and replacing existing assets on connected Android devices via A
 """
 import os
 import re
+import sys
 import subprocess
 import shutil
 from pathlib import Path
@@ -18,6 +19,18 @@ from PySide6.QtWidgets import (
 )
 
 from adb_setup import is_adb_installed
+
+
+def get_subprocess_kwargs():
+    """Get platform-specific subprocess kwargs to hide console windows on Windows."""
+    kwargs = {
+        'capture_output': True,
+        'text': True,
+    }
+    if sys.platform == 'win32':
+        # Prevent console window from flashing on Windows
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    return kwargs
 
 
 def normalize_game_name(name: str) -> str:
@@ -87,9 +100,10 @@ def list_device_directory(adb_path: str, device_path: str) -> List[str]:
     """List contents of a directory on the device."""
     try:
         # Quote the path to handle spaces
+        kwargs = get_subprocess_kwargs()
         result = subprocess.run(
             [adb_path, "shell", f'ls -1 "{device_path}"'],
-            capture_output=True, text=True, timeout=30
+            timeout=30, **kwargs
         )
         print(f"[DEBUG] ls '{device_path}' returncode={result.returncode}")
         if result.stderr:
@@ -109,9 +123,10 @@ def check_path_is_directory(adb_path: str, device_path: str) -> bool:
     """Check if a path on the device is a directory."""
     try:
         # Use a single shell command string so && is interpreted correctly
+        kwargs = get_subprocess_kwargs()
         result = subprocess.run(
             [adb_path, "shell", f'test -d "{device_path}" && echo yes'],
-            capture_output=True, text=True, timeout=10
+            timeout=10, **kwargs
         )
         is_dir = "yes" in result.stdout
         print(f"[DEBUG] check_path_is_directory '{device_path}' = {is_dir}")
@@ -153,9 +168,10 @@ class DeviceScanThread(QThread):
 
                 # List game folders in platform - use ls -la to identify directories
                 try:
+                    kwargs = get_subprocess_kwargs()
                     result = subprocess.run(
                         [self.adb_path, "shell", f'ls -la "{platform_path}"'],
-                        capture_output=True, text=True, timeout=60
+                        timeout=60, **kwargs
                     )
                     print(f"[DEBUG] ls -la {platform_path} returncode={result.returncode}")
 
@@ -234,9 +250,10 @@ class DevicePushThread(QThread):
                 try:
                     # Push file to existing device folder
                     # adb push handles paths with spaces correctly
+                    kwargs = get_subprocess_kwargs()
                     result = subprocess.run(
                         [self.adb_path, "push", local_path, device_path],
-                        capture_output=True, text=True, timeout=60
+                        timeout=60, **kwargs
                     )
 
                     if result.returncode == 0:
@@ -411,9 +428,10 @@ class DeviceAssetDialog(QDialog):
         else:
             # Check for connected devices
             try:
+                kwargs = get_subprocess_kwargs()
                 result = subprocess.run(
                     [self.adb_path, "devices"],
-                    capture_output=True, text=True, timeout=10
+                    timeout=10, **kwargs
                 )
                 lines = result.stdout.strip().split('\n')[1:]
                 devices = [l.split('\t')[0] for l in lines if '\tdevice' in l]

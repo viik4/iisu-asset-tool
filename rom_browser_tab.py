@@ -2,6 +2,7 @@
 ROM Browser Tab for iiSU Asset Tool
 Browse ROMs from iiSU directory or manual folder selection and generate icons.
 """
+import sys
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -27,6 +28,14 @@ from rom_parser import (
 from adb_setup import setup_adb, is_adb_installed, get_setup_instructions
 from app_paths import get_config_path, get_borders_dir, get_platform_icons_dir
 import run_backend
+import subprocess
+
+
+def _get_subprocess_flags():
+    """Get platform-specific subprocess flags to hide console on Windows."""
+    if sys.platform == 'win32':
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {}
 
 
 class BackendCallbacks(QObject):
@@ -554,9 +563,13 @@ if ($device) {{
                     f.write(ps_script)
                     script_path = f.name
 
+                # Hide console window on Windows
+                run_kwargs = {'capture_output': True, 'text': True, 'timeout': 60}
+                if sys.platform == 'win32':
+                    run_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
                 result = subprocess.run(
                     ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', script_path],
-                    capture_output=True, text=True, timeout=60
+                    **run_kwargs
                 )
 
                 import os
@@ -1477,7 +1490,8 @@ if ($device) {{
             # List platform folders
             result = subprocess.run(
                 [adb_path, "-s", device_id, "shell", f'ls -1 "{assets_path}"'],
-                capture_output=True, text=True, timeout=30, encoding='utf-8', errors='replace'
+                capture_output=True, text=True, timeout=30, encoding='utf-8', errors='replace',
+                **_get_subprocess_flags()
             )
 
             if result.returncode != 0:
@@ -1503,7 +1517,8 @@ if ($device) {{
                 try:
                     result = subprocess.run(
                         [adb_path, "-s", device_id, "shell", f'ls -la "{platform_path}"'],
-                        capture_output=True, text=True, timeout=60, encoding='utf-8', errors='replace'
+                        capture_output=True, text=True, timeout=60, encoding='utf-8', errors='replace',
+                        **_get_subprocess_flags()
                     )
 
                     if result.returncode != 0:
@@ -1528,7 +1543,8 @@ if ($device) {{
                                     # Check what files exist in the game folder
                                     files_result = subprocess.run(
                                         [adb_path, "-s", device_id, "shell", f'ls -1 "{game_path}"'],
-                                        capture_output=True, text=True, timeout=10, encoding='utf-8', errors='replace'
+                                        capture_output=True, text=True, timeout=10, encoding='utf-8', errors='replace',
+                                        **_get_subprocess_flags()
                                     )
 
                                     files = []
