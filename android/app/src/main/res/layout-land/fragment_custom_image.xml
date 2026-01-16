@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Landscape layout - optimized for horizontal space with compact elements -->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_md">
+
+        <!-- Title - smaller in landscape -->
+        <TextView
+            android:id="@+id/textTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/custom_image_title"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/theme_text_primary" />
+
+        <!-- Accent line under title -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginTop="@dimen/spacing_xs"
+            android:layout_marginBottom="@dimen/spacing_sm"
+            android:background="@drawable/bg_accent_line" />
+
+        <!-- Main content - horizontal layout in landscape -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <!-- Left column: Image selection and preview -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginEnd="@dimen/spacing_sm">
+
+                <!-- Select Image Card - compact -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="@color/theme_surface"
+                    app:cardCornerRadius="8dp"
+                    app:cardElevation="2dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="@color/theme_border_color">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="@dimen/spacing_sm">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Step 1: Select Image"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/accent_cyan" />
+
+                        <!-- Select Image Button -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/buttonSelectImage"
+                            android:layout_width="match_parent"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="@dimen/spacing_xs"
+                            android:text="@string/custom_select_image"
+                            android:textSize="12sp"
+                            style="@style/IisuPrimaryButton"
+                            app:backgroundTint="@null"
+                            app:icon="@drawable/ic_image"
+                            app:iconGravity="textStart"
+                            app:cornerRadius="8dp" />
+
+                    </LinearLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Image Preview Card - smaller in landscape -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardPreview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    app:cardBackgroundColor="@color/theme_surface"
+                    app:cardCornerRadius="8dp"
+                    app:cardElevation="2dp"
+                    app:strokeWidth="2dp"
+                    app:strokeColor="@color/theme_border_color">
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <ImageView
+                            android:id="@+id/imagePreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="160dp"
+                            android:scaleType="fitCenter"
+                            android:padding="@dimen/spacing_sm"
+                            android:background="@color/theme_card_background"
+                            android:contentDescription="@string/custom_image_title"
+                            tools:src="@android:drawable/ic_menu_gallery" />
+
+                        <com.google.android.material.progressindicator.CircularProgressIndicator
+                            android:id="@+id/progressBar"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:indeterminate="true"
+                            android:visibility="gone" />
+
+                    </FrameLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+            </LinearLayout>
+
+            <!-- Right column: Border selection and actions -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="@dimen/spacing_sm">
+
+                <!-- Border Selection Card - compact -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="@color/theme_surface"
+                    app:cardCornerRadius="8dp"
+                    app:cardElevation="2dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="@color/theme_border_color">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="@dimen/spacing_sm">
+
+                        <TextView
+                            android:id="@+id/labelBorders"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Step 2: Select Border"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/accent_cyan" />
+
+                        <!-- Border Grid - smaller height in landscape -->
+                        <androidx.recyclerview.widget.RecyclerView
+                            android:id="@+id/recyclerViewBorders"
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:layout_marginTop="@dimen/spacing_xs"
+                            android:clipToPadding="false"
+                            tools:listitem="@layout/item_border" />
+
+                    </LinearLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Action Buttons Card - compact -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    app:cardBackgroundColor="@color/theme_surface"
+                    app:cardCornerRadius="8dp"
+                    app:cardElevation="2dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="@color/theme_border_color">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="@dimen/spacing_sm">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Step 3: Apply &amp; Save"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/accent_cyan" />
+
+                        <!-- Buttons row -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_marginTop="@dimen/spacing_xs">
+
+                            <!-- Apply Button -->
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/buttonApply"
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="4dp"
+                                android:text="Apply"
+                                android:textSize="11sp"
+                                android:enabled="false"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                app:strokeColor="@color/theme_border_color"
+                                app:cornerRadius="8dp" />
+
+                            <!-- Save Button -->
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/buttonSave"
+                                android:layout_width="0dp"
+                                android:layout_weight="1"
+                                android:layout_height="36dp"
+                                android:layout_marginStart="4dp"
+                                android:text="Save"
+                                android:textSize="11sp"
+                                android:enabled="false"
+                                style="@style/IisuSecondaryButton"
+                                app:backgroundTint="@null"
+                                app:icon="@drawable/ic_save"
+                                app:iconGravity="textStart"
+                                app:iconSize="16dp"
+                                app:cornerRadius="8dp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                </com.google.android.material.card.MaterialCardView>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

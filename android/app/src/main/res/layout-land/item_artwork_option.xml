@@ -5,7 +5,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/cardOption"
-    android:layout_width="100dp"
+    android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:layout_marginEnd="8dp"
     android:clickable="true"
@@ -22,8 +22,9 @@
         android:orientation="vertical"
         android:padding="6dp">
 
-        <!-- Thumbnail - smaller in landscape -->
+        <!-- Thumbnail - adaptive size for different artwork types -->
         <FrameLayout
+            android:id="@+id/frameThumbnail"
             android:layout_width="match_parent"
             android:layout_height="80dp">
 
@@ -31,7 +32,7 @@
                 android:id="@+id/imageThumbnail"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:scaleType="centerCrop"
+                android:scaleType="fitCenter"
                 android:background="@color/card_background"
                 tools:src="@drawable/ic_iisu_home" />
 

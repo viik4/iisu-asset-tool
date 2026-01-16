@@ -158,7 +158,12 @@ class GameListFragment : Fragment() {
             scrapingCancelled.set(true)
             scrapingJob?.cancel()
 
-            Toast.makeText(requireContext(), "Cancelling scraping...", Toast.LENGTH_SHORT).show()
+            // Immediately update UI - don't wait for network operations to finish
+            setScrapingState(false)
+            scrapingJob = null
+
+            Toast.makeText(requireContext(), "Scraping cancelled", Toast.LENGTH_SHORT).show()
+            refreshGameList()
         }
     }
 
@@ -509,18 +514,19 @@ class GameListFragment : Fragment() {
 
                 jobs.awaitAll()
 
-                val wasCancelled = scrapingCancelled.get()
-                finishScraping(
-                    "Icons: ${successCount.get()} found, ${failCount.get()} not found",
-                    wasCancelled
-                )
-            } catch (e: Exception) {
-                if (scrapingCancelled.get()) {
+                // Only finish if not already cancelled (cancel button handles UI)
+                if (!scrapingCancelled.get()) {
                     finishScraping(
                         "Icons: ${successCount.get()} found, ${failCount.get()} not found",
-                        wasCancelled = true
+                        wasCancelled = false
                     )
-                } else {
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Job was cancelled - UI already updated by cancelScraping()
+                // Just clean up the flag
+                scrapingCancelled.set(false)
+            } catch (e: Exception) {
+                if (!scrapingCancelled.get()) {
                     finishScraping("Error: ${e.message}")
                 }
             }
@@ -580,18 +586,18 @@ class GameListFragment : Fragment() {
 
                 jobs.awaitAll()
 
-                val wasCancelled = scrapingCancelled.get()
-                finishScraping(
-                    "Heroes: ${successCount.get()} found, ${failCount.get()} not found",
-                    wasCancelled
-                )
-            } catch (e: Exception) {
-                if (scrapingCancelled.get()) {
+                // Only finish if not already cancelled (cancel button handles UI)
+                if (!scrapingCancelled.get()) {
                     finishScraping(
                         "Heroes: ${successCount.get()} found, ${failCount.get()} not found",
-                        wasCancelled = true
+                        wasCancelled = false
                     )
-                } else {
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Job was cancelled - UI already updated by cancelScraping()
+                scrapingCancelled.set(false)
+            } catch (e: Exception) {
+                if (!scrapingCancelled.get()) {
                     finishScraping("Error: ${e.message}")
                 }
             }
@@ -651,18 +657,18 @@ class GameListFragment : Fragment() {
 
                 jobs.awaitAll()
 
-                val wasCancelled = scrapingCancelled.get()
-                finishScraping(
-                    "Logos: ${successCount.get()} found, ${failCount.get()} not found",
-                    wasCancelled
-                )
-            } catch (e: Exception) {
-                if (scrapingCancelled.get()) {
+                // Only finish if not already cancelled (cancel button handles UI)
+                if (!scrapingCancelled.get()) {
                     finishScraping(
                         "Logos: ${successCount.get()} found, ${failCount.get()} not found",
-                        wasCancelled = true
+                        wasCancelled = false
                     )
-                } else {
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Job was cancelled - UI already updated by cancelScraping()
+                scrapingCancelled.set(false)
+            } catch (e: Exception) {
+                if (!scrapingCancelled.get()) {
                     finishScraping("Error: ${e.message}")
                 }
             }
@@ -729,18 +735,18 @@ class GameListFragment : Fragment() {
 
                 jobs.awaitAll()
 
-                val wasCancelled = scrapingCancelled.get()
-                finishScraping(
-                    "Screenshots: ${successCount.get()} found, ${failCount.get()} not found",
-                    wasCancelled
-                )
-            } catch (e: Exception) {
-                if (scrapingCancelled.get()) {
+                // Only finish if not already cancelled (cancel button handles UI)
+                if (!scrapingCancelled.get()) {
                     finishScraping(
                         "Screenshots: ${successCount.get()} found, ${failCount.get()} not found",
-                        wasCancelled = true
+                        wasCancelled = false
                     )
-                } else {
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Job was cancelled - UI already updated by cancelScraping()
+                scrapingCancelled.set(false)
+            } catch (e: Exception) {
+                if (!scrapingCancelled.get()) {
                     finishScraping("Error: ${e.message}")
                 }
             }
@@ -889,24 +895,20 @@ class GameListFragment : Fragment() {
 
                 val totalSuccess = iconSuccess.get() + heroSuccess.get() + logoSuccess.get()
                 val totalFail = iconFail.get() + heroFail.get() + logoFail.get()
-                val wasCancelled = scrapingCancelled.get()
 
-                finishScraping(
-                    "Complete: $totalSuccess found, $totalFail not found\n" +
-                        "(Icons: ${iconSuccess.get()}, Heroes: ${heroSuccess.get()}, Logos: ${logoSuccess.get()})",
-                    wasCancelled
-                )
-            } catch (e: Exception) {
-                val totalSuccess = iconSuccess.get() + heroSuccess.get() + logoSuccess.get()
-                val totalFail = iconFail.get() + heroFail.get() + logoFail.get()
-
-                if (scrapingCancelled.get()) {
+                // Only finish if not already cancelled (cancel button handles UI)
+                if (!scrapingCancelled.get()) {
                     finishScraping(
-                        "Partial: $totalSuccess found, $totalFail not found\n" +
+                        "Complete: $totalSuccess found, $totalFail not found\n" +
                             "(Icons: ${iconSuccess.get()}, Heroes: ${heroSuccess.get()}, Logos: ${logoSuccess.get()})",
-                        wasCancelled = true
+                        wasCancelled = false
                     )
-                } else {
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Job was cancelled - UI already updated by cancelScraping()
+                scrapingCancelled.set(false)
+            } catch (e: Exception) {
+                if (!scrapingCancelled.get()) {
                     finishScraping("Error: ${e.message}")
                 }
             }
@@ -958,34 +960,75 @@ class GameListFragment : Fragment() {
                 if (_binding == null || scrapingCancelled.get()) return@launch
 
                 if (iconResult.options.isNotEmpty()) {
-                    ArtworkPickerDialog.show(
-                        requireContext(),
-                        ArtworkPickerDialog.ArtworkType.ICON,
-                        iconResult
-                    ) { selectedOption ->
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            if (scrapingCancelled.get() || _binding == null) return@launch
+                    ArtworkPickerDialog.showWithSkip(
+                        context = requireContext(),
+                        artworkType = ArtworkPickerDialog.ArtworkType.ICON,
+                        searchResult = iconResult,
+                        onOptionSelected = { selectedOption ->
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                if (scrapingCancelled.get() || _binding == null) return@launch
 
-                            withContext(Dispatchers.IO) {
-                                artworkScraper.saveIconFromOption(selectedOption, game, platformName)
-                            }
-                            // Continue to hero picker
-                            showHeroPickerForGame(game) {
-                                showLogoPickerForGame(game) {
+                                withContext(Dispatchers.IO) {
+                                    artworkScraper.saveIconFromOption(selectedOption, game, platformName)
+                                }
+                                // Continue to hero picker with skip support
+                                val cancelBulk = {
+                                    scrapingCancelled.set(true)
+                                    finishScraping("Processed $currentGameIndex/${games.size} games", wasCancelled = true)
+                                }
+                                val skipToNextGame = {
                                     currentGameIndex++
                                     processNextGame()
                                 }
+                                showHeroPickerForGame(
+                                    game = game,
+                                    onComplete = {
+                                        showLogoPickerForGame(
+                                            game = game,
+                                            onComplete = skipToNextGame,
+                                            onSkipGame = skipToNextGame,
+                                            onCancelBulk = cancelBulk
+                                        )
+                                    },
+                                    onSkipGame = skipToNextGame,
+                                    onCancelBulk = cancelBulk
+                                )
                             }
-                        }
-                    }
-                } else {
-                    // No icons found, move to hero
-                    showHeroPickerForGame(game) {
-                        showLogoPickerForGame(game) {
+                        },
+                        onSkip = {
+                            // Skip this game entirely, move to next
                             currentGameIndex++
                             processNextGame()
+                        },
+                        onCancel = {
+                            // Cancel entire bulk operation
+                            scrapingCancelled.set(true)
+                            finishScraping("Processed $currentGameIndex/${games.size} games", wasCancelled = true)
                         }
+                    )
+                } else {
+                    // No icons found, move to hero with skip support
+                    val cancelBulk = {
+                        scrapingCancelled.set(true)
+                        finishScraping("Processed $currentGameIndex/${games.size} games", wasCancelled = true)
                     }
+                    val skipToNextGame = {
+                        currentGameIndex++
+                        processNextGame()
+                    }
+                    showHeroPickerForGame(
+                        game = game,
+                        onComplete = {
+                            showLogoPickerForGame(
+                                game = game,
+                                onComplete = skipToNextGame,
+                                onSkipGame = skipToNextGame,
+                                onCancelBulk = cancelBulk
+                            )
+                        },
+                        onSkipGame = skipToNextGame,
+                        onCancelBulk = cancelBulk
+                    )
                 }
             }
         }
@@ -993,7 +1036,12 @@ class GameListFragment : Fragment() {
         processNextGame()
     }
 
-    private fun showHeroPickerForGame(game: GameInfo, onComplete: () -> Unit) {
+    private fun showHeroPickerForGame(
+        game: GameInfo,
+        onComplete: () -> Unit,
+        onSkipGame: (() -> Unit)? = null,
+        onCancelBulk: (() -> Unit)? = null
+    ) {
         if (scrapingCancelled.get() || _binding == null) {
             onComplete()
             return
@@ -1015,21 +1063,46 @@ class GameListFragment : Fragment() {
             }
 
             if (heroResult.options.isNotEmpty()) {
-                ArtworkPickerDialog.show(
-                    requireContext(),
-                    ArtworkPickerDialog.ArtworkType.HERO,
-                    heroResult
-                ) { selectedOption ->
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        if (scrapingCancelled.get() || _binding == null) {
-                            onComplete()
-                            return@launch
-                        }
+                // Use skip-enabled dialog if callbacks provided (bulk mode)
+                if (onSkipGame != null && onCancelBulk != null) {
+                    ArtworkPickerDialog.showWithSkip(
+                        context = requireContext(),
+                        artworkType = ArtworkPickerDialog.ArtworkType.HERO,
+                        searchResult = heroResult,
+                        onOptionSelected = { selectedOption ->
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                if (scrapingCancelled.get() || _binding == null) {
+                                    onComplete()
+                                    return@launch
+                                }
 
-                        withContext(Dispatchers.IO) {
-                            artworkScraper.saveHeroFromOption(selectedOption, game)
+                                withContext(Dispatchers.IO) {
+                                    artworkScraper.saveHeroFromOption(selectedOption, game)
+                                }
+                                onComplete()
+                            }
+                        },
+                        onSkip = { onComplete() },  // Skip hero, continue to logo
+                        onCancel = onCancelBulk
+                    )
+                } else {
+                    // Single game mode - no skip
+                    ArtworkPickerDialog.show(
+                        requireContext(),
+                        ArtworkPickerDialog.ArtworkType.HERO,
+                        heroResult
+                    ) { selectedOption ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            if (scrapingCancelled.get() || _binding == null) {
+                                onComplete()
+                                return@launch
+                            }
+
+                            withContext(Dispatchers.IO) {
+                                artworkScraper.saveHeroFromOption(selectedOption, game)
+                            }
+                            onComplete()
                         }
-                        onComplete()
                     }
                 }
             } else {
@@ -1038,7 +1111,12 @@ class GameListFragment : Fragment() {
         }
     }
 
-    private fun showLogoPickerForGame(game: GameInfo, onComplete: () -> Unit) {
+    private fun showLogoPickerForGame(
+        game: GameInfo,
+        onComplete: () -> Unit,
+        onSkipGame: (() -> Unit)? = null,
+        onCancelBulk: (() -> Unit)? = null
+    ) {
         if (scrapingCancelled.get() || _binding == null) {
             onComplete()
             return
@@ -1060,21 +1138,46 @@ class GameListFragment : Fragment() {
             }
 
             if (logoResult.options.isNotEmpty()) {
-                ArtworkPickerDialog.show(
-                    requireContext(),
-                    ArtworkPickerDialog.ArtworkType.LOGO,
-                    logoResult
-                ) { selectedOption ->
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        if (scrapingCancelled.get() || _binding == null) {
-                            onComplete()
-                            return@launch
-                        }
+                // Use skip-enabled dialog if callbacks provided (bulk mode)
+                if (onSkipGame != null && onCancelBulk != null) {
+                    ArtworkPickerDialog.showWithSkip(
+                        context = requireContext(),
+                        artworkType = ArtworkPickerDialog.ArtworkType.LOGO,
+                        searchResult = logoResult,
+                        onOptionSelected = { selectedOption ->
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                if (scrapingCancelled.get() || _binding == null) {
+                                    onComplete()
+                                    return@launch
+                                }
 
-                        withContext(Dispatchers.IO) {
-                            artworkScraper.saveLogoFromOption(selectedOption, game)
+                                withContext(Dispatchers.IO) {
+                                    artworkScraper.saveLogoFromOption(selectedOption, game)
+                                }
+                                onComplete()
+                            }
+                        },
+                        onSkip = { onComplete() },  // Skip logo, move to next game
+                        onCancel = onCancelBulk
+                    )
+                } else {
+                    // Single game mode - no skip
+                    ArtworkPickerDialog.show(
+                        requireContext(),
+                        ArtworkPickerDialog.ArtworkType.LOGO,
+                        logoResult
+                    ) { selectedOption ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            if (scrapingCancelled.get() || _binding == null) {
+                                onComplete()
+                                return@launch
+                            }
+
+                            withContext(Dispatchers.IO) {
+                                artworkScraper.saveLogoFromOption(selectedOption, game)
+                            }
+                            onComplete()
                         }
-                        onComplete()
                     }
                 }
             } else {

@@ -92,9 +92,11 @@ class IconGeneratorTab(QWidget):
         self.region_combo.setFixedWidth(90)
         row_filter.addWidget(self.region_combo)
 
-        # Interactive mode checkbox
+        # Interactive mode checkbox - enabled by default
         self.interactive_mode = QCheckBox("Interactive Mode")
         self.interactive_mode.setToolTip("Manually select artwork from all available sources for each title")
+        self.interactive_mode.setChecked(True)  # Enabled by default
+        self.interactive_mode.stateChanged.connect(self._on_interactive_mode_changed)
         row_filter.addWidget(self.interactive_mode)
 
         # Hero images checkbox
@@ -439,6 +441,17 @@ class IconGeneratorTab(QWidget):
     def _on_sort_changed(self):
         """Re-sort platforms when sort order changes."""
         self.load_platforms_from_config()
+
+    def _on_interactive_mode_changed(self, state):
+        """Show warning when interactive mode is disabled."""
+        if state == Qt.Unchecked:
+            QMessageBox.warning(
+                self,
+                "Interactive Mode Disabled",
+                "Warning: With Interactive Mode disabled, artwork will be automatically selected "
+                "without prompting you for each game.\n\n"
+                "The first matching result from your enabled sources will be used."
+            )
 
     # ---------- Config and platforms ----------
     def _show_logs_dialog(self):

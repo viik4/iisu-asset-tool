@@ -291,14 +291,22 @@ class ArtworkScraper(private val context: Context) {
      * Download and save a selected hero image.
      * Saves as hero_1.png/jpg to match iiSU naming convention.
      * Uses export format settings from preferences.
+     * Optionally crops to 1920x1080 based on settings.
      */
     suspend fun saveHeroFromOption(option: ArtworkOption, game: GameInfo, heroIndex: Int = 1): Boolean = withContext(Dispatchers.IO) {
         try {
-            val bitmap = downloadBitmap(option.url) ?: return@withContext false
+            var bitmap = downloadBitmap(option.url) ?: return@withContext false
 
             // Delete existing hero files only if this is hero_1 (first hero)
             if (heroIndex == 1) {
                 deleteExistingAsset(game.folder, "hero")
+            }
+
+            // Check if hero cropping is enabled
+            if (SettingsFragment.isHeroCropEnabled(context)) {
+                val cropPosition = SettingsFragment.getHeroCropPosition(context)
+                bitmap = cropHeroTo1080p(bitmap, cropPosition)
+                Log.d(TAG, "Cropped hero to 1920x1080 (position: $cropPosition)")
             }
 
             // Get export format settings
@@ -323,6 +331,41 @@ class ArtworkScraper(private val context: Context) {
             Log.e(TAG, "Failed to save hero", e)
             false
         }
+    }
+
+    /**
+     * Crop a hero image to 1920x1080 (16:9 aspect ratio).
+     * @param bitmap The source bitmap
+     * @param verticalPosition 0.0 = crop from top, 0.5 = center, 1.0 = crop from bottom
+     * @return Cropped and scaled bitmap at 1920x1080
+     */
+    private fun cropHeroTo1080p(bitmap: Bitmap, verticalPosition: Float): Bitmap {
+        val targetWidth = SettingsFragment.HERO_TARGET_WIDTH
+        val targetHeight = SettingsFragment.HERO_TARGET_HEIGHT
+        val targetAspect = targetWidth.toFloat() / targetHeight  // 16:9 = 1.777...
+
+        val srcWidth = bitmap.width
+        val srcHeight = bitmap.height
+        val srcAspect = srcWidth.toFloat() / srcHeight
+
+        val (cropWidth, cropHeight, cropX, cropY) = if (srcAspect > targetAspect) {
+            // Source is wider than target - crop horizontally (left/right)
+            val newWidth = (srcHeight * targetAspect).toInt()
+            val x = ((srcWidth - newWidth) / 2)  // Center horizontally
+            arrayOf(newWidth, srcHeight, x, 0)
+        } else {
+            // Source is taller than target - crop vertically based on position
+            val newHeight = (srcWidth / targetAspect).toInt()
+            val maxY = srcHeight - newHeight
+            val y = (maxY * verticalPosition).toInt().coerceIn(0, maxY)
+            arrayOf(srcWidth, newHeight, 0, y)
+        }
+
+        // Crop the bitmap
+        val cropped = Bitmap.createBitmap(bitmap, cropX, cropY, cropWidth, cropHeight)
+
+        // Scale to exact 1920x1080
+        return Bitmap.createScaledBitmap(cropped, targetWidth, targetHeight, true)
     }
 
     /**
@@ -764,7 +807,8 @@ class ArtworkScraper(private val context: Context) {
             val thumbUrl = hero.optString("thumb", imageUrl)
             val width = hero.optInt("width", 0)
             val height = hero.optInt("height", 0)
-            val thumbnail = downloadThumbnail(thumbUrl)
+            // Use aspect-preserving thumbnail for heroes (wide banners)
+            val thumbnail = downloadThumbnailPreserveAspect(thumbUrl)
 
             options.add(ArtworkOption(
                 url = imageUrl,
@@ -814,7 +858,8 @@ class ArtworkScraper(private val context: Context) {
             val thumbUrl = logo.optString("thumb", imageUrl)
             val width = logo.optInt("width", 0)
             val height = logo.optInt("height", 0)
-            val thumbnail = downloadThumbnail(thumbUrl)
+            // Use aspect-preserving thumbnail for logos (various aspect ratios)
+            val thumbnail = downloadThumbnailPreserveAspect(thumbUrl)
 
             options.add(ArtworkOption(
                 url = imageUrl,
@@ -828,10 +873,285 @@ class ArtworkScraper(private val context: Context) {
         return options
     }
 
+    // ==================== IGDB Screenshot Scraping ====================
+
+    // IGDB API configuration
+    private var igdbAccessToken: String? = null
+    private var igdbTokenExpiry: Long = 0
+
+    /**
+     * Get IGDB access token using Twitch OAuth2.
+     * Caches the token until it expires.
+     */
+    private fun getIGDBAccessToken(): String? {
+        // Check if we have a valid cached token
+        if (igdbAccessToken != null && System.currentTimeMillis() < igdbTokenExpiry) {
+            return igdbAccessToken
+        }
+
+        val clientId = SettingsFragment.getIgdbClientId(context)
+        val clientSecret = SettingsFragment.getIgdbClientSecret(context)
+
+        if (clientId.isNullOrEmpty() || clientSecret.isNullOrEmpty()) {
+            Log.w(TAG, "IGDB credentials not configured")
+            return null
+        }
+
+        try {
+            val tokenUrl = "https://id.twitch.tv/oauth2/token"
+            val postData = "client_id=$clientId&client_secret=$clientSecret&grant_type=client_credentials"
+
+            val connection = URL(tokenUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+
+            connection.outputStream.use { os ->
+                os.write(postData.toByteArray())
+            }
+
+            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val response = connection.inputStream.bufferedReader().readText()
+                val json = JSONObject(response)
+                igdbAccessToken = json.getString("access_token")
+                val expiresIn = json.getLong("expires_in")
+                // Set expiry 5 minutes before actual expiry for safety
+                igdbTokenExpiry = System.currentTimeMillis() + (expiresIn - 300) * 1000
+                Log.d(TAG, "IGDB access token obtained, expires in ${expiresIn}s")
+                return igdbAccessToken
+            } else {
+                Log.e(TAG, "Failed to get IGDB token: ${connection.responseCode}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "IGDB OAuth failed", e)
+        }
+
+        return null
+    }
+
+    /**
+     * Search IGDB for a game and get its ID.
+     */
+    private fun searchIGDBGame(gameName: String, platform: String): Int? {
+        val accessToken = getIGDBAccessToken() ?: return null
+        val clientId = SettingsFragment.getIgdbClientId(context) ?: return null
+
+        try {
+            val searchUrl = "https://api.igdb.com/v4/games"
+
+            // Build the search query with platform filtering if possible
+            val platformFilter = getIGDBPlatformId(platform)?.let {
+                " & platforms = ($it)"
+            } ?: ""
+
+            val query = "search \"$gameName\"; fields id,name,screenshots; where screenshots != null$platformFilter; limit 5;"
+
+            val connection = URL(searchUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.setRequestProperty("Client-ID", clientId)
+            connection.setRequestProperty("Authorization", "Bearer $accessToken")
+            connection.setRequestProperty("Content-Type", "text/plain")
+
+            connection.outputStream.use { os ->
+                os.write(query.toByteArray())
+            }
+
+            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val response = connection.inputStream.bufferedReader().readText()
+                val games = org.json.JSONArray(response)
+
+                if (games.length() > 0) {
+                    // Return the first game with screenshots
+                    for (i in 0 until games.length()) {
+                        val game = games.getJSONObject(i)
+                        val screenshots = game.optJSONArray("screenshots")
+                        if (screenshots != null && screenshots.length() > 0) {
+                            Log.d(TAG, "Found IGDB game: ${game.optString("name")} with ${screenshots.length()} screenshots")
+                            return game.getInt("id")
+                        }
+                    }
+                }
+            } else {
+                Log.e(TAG, "IGDB search failed: ${connection.responseCode}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "IGDB search error", e)
+        }
+
+        return null
+    }
+
+    /**
+     * Get screenshots for a game from IGDB.
+     */
+    private fun getIGDBScreenshotOptions(gameName: String, platform: String): List<ArtworkOption> {
+        val accessToken = getIGDBAccessToken() ?: return emptyList()
+        val clientId = SettingsFragment.getIgdbClientId(context) ?: return emptyList()
+
+        try {
+            // First search for the game
+            val searchUrl = "https://api.igdb.com/v4/games"
+
+            val platformFilter = getIGDBPlatformId(platform)?.let {
+                " & platforms = ($it)"
+            } ?: ""
+
+            val query = "search \"$gameName\"; fields id,name,screenshots; where screenshots != null$platformFilter; limit 1;"
+
+            var connection = URL(searchUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.setRequestProperty("Client-ID", clientId)
+            connection.setRequestProperty("Authorization", "Bearer $accessToken")
+            connection.setRequestProperty("Content-Type", "text/plain")
+
+            connection.outputStream.use { os ->
+                os.write(query.toByteArray())
+            }
+
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                Log.e(TAG, "IGDB game search failed: ${connection.responseCode}")
+                return emptyList()
+            }
+
+            val gamesResponse = connection.inputStream.bufferedReader().readText()
+            val games = org.json.JSONArray(gamesResponse)
+
+            if (games.length() == 0) {
+                Log.d(TAG, "No IGDB games found for: $gameName")
+                return emptyList()
+            }
+
+            val game = games.getJSONObject(0)
+            val screenshotIds = game.optJSONArray("screenshots") ?: return emptyList()
+
+            if (screenshotIds.length() == 0) {
+                return emptyList()
+            }
+
+            // Build list of screenshot IDs
+            val ids = StringBuilder()
+            for (i in 0 until screenshotIds.length()) {
+                if (i > 0) ids.append(",")
+                ids.append(screenshotIds.getInt(i))
+            }
+
+            // Fetch screenshot details
+            val screenshotsUrl = "https://api.igdb.com/v4/screenshots"
+            val screenshotQuery = "fields url,width,height; where id = ($ids); limit 10;"
+
+            connection = URL(screenshotsUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.setRequestProperty("Client-ID", clientId)
+            connection.setRequestProperty("Authorization", "Bearer $accessToken")
+            connection.setRequestProperty("Content-Type", "text/plain")
+
+            connection.outputStream.use { os ->
+                os.write(screenshotQuery.toByteArray())
+            }
+
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                Log.e(TAG, "IGDB screenshots fetch failed: ${connection.responseCode}")
+                return emptyList()
+            }
+
+            val screenshotsResponse = connection.inputStream.bufferedReader().readText()
+            val screenshots = org.json.JSONArray(screenshotsResponse)
+
+            val options = mutableListOf<ArtworkOption>()
+
+            for (i in 0 until screenshots.length()) {
+                val screenshot = screenshots.getJSONObject(i)
+                // IGDB returns URLs like //images.igdb.com/igdb/image/upload/t_thumb/xxx.jpg
+                // We need to add https: and change the size
+                var imageUrl = screenshot.optString("url", "")
+                if (imageUrl.startsWith("//")) {
+                    imageUrl = "https:$imageUrl"
+                }
+                // Change thumbnail size to full 1080p
+                val fullUrl = imageUrl.replace("t_thumb", "t_1080p")
+                val thumbUrl = imageUrl.replace("t_thumb", "t_screenshot_med")
+
+                val width = screenshot.optInt("width", 0)
+                val height = screenshot.optInt("height", 0)
+                // Use aspect-preserving thumbnail for screenshots (wide images)
+                val thumbnail = downloadThumbnailPreserveAspect(thumbUrl)
+
+                options.add(ArtworkOption(
+                    url = fullUrl,
+                    source = "IGDB",
+                    thumbnail = thumbnail,
+                    width = width,
+                    height = height
+                ))
+            }
+
+            Log.d(TAG, "Found ${options.size} IGDB screenshots for: $gameName")
+            return options
+
+        } catch (e: Exception) {
+            Log.e(TAG, "IGDB screenshot fetch error", e)
+        }
+
+        return emptyList()
+    }
+
+    /**
+     * Map platform names to IGDB platform IDs.
+     */
+    private fun getIGDBPlatformId(platform: String): Int? {
+        return when (platform.lowercase()) {
+            // Nintendo
+            "nes" -> 18
+            "snes" -> 19
+            "n64" -> 4
+            "gamecube", "gc" -> 21
+            "wii" -> 5
+            "wiiu" -> 41
+            "switch" -> 130
+            "gb" -> 33
+            "gbc" -> 22
+            "gba" -> 24
+            "nds" -> 20
+            "3ds", "n3ds" -> 37
+            // Sony
+            "psx", "ps1" -> 7
+            "ps2" -> 8
+            "ps3" -> 9
+            "ps4" -> 48
+            "ps5" -> 167
+            "psp" -> 38
+            "psvita" -> 46
+            // Sega
+            "mastersystem" -> 64
+            "genesis", "megadrive" -> 29
+            "segacd" -> 78
+            "sega32x" -> 30
+            "saturn" -> 32
+            "dreamcast" -> 23
+            "gamegear" -> 35
+            // Microsoft
+            "xbox" -> 11
+            "xbox360" -> 12
+            else -> null
+        }
+    }
+
     // ==================== Screenshot Scraping ====================
 
     /**
-     * Search for screenshot options from Libretro (screenshots are in a separate folder).
+     * Search for screenshot options from multiple sources.
+     * Tries IGDB first (best quality and quantity), then Libretro as fallback.
      */
     suspend fun searchScreenshotOptions(game: GameInfo, platform: String): ArtworkSearchResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "Searching screenshot options for: ${game.name} -> ${game.searchName} (platform: $platform)")
@@ -842,11 +1162,20 @@ class ArtworkScraper(private val context: Context) {
         // Load current screenshot if exists
         val currentImage = findScreenshotFile(game.folder)?.let { loadBitmapFromFile(it) }
 
-        // Try Libretro screenshots
+        // Try IGDB screenshots first (best quality and most screenshots per game)
         try {
-            options.addAll(getLibretroScreenshotOptions(searchName, platform))
+            options.addAll(getIGDBScreenshotOptions(searchName, platform))
         } catch (e: Exception) {
-            Log.w(TAG, "Libretro screenshot search failed: ${e.message}")
+            Log.w(TAG, "IGDB screenshot search failed: ${e.message}")
+        }
+
+        // Try Libretro screenshots as fallback (only has 1 screenshot per game)
+        if (options.isEmpty()) {
+            try {
+                options.addAll(getLibretroScreenshotOptions(searchName, platform))
+            } catch (e: Exception) {
+                Log.w(TAG, "Libretro screenshot search failed: ${e.message}")
+            }
         }
 
         Log.d(TAG, "Found ${options.size} screenshot options for ${game.displayName}")
@@ -976,99 +1305,114 @@ class ArtworkScraper(private val context: Context) {
 
     /**
      * Find the best matching game ID from SteamGridDB search results.
-     * Prioritizes exact name matches for the specified platform.
+     * Uses string similarity scoring to find the closest match.
      */
     private fun findBestMatchingGameId(data: org.json.JSONArray, gameName: String, platform: String): Int? {
-        val keywords = platformKeywords[platform.lowercase()] ?: emptyList()
-        val normalizedGameName = gameName.lowercase().trim()
-
-        // First pass: look for exact name match
-        for (i in 0 until data.length()) {
-            val gameResult = data.getJSONObject(i)
-            val resultName = gameResult.optString("name", "").lowercase()
-
-            // Check for exact name match (ignoring case)
-            if (resultName == normalizedGameName) {
-                Log.d(TAG, "Found exact name match: ${gameResult.optString("name")}")
-                return gameResult.getInt("id")
-            }
-        }
-
-        // Second pass: look for name match with platform indicator in the game name
-        for (i in 0 until data.length()) {
-            val gameResult = data.getJSONObject(i)
-            val resultName = gameResult.optString("name", "").lowercase()
-
-            // Check if the result name contains the game name
-            if (resultName.contains(normalizedGameName)) {
-                // Check if it also contains any platform keyword
-                for (keyword in keywords) {
-                    if (resultName.contains(keyword)) {
-                        Log.d(TAG, "Found platform-specific match: ${gameResult.optString("name")} (keyword: $keyword)")
-                        return gameResult.getInt("id")
-                    }
-                }
-            }
-        }
-
-        // Third pass: check the "types" field if available (some SGDB results have platform info)
-        for (i in 0 until data.length()) {
-            val gameResult = data.getJSONObject(i)
-            val resultName = gameResult.optString("name", "").lowercase()
-            val types = gameResult.optJSONArray("types")
-
-            if (resultName.contains(normalizedGameName) || normalizedGameName.contains(resultName.split("(")[0].trim())) {
-                if (types != null) {
-                    for (t in 0 until types.length()) {
-                        val typeName = types.optString(t, "").lowercase()
-                        for (keyword in keywords) {
-                            if (typeName.contains(keyword)) {
-                                Log.d(TAG, "Found match via types: ${gameResult.optString("name")}")
-                                return gameResult.getInt("id")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Fourth pass: Look for a result that contains the game name but NOT other platform indicators
-        val otherPlatformKeywords = listOf(
-            "gba", "game boy advance", "minish cap", "link to the past",
-            "3ds", "ds", "switch", "wii", "gamecube", "n64",
-            "ps2", "ps3", "ps4", "psp", "vita",
-            "xbox 360", "xbox one"
-        ).filter { kw -> !keywords.any { it.contains(kw) || kw.contains(it) } }
+        val normalizedQuery = normalizeForMatching(gameName)
+        var bestMatchId: Int? = null
+        var bestScore = 0.0
 
         for (i in 0 until data.length()) {
             val gameResult = data.getJSONObject(i)
-            val resultName = gameResult.optString("name", "").lowercase()
+            val resultName = gameResult.optString("name", "")
+            val gameId = gameResult.getInt("id")
 
-            if (resultName.contains(normalizedGameName) || normalizedGameName.contains(resultName.split("(")[0].trim())) {
-                // Check that it doesn't contain other platform keywords
-                var hasOtherPlatform = false
-                for (other in otherPlatformKeywords) {
-                    if (resultName.contains(other)) {
-                        hasOtherPlatform = true
-                        break
-                    }
-                }
+            val normalizedName = normalizeForMatching(resultName)
+            val score = calculateMatchScore(normalizedQuery, normalizedName)
 
-                if (!hasOtherPlatform) {
-                    Log.d(TAG, "Found general match (no conflicting platform): ${gameResult.optString("name")}")
-                    return gameResult.getInt("id")
-                }
+            Log.d(TAG, "Match score for '$resultName': $score (normalized: '$normalizedName' vs '$normalizedQuery')")
+
+            if (score > bestScore) {
+                bestScore = score
+                bestMatchId = gameId
+            }
+
+            // Perfect match - no need to continue
+            if (score >= 1.0) break
+        }
+
+        if (bestMatchId != null) {
+            Log.d(TAG, "Best match for '$gameName': ID $bestMatchId with score $bestScore")
+        } else {
+            Log.w(TAG, "No matching game found for '$gameName'")
+        }
+
+        return bestMatchId
+    }
+
+    /**
+     * Normalize game name for comparison by removing special characters and normalizing spaces.
+     * Handles accented characters by converting them to their ASCII equivalents.
+     * Handles sorted titles like "Legend of Zelda, The" -> "The Legend of Zelda"
+     */
+    private fun normalizeForMatching(name: String): String {
+        // First, handle "Name, The/A/An" format by moving article to the front
+        var result = name.trim()
+        when {
+            result.endsWith(", The", ignoreCase = true) -> {
+                result = "The " + result.dropLast(5)
+            }
+            result.endsWith(", A", ignoreCase = true) -> {
+                result = "A " + result.dropLast(3)
+            }
+            result.endsWith(", An", ignoreCase = true) -> {
+                result = "An " + result.dropLast(4)
             }
         }
 
-        // Fallback: return first result if nothing else matches, but log a warning
-        if (data.length() > 0) {
-            val firstResult = data.getJSONObject(0)
-            Log.w(TAG, "No platform-specific match found, using first result: ${firstResult.optString("name")}")
-            return firstResult.getInt("id")
+        // Normalize accented characters to ASCII equivalents
+        val normalized = java.text.Normalizer.normalize(result, java.text.Normalizer.Form.NFD)
+            .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")  // Remove diacritical marks
+
+        return normalized.lowercase()
+            .replace(Regex("\\s*[-–—:]\\s*"), " ")  // Normalize dashes and colons to spaces
+            .replace(Regex("\\s+"), " ")  // Normalize multiple spaces
+            .replace(Regex("['']"), "")  // Remove apostrophes
+            .replace(Regex("[^a-z0-9 ]"), "")  // Remove remaining special characters
+            .trim()
+    }
+
+    /**
+     * Calculate match score between query and game name.
+     * Returns a score from 0.0 to 1.0 where 1.0 is a perfect match.
+     */
+    private fun calculateMatchScore(query: String, gameName: String): Double {
+        // Exact match
+        if (query == gameName) return 1.0
+
+        // Game name starts with the query (high priority)
+        // e.g., "pokemon moon" matches "pokemon moon" better than "pokemon moon black 2"
+        if (gameName.startsWith(query)) {
+            // Penalize longer names that just happen to start with the query
+            val extraLength = gameName.length - query.length
+            // Small penalty for each extra character
+            return (0.95 - (extraLength * 0.02)).coerceAtLeast(0.5)
         }
 
-        return null
+        // Query starts with the game name (game name is shorter version)
+        if (query.startsWith(gameName)) {
+            return 0.8
+        }
+
+        // Check word-by-word match
+        val queryWords = query.split(" ").filter { it.isNotEmpty() }
+        val nameWords = gameName.split(" ").filter { it.isNotEmpty() }
+
+        // Count matching words
+        val matchingWords = queryWords.count { qWord ->
+            nameWords.any { nWord -> nWord == qWord || nWord.startsWith(qWord) || qWord.startsWith(nWord) }
+        }
+
+        // All query words match
+        if (matchingWords == queryWords.size) {
+            // Prefer shorter game names when all words match
+            val lengthPenalty = (nameWords.size - queryWords.size) * 0.05
+            return (0.85 - lengthPenalty).coerceAtLeast(0.5)
+        }
+
+        // Partial word match
+        val wordMatchRatio = matchingWords.toDouble() / queryWords.size
+        return wordMatchRatio * 0.6
     }
 
     /**
@@ -1182,6 +1526,35 @@ class ArtworkScraper(private val context: Context) {
         } catch (e: Exception) {
             null
         }
+    }
+
+    /**
+     * Download thumbnail preserving aspect ratio (for heroes, logos, screenshots).
+     * Scales down to fit within maxSize while maintaining proportions.
+     */
+    private fun downloadThumbnailPreserveAspect(url: String, maxSize: Int = THUMBNAIL_SIZE * 2): Bitmap? {
+        return try {
+            val bitmap = downloadBitmap(url) ?: return null
+            resizePreserveAspect(bitmap, maxSize)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun resizePreserveAspect(bitmap: Bitmap, maxSize: Int): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val maxDim = maxOf(width, height)
+
+        if (maxDim <= maxSize) {
+            return bitmap // Already small enough
+        }
+
+        val scale = maxSize.toFloat() / maxDim
+        val newWidth = (width * scale).toInt()
+        val newHeight = (height * scale).toInt()
+
+        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
 
     private fun downloadBitmap(url: String): Bitmap? {

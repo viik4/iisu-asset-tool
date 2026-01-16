@@ -2884,17 +2884,24 @@ def run_job(
 
         # Apply search/filter before limit
         if search_term:
-            # Use fuzzy matching for better results
+            # When user explicitly searches for something, only return that specific game
+            # Don't return multiple fuzzy matches - user wants exactly what they searched for
             if titles:
-                # Try fuzzy matching against database
-                fuzzy_matches = fuzzy_match_title(search_term, titles, threshold=0.5)
+                # Try to find an exact or near-exact match in the database
+                fuzzy_matches = fuzzy_match_title(search_term, titles, threshold=0.7)  # Higher threshold for explicit search
 
                 if fuzzy_matches:
-                    # Use best matches from database
-                    matching_titles = [title for title, score in fuzzy_matches[:5]]
-                    titles = matching_titles
-                    best_score = fuzzy_matches[0][1] if fuzzy_matches else 0
-                    _emit_log(callbacks, f"[FILTER] Search '{search_term}' on {platform_key}: {len(titles)} fuzzy matches (best: {best_score:.2f})")
+                    # Only use the BEST match, not multiple - user searched for a specific game
+                    best_match, best_score = fuzzy_matches[0]
+                    # Only use database match if it's a very good match (>= 0.85)
+                    # Otherwise use the search term directly to let the API find it
+                    if best_score >= 0.85:
+                        titles = [best_match]
+                        _emit_log(callbacks, f"[FILTER] Search '{search_term}' on {platform_key}: Found exact match '{best_match}' (score: {best_score:.2f})")
+                    else:
+                        # Score not high enough - use search term directly
+                        titles = [search_term]
+                        _emit_log(callbacks, f"[FILTER] Search '{search_term}' on {platform_key}: No exact match (best: {best_score:.2f}), using search term directly")
                 else:
                     # No fuzzy matches - use search term directly
                     titles = [search_term]

@@ -10,8 +10,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import android.provider.DocumentsContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.iisu.assettool.BuildConfig
@@ -48,13 +51,19 @@ class SettingsFragment : Fragment() {
     companion object {
         const val PREFS_NAME = "iisu_asset_tool_prefs"
         const val PREF_SGDB_API_KEY = "steamgriddb_api_key"
+        const val PREF_IGDB_CLIENT_ID = "igdb_client_id"
+        const val PREF_IGDB_CLIENT_SECRET = "igdb_client_secret"
         const val PREF_PARALLEL_DOWNLOADS = "parallel_downloads"
         const val PREF_INTERACTIVE_MODE = "interactive_mode"
+        const val PREF_DS_MODE = "ds_mode"
+        const val PREF_CUSTOM_ASSET_DIR = "custom_asset_directory"
         const val PREF_SOURCE_PRIORITY = "source_priority"
         const val PREF_SCRAPE_LOGOS = "scrape_logos"
         const val PREF_LOGO_FALLBACK_BOXART = "logo_fallback_boxart"
         const val PREF_HERO_ENABLED = "hero_enabled"
         const val PREF_HERO_COUNT = "hero_count"
+        const val PREF_HERO_CROP_ENABLED = "hero_crop_enabled"
+        const val PREF_HERO_CROP_POSITION = "hero_crop_position"  // 0.0 to 1.0, vertical position
         const val PREF_USE_FALLBACK = "use_platform_fallback"
         const val PREF_SKIP_SCRAPING = "skip_scraping"
         const val PREF_EXPORT_FORMAT = "export_format"
@@ -65,11 +74,16 @@ class SettingsFragment : Fragment() {
         const val PREF_SCREENSHOT_COUNT = "screenshot_count"
 
         const val DEFAULT_PARALLEL_DOWNLOADS = 3
-        const val DEFAULT_INTERACTIVE_MODE = false
+        const val DEFAULT_INTERACTIVE_MODE = true
+        const val DEFAULT_DS_MODE = false
         const val DEFAULT_SCRAPE_LOGOS = true
         const val DEFAULT_LOGO_FALLBACK_BOXART = true
         const val DEFAULT_HERO_ENABLED = true
         const val DEFAULT_HERO_COUNT = 1
+        const val DEFAULT_HERO_CROP_ENABLED = true
+        const val DEFAULT_HERO_CROP_POSITION = 0.5f  // Center by default
+        const val HERO_TARGET_WIDTH = 1920
+        const val HERO_TARGET_HEIGHT = 1080
         const val DEFAULT_USE_FALLBACK = false
         const val DEFAULT_SKIP_SCRAPING = false
         const val DEFAULT_EXPORT_FORMAT = "PNG"
@@ -90,6 +104,24 @@ class SettingsFragment : Fragment() {
         }
 
         /**
+         * Get the saved IGDB Client ID.
+         */
+        fun getIgdbClientId(context: Context): String? {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val key = prefs.getString(PREF_IGDB_CLIENT_ID, null)
+            return if (key.isNullOrBlank()) null else key
+        }
+
+        /**
+         * Get the saved IGDB Client Secret.
+         */
+        fun getIgdbClientSecret(context: Context): String? {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val key = prefs.getString(PREF_IGDB_CLIENT_SECRET, null)
+            return if (key.isNullOrBlank()) null else key
+        }
+
+        /**
          * Get the number of parallel downloads for bulk generation.
          */
         fun getParallelDownloads(context: Context): Int {
@@ -103,6 +135,23 @@ class SettingsFragment : Fragment() {
         fun isInteractiveModeEnabled(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getBoolean(PREF_INTERACTIVE_MODE, DEFAULT_INTERACTIVE_MODE)
+        }
+
+        /**
+         * Get whether DS Mode is enabled (show hero/logo sections for dual-screen devices).
+         */
+        fun isDsModeEnabled(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getBoolean(PREF_DS_MODE, DEFAULT_DS_MODE)
+        }
+
+        /**
+         * Get custom asset directory path (or null if not set).
+         */
+        fun getCustomAssetDirectory(context: Context): String? {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val path = prefs.getString(PREF_CUSTOM_ASSET_DIR, null)
+            return if (path.isNullOrBlank()) null else path
         }
 
         /**
@@ -165,6 +214,22 @@ class SettingsFragment : Fragment() {
         fun getHeroCount(context: Context): Int {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getInt(PREF_HERO_COUNT, DEFAULT_HERO_COUNT)
+        }
+
+        /**
+         * Get whether hero cropping to 1920x1080 is enabled.
+         */
+        fun isHeroCropEnabled(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getBoolean(PREF_HERO_CROP_ENABLED, DEFAULT_HERO_CROP_ENABLED)
+        }
+
+        /**
+         * Get the hero crop vertical position (0.0 = top, 0.5 = center, 1.0 = bottom).
+         */
+        fun getHeroCropPosition(context: Context): Float {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getFloat(PREF_HERO_CROP_POSITION, DEFAULT_HERO_CROP_POSITION)
         }
 
         /**
@@ -253,6 +318,13 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    // Directory picker for custom asset directory
+    private val pickAssetDirLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let { saveCustomAssetDirectory(it) }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -260,10 +332,12 @@ class SettingsFragment : Fragment() {
         setupApiKeySection()
         setupBulkGenerationSection()
         setupSourcePrioritySection()
+        setupDsModeSection()
         setupLogoSection()
         setupHeroSection()
         setupScreenshotSection()
         setupCustomBorderSection()
+        setupCustomAssetDirSection()
         setupFallbackSection()
         setupExportFormatSection()
         setupAboutSection()
@@ -288,24 +362,30 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupApiKeySection() {
-        // Load saved API key
+        // Load saved API keys
         val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedKey = prefs.getString(PREF_SGDB_API_KEY, "")
-        binding.editSgdbApiKey.setText(savedKey)
+        val savedSgdbKey = prefs.getString(PREF_SGDB_API_KEY, "")
+        val savedIgdbClientId = prefs.getString(PREF_IGDB_CLIENT_ID, "")
+        val savedIgdbClientSecret = prefs.getString(PREF_IGDB_CLIENT_SECRET, "")
+
+        binding.editSgdbApiKey.setText(savedSgdbKey)
+        binding.editIgdbClientId.setText(savedIgdbClientId)
+        binding.editIgdbClientSecret.setText(savedIgdbClientSecret)
 
         // Save button click handler
         binding.btnSaveApiKey.setOnClickListener {
-            val apiKey = binding.editSgdbApiKey.text?.toString()?.trim() ?: ""
+            val sgdbApiKey = binding.editSgdbApiKey.text?.toString()?.trim() ?: ""
+            val igdbClientId = binding.editIgdbClientId.text?.toString()?.trim() ?: ""
+            val igdbClientSecret = binding.editIgdbClientSecret.text?.toString()?.trim() ?: ""
 
-            if (apiKey.isEmpty()) {
-                Toast.makeText(context, "Please enter an API key", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            // Save all API keys to SharedPreferences
+            prefs.edit()
+                .putString(PREF_SGDB_API_KEY, sgdbApiKey)
+                .putString(PREF_IGDB_CLIENT_ID, igdbClientId)
+                .putString(PREF_IGDB_CLIENT_SECRET, igdbClientSecret)
+                .apply()
 
-            // Save to SharedPreferences
-            prefs.edit().putString(PREF_SGDB_API_KEY, apiKey).apply()
-
-            Toast.makeText(context, "SteamGridDB API key saved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "API keys saved", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -329,7 +409,36 @@ class SettingsFragment : Fragment() {
 
         binding.switchInteractiveMode.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean(PREF_INTERACTIVE_MODE, isChecked).apply()
+            // Show warning when disabling interactive mode
+            if (!isChecked) {
+                Toast.makeText(
+                    context,
+                    "Warning: Without Interactive Mode, artwork will be auto-selected without prompting",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
+    }
+
+    private fun setupDsModeSection() {
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        // DS Mode toggle
+        val savedDsMode = prefs.getBoolean(PREF_DS_MODE, DEFAULT_DS_MODE)
+        binding.switchDsMode.isChecked = savedDsMode
+        updateDsModeVisibility(savedDsMode)
+
+        binding.switchDsMode.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(PREF_DS_MODE, isChecked).apply()
+            updateDsModeVisibility(isChecked)
+        }
+    }
+
+    private fun updateDsModeVisibility(dsMode: Boolean) {
+        // Show/hide hero and logo sections based on DS Mode
+        val visibility = if (dsMode) View.VISIBLE else View.GONE
+        binding.cardHeroSection.visibility = visibility
+        binding.cardLogoSection.visibility = visibility
     }
 
     private fun setupSourcePrioritySection() {
@@ -424,6 +533,38 @@ class SettingsFragment : Fragment() {
             binding.textHeroCount.text = count.toString()
             prefs.edit().putInt(PREF_HERO_COUNT, count).apply()
         }
+
+        // Hero crop toggle
+        binding.switchHeroCrop.isChecked = prefs.getBoolean(PREF_HERO_CROP_ENABLED, DEFAULT_HERO_CROP_ENABLED)
+        binding.switchHeroCrop.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(PREF_HERO_CROP_ENABLED, isChecked).apply()
+            // Show/hide crop position slider based on crop toggle
+            binding.layoutHeroCropPosition.visibility = if (isChecked) View.VISIBLE else View.GONE
+        }
+
+        // Hero crop position slider (0.0 = top, 0.5 = center, 1.0 = bottom)
+        val savedCropPosition = prefs.getFloat(PREF_HERO_CROP_POSITION, DEFAULT_HERO_CROP_POSITION)
+        binding.sliderHeroCropPosition.value = savedCropPosition
+        updateCropPositionLabel(savedCropPosition)
+
+        // Show/hide crop position based on crop toggle
+        binding.layoutHeroCropPosition.visibility = if (binding.switchHeroCrop.isChecked) View.VISIBLE else View.GONE
+
+        binding.sliderHeroCropPosition.addOnChangeListener { _, value, _ ->
+            updateCropPositionLabel(value)
+            prefs.edit().putFloat(PREF_HERO_CROP_POSITION, value).apply()
+        }
+    }
+
+    private fun updateCropPositionLabel(position: Float) {
+        val label = when {
+            position <= 0.2f -> "Top"
+            position <= 0.4f -> "Upper"
+            position <= 0.6f -> "Center"
+            position <= 0.8f -> "Lower"
+            else -> "Bottom"
+        }
+        binding.textHeroCropPosition.text = label
     }
 
     private fun setupScreenshotSection() {
@@ -476,6 +617,57 @@ class SettingsFragment : Fragment() {
 
         // Load existing custom border preview
         loadCustomBorderPreview()
+    }
+
+    private fun setupCustomAssetDirSection() {
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        // Load saved custom asset directory
+        val savedPath = prefs.getString(PREF_CUSTOM_ASSET_DIR, null)
+        updateCustomAssetDirDisplay(savedPath)
+
+        // Select directory button
+        binding.btnSelectAssetDir.setOnClickListener {
+            pickAssetDirLauncher.launch(null)
+        }
+
+        // Clear directory button
+        binding.btnClearAssetDir.setOnClickListener {
+            prefs.edit().remove(PREF_CUSTOM_ASSET_DIR).apply()
+            updateCustomAssetDirDisplay(null)
+            Toast.makeText(context, "Custom asset directory cleared", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun saveCustomAssetDirectory(uri: Uri) {
+        try {
+            // Take persistable permission for the directory
+            val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            requireContext().contentResolver.takePersistableUriPermission(uri, takeFlags)
+
+            // Save the URI string to preferences
+            val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putString(PREF_CUSTOM_ASSET_DIR, uri.toString()).apply()
+
+            updateCustomAssetDirDisplay(uri.toString())
+            Toast.makeText(context, "Custom asset directory saved", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(context, "Failed to save directory: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun updateCustomAssetDirDisplay(uriString: String?) {
+        if (uriString != null) {
+            try {
+                val uri = Uri.parse(uriString)
+                val docFile = DocumentFile.fromTreeUri(requireContext(), uri)
+                binding.textCustomAssetDir.text = docFile?.name ?: "Custom directory set"
+            } catch (e: Exception) {
+                binding.textCustomAssetDir.text = "Custom directory set"
+            }
+        } else {
+            binding.textCustomAssetDir.text = "Default (iiSU Launcher media folder)"
+        }
     }
 
     private fun saveCustomBorder(uri: Uri) {

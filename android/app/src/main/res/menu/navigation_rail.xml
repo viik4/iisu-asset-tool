@@ -12,11 +12,6 @@
         android:title="@string/nav_icon_generator" />
 
     <item
-        android:id="@+id/nav_cover_generator"
-        android:icon="@drawable/ic_cover_generator"
-        android:title="@string/nav_cover_generator" />
-
-    <item
         android:id="@+id/nav_custom_image"
         android:icon="@drawable/ic_custom_image"
         android:title="@string/nav_custom_image" />

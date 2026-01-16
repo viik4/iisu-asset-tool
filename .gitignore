@@ -76,3 +76,4 @@ android/build/
 android/local.properties
 *.aar
 *.ap_
+tutorial_voiceover_script.txt

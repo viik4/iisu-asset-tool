@@ -375,13 +375,14 @@ class MainWindowWithTabs(QMainWindow):
         <h3>Credits</h3>
         <p>Built for the <a href="https://iisu.network/" style="color: #00D4FF;">iiSU Network</a> community.</p>
         <p>Special thanks to the iiSU team for the design aesthetic and inspiration.</p>
+        <p>Logo by <b>Caddypillar</b></p>
 
         <h3>License</h3>
         <p>This tool is provided as-is for creating custom game library assets.<br>
         Ensure compliance with artwork source terms of service.</p>
 
         <p style="color: #666; font-size: 10px; margin-top: 20px;">
-        Version 1.2.0 | Desktop + Android companion app available
+        Version 1.2.1 | Desktop + Android companion app available
         </p>
         """)
         layout.addWidget(text)

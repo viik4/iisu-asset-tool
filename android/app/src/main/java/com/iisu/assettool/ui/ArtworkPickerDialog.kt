@@ -8,6 +8,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -23,12 +24,17 @@ import com.iisu.assettool.util.ArtworkSearchResult
  * Dialog for selecting artwork from multiple options.
  * Shows current image (if any), available options with thumbnails,
  * and allows user to select one to save.
+ *
+ * In bulk generation mode, provides Skip button to skip current game
+ * without cancelling the entire operation.
  */
 class ArtworkPickerDialog(
     context: Context,
     private val artworkType: ArtworkType,
     private val searchResult: ArtworkSearchResult,
-    private val onOptionSelected: (ArtworkOption) -> Unit
+    private val onOptionSelected: (ArtworkOption) -> Unit,
+    private val onSkip: (() -> Unit)? = null,
+    private val onCancel: (() -> Unit)? = null
 ) : Dialog(context) {
 
     enum class ArtworkType {
@@ -38,6 +44,7 @@ class ArtworkPickerDialog(
     private lateinit var binding: DialogArtworkPickerBinding
     private var selectedOption: ArtworkOption? = null
     private var selectedView: MaterialCardView? = null
+    private var wasCancelled = true  // Track if dialog was cancelled vs skipped/saved
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,16 +103,37 @@ class ArtworkPickerDialog(
             binding.layoutCurrentImage.visibility = View.GONE
         }
 
-        // Cancel button
+        // Cancel button - stops the entire bulk operation
         binding.btnCancel.setOnClickListener {
+            wasCancelled = true
             dismiss()
+        }
+
+        // Skip button - visible only in bulk mode, skips current game
+        if (onSkip != null) {
+            binding.btnSkip?.visibility = View.VISIBLE
+            binding.btnSkip?.setOnClickListener {
+                wasCancelled = false
+                onSkip.invoke()
+                dismiss()
+            }
+        } else {
+            binding.btnSkip?.visibility = View.GONE
         }
 
         // Save button
         binding.btnSave.setOnClickListener {
             selectedOption?.let { option ->
+                wasCancelled = false
                 onOptionSelected(option)
                 dismiss()
+            }
+        }
+
+        // Handle dialog dismiss (back button, tap outside)
+        setOnDismissListener {
+            if (wasCancelled) {
+                onCancel?.invoke()
             }
         }
     }
@@ -134,11 +162,31 @@ class ArtworkPickerDialog(
         val view = inflater.inflate(R.layout.item_artwork_option, binding.layoutOptions, false)
 
         val card = view.findViewById<MaterialCardView>(R.id.cardOption)
+        val frameThumbnail = view.findViewById<FrameLayout>(R.id.frameThumbnail)
         val thumbnail = view.findViewById<ImageView>(R.id.imageThumbnail)
         val progress = view.findViewById<ProgressBar>(R.id.progressThumbnail)
         val iconSelected = view.findViewById<ImageView>(R.id.iconSelected)
         val textSource = view.findViewById<TextView>(R.id.textSource)
         val textDimensions = view.findViewById<TextView>(R.id.textDimensions)
+
+        // Adjust thumbnail size based on artwork type for better preview
+        // Heroes are wide banners (~3:1), logos vary, icons are square
+        val (thumbnailWidth, thumbnailHeight) = when (artworkType) {
+            ArtworkType.ICON -> Pair(100.dpToPx(), 100.dpToPx())
+            ArtworkType.HERO -> Pair(200.dpToPx(), 65.dpToPx())  // ~3:1 aspect ratio for heroes
+            ArtworkType.LOGO -> Pair(150.dpToPx(), 80.dpToPx())  // Logos are typically wider than tall
+        }
+        val frameParams = frameThumbnail.layoutParams
+        frameParams.width = thumbnailWidth
+        frameParams.height = thumbnailHeight
+        frameThumbnail.layoutParams = frameParams
+
+        // Use fitCenter for heroes/logos to show full image without cropping
+        thumbnail.scaleType = when (artworkType) {
+            ArtworkType.ICON -> ImageView.ScaleType.CENTER_CROP
+            ArtworkType.HERO -> ImageView.ScaleType.FIT_CENTER
+            ArtworkType.LOGO -> ImageView.ScaleType.FIT_CENTER
+        }
 
         // Set source label
         textSource.text = option.source
@@ -205,6 +253,27 @@ class ArtworkPickerDialog(
             onOptionSelected: (ArtworkOption) -> Unit
         ): ArtworkPickerDialog {
             val dialog = ArtworkPickerDialog(context, artworkType, searchResult, onOptionSelected)
+            dialog.show()
+            return dialog
+        }
+
+        /**
+         * Show the artwork picker dialog with skip support for bulk operations.
+         * @param onSkip Called when user clicks Skip to move to next game
+         * @param onCancel Called when user clicks Cancel to stop the bulk operation
+         */
+        fun showWithSkip(
+            context: Context,
+            artworkType: ArtworkType,
+            searchResult: ArtworkSearchResult,
+            onOptionSelected: (ArtworkOption) -> Unit,
+            onSkip: () -> Unit,
+            onCancel: () -> Unit
+        ): ArtworkPickerDialog {
+            val dialog = ArtworkPickerDialog(
+                context, artworkType, searchResult,
+                onOptionSelected, onSkip, onCancel
+            )
             dialog.show()
             return dialog
         }

@@ -43,8 +43,8 @@
             android:textColor="@color/accent_magenta" />
 
         <com.google.android.material.card.MaterialCardView
-            android:layout_width="@dimen/preview_size_small"
-            android:layout_height="@dimen/preview_size_small"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             app:cardBackgroundColor="@color/theme_surface"
             app:cardCornerRadius="8dp"
@@ -53,9 +53,12 @@
 
             <ImageView
                 android:id="@+id/imageCurrentArtwork"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="centerCrop" />
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:maxWidth="200dp"
+                android:maxHeight="150dp"
+                android:scaleType="fitCenter" />
 
         </com.google.android.material.card.MaterialCardView>
 
@@ -91,22 +94,23 @@
         style="@style/IisuTextAppearance.Description"
         android:visibility="gone" />
 
-    <!-- Options Grid (horizontal scroll) -->
-    <HorizontalScrollView
+    <!-- Options Grid (vertical scroll) -->
+    <ScrollView
         android:id="@+id/scrollOptions"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:layout_marginTop="@dimen/spacing_sm"
-        android:scrollbars="none">
+        android:fillViewport="true">
 
         <LinearLayout
             android:id="@+id/layoutOptions"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:paddingVertical="@dimen/spacing_sm" />
 
-    </HorizontalScrollView>
+    </ScrollView>
 
     <!-- Buttons -->
     <LinearLayout
@@ -123,6 +127,16 @@
             android:text="Cancel"
             android:fontFamily="@font/continuum"
             style="@style/Widget.Material3.Button.TextButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSkip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:text="Skip"
+            android:fontFamily="@font/continuum"
+            android:visibility="gone"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSave"

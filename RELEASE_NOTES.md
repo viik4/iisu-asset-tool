@@ -1,8 +1,30 @@
-# iiSU Asset Tool v1.2.0
+# iiSU Asset Tool v1.2.1
 
-## New Platforms
+## What's New in v1.2.1
 
-### Android App (NEW)
+### Branding
+- **New app logo** - Fresh logo designed by Caddypillar
+- **In-app logo display** - Logo now appears in the Android navigation rail
+
+### Android Improvements
+- **IGDB API key settings** - Added IGDB Client ID and Client Secret input fields in Settings for screenshot scraping
+- **Fixed screenshot scraping** - Screenshots now properly use IGDB API instead of non-existent SteamGridDB endpoint
+- **Vertical artwork picker** - Interactive mode popup now scrolls vertically instead of horizontally for better usability
+- **Improved artwork previews** - Hero and logo thumbnails now preserve aspect ratio instead of being cropped to squares
+- **DS Mode toggle** - New setting to show/hide hero and logo sections (for dual-screen devices and foldables)
+- **Custom asset directory** - Set a custom directory for iiSU assets on SD card or external storage
+- **Interactive mode default** - Interactive mode is now enabled by default with warning when disabled
+- **5-column platform grid** - Platform browser now displays 5 columns instead of 4 for better use of screen space
+
+### Desktop Improvements
+- **Interactive mode default** - Interactive mode now enabled by default on all platforms
+- **Disable warning** - Shows warning dialog when disabling interactive mode explaining artwork will be auto-selected
+
+---
+
+## v1.2.0 Features
+
+### Android App
 - **Native Android app** - Full-featured Android port of iiSU Asset Tool
 - **iiSU Browser** - Browse your ROM library organized by platform with game counts and missing asset stats
 - **Artwork scraping** - Search and download artwork from SteamGridDB, IGDB, TheGamesDB, and Libretro
@@ -14,18 +36,18 @@
 - **Source priority** - Drag-to-reorder artwork sources with enable/disable toggles
 - **Logo scraping** - Download game logos from SteamGridDB for title.png
 - **Hero image downloads** - Download hero/banner images from SteamGridDB
-- **Screenshot scraping** - Download game screenshots from Libretro with configurable count (1-10)
+- **Screenshot scraping** - Download game screenshots from IGDB or Libretro with configurable count (1-10)
 - **Fallback icons** - Use platform icons when artwork not found
 - **Export format options** - Choose PNG or JPEG output with quality settings
 - **Light/Dark theme** - Match your system theme or choose manually
 - **Cancel button** - Cancel bulk scraping operations mid-progress without crashing
 - **Platform-aware search** - Improved SteamGridDB search filters results by platform to avoid wrong game matches
 
-### Linux Support (NEW)
+### Linux Support
 - **Native Linux builds** - Linux releases now available alongside Windows and macOS
 - **PyInstaller packaging** - Standalone executable with all dependencies bundled
 
-## New Features
+## Features
 
 ### Custom Border Support
 - **Custom border upload** - Upload your own custom border image to use for all icons instead of platform-specific borders
@@ -120,4 +142,4 @@
 
 ---
 
-**Full Changelog**: https://github.com/viik-4/iisu-asset-tool/compare/v1.1.1...v1.2.0
+**Full Changelog**: https://github.com/viik-4/iisu-asset-tool/compare/v1.2.0...v1.2.1

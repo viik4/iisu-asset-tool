@@ -9,12 +9,16 @@ data class ArtworkResult(
     val platform: Platform,
     val type: ArtworkType,
     val width: Int = 0,
-    val height: Int = 0
+    val height: Int = 0,
+    val source: String = "",
+    val score: Int = 0
 )
 
 enum class ArtworkType {
     ICON,
     COVER,
     SCREENSHOT,
-    FANART
+    FANART,
+    HERO,
+    LOGO
 }

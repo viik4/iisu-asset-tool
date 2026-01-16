@@ -55,6 +55,12 @@ class IconGeneratorFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Load SteamGridDB API key from settings
+        val sgdbApiKey = SettingsFragment.getSteamGridDBApiKey(requireContext())
+        if (sgdbApiKey != null) {
+            artworkScraper.setSteamGridDBApiKey(sgdbApiKey)
+        }
+
         setupPlatformSpinner()
         setupSearchButton()
         setupSaveButton()

@@ -121,7 +121,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/spacing_xs"
-                    android:text="SteamGridDB API key is required for downloading heroes, logos, and additional artwork."
+                    android:text="API keys for artwork sources. SteamGridDB is recommended for heroes and logos."
                     android:textSize="12sp"
                     android:textColor="@color/theme_text_secondary" />
 
@@ -155,12 +155,71 @@
                     android:textColor="@color/accent_cyan"
                     android:autoLink="web" />
 
+                <!-- IGDB API Keys -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:text="IGDB (Twitch) API"
+                    android:textSize="14sp"
+                    android:textColor="@color/theme_text_primary"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/inputLayoutIgdbClientId"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:hint="IGDB Client ID"
+                    app:boxBackgroundColor="@color/theme_input_background"
+                    app:boxStrokeColor="@color/theme_input_border"
+                    app:hintTextColor="@color/theme_text_secondary"
+                    app:endIconMode="password_toggle">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editIgdbClientId"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/theme_text_primary" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/inputLayoutIgdbClientSecret"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:hint="IGDB Client Secret"
+                    app:boxBackgroundColor="@color/theme_input_background"
+                    app:boxStrokeColor="@color/theme_input_border"
+                    app:hintTextColor="@color/theme_text_secondary"
+                    app:endIconMode="password_toggle">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editIgdbClientSecret"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/theme_text_primary" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Get IGDB credentials at api.igdb.com (requires Twitch account)"
+                    android:textSize="11sp"
+                    android:textColor="@color/accent_cyan"
+                    android:autoLink="web" />
+
                 <Button
                     android:id="@+id/btnSaveApiKey"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/spacing_sm"
-                    android:text="Save API Key"
+                    android:text="Save API Keys"
                     android:background="@drawable/bg_button_gradient"
                     android:textColor="@color/theme_text_primary" />
 
@@ -286,6 +345,80 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- DS Mode Section (for dual-screen devices) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="@dimen/card_elevation"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border_color">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Dual Screen Mode"
+                    android:textSize="@dimen/text_subtitle"
+                    android:textColor="@color/theme_text_primary"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Enable hero and logo sections for dual-screen devices or foldables."
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary" />
+
+                <!-- DS Mode Toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="DS Mode"
+                            android:textSize="@dimen/text_body"
+                            android:textColor="@color/theme_text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Show hero and logo download options (for iiSU Launcher extended display)"
+                            android:textSize="11sp"
+                            android:textColor="@color/theme_text_secondary" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchDsMode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Source Priority Section -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
@@ -354,9 +487,11 @@
 
         <!-- Logo/Title Settings Section -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardLogoSection"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/spacing_md"
+            android:visibility="gone"
             app:cardBackgroundColor="@color/theme_surface"
             app:cardCornerRadius="@dimen/card_corner_radius"
             app:cardElevation="@dimen/card_elevation"
@@ -465,9 +600,11 @@
 
         <!-- Hero Images Section -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardHeroSection"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/spacing_md"
+            android:visibility="gone"
             app:cardBackgroundColor="@color/theme_surface"
             app:cardCornerRadius="@dimen/card_corner_radius"
             app:cardElevation="@dimen/card_elevation"
@@ -567,6 +704,89 @@
                         android:textColor="@color/accent_cyan"
                         android:textStyle="bold"
                         android:gravity="center" />
+
+                </LinearLayout>
+
+                <!-- Hero Crop Toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Crop to 1920x1080"
+                            android:textSize="@dimen/text_body"
+                            android:textColor="@color/theme_text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Crop heroes to 16:9 aspect ratio for iiSU"
+                            android:textSize="11sp"
+                            android:textColor="@color/theme_text_secondary" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchHeroCrop"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                </LinearLayout>
+
+                <!-- Crop Position Slider -->
+                <LinearLayout
+                    android:id="@+id/layoutHeroCropPosition"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Vertical crop position"
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/theme_text_primary" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/sliderHeroCropPosition"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:valueFrom="0"
+                            android:valueTo="1"
+                            android:stepSize="0.1"
+                            app:labelBehavior="gone" />
+
+                        <TextView
+                            android:id="@+id/textHeroCropPosition"
+                            android:layout_width="60dp"
+                            android:layout_height="wrap_content"
+                            android:text="Center"
+                            android:textSize="@dimen/text_body"
+                            android:textColor="@color/accent_cyan"
+                            android:textStyle="bold"
+                            android:gravity="center" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 
@@ -817,6 +1037,90 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/spacing_sm"
                     android:text="Recommended: 1024x1024 PNG with transparency for best results."
+                    android:textSize="11sp"
+                    android:textColor="@color/theme_text_secondary" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Custom Asset Directory Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="@dimen/card_elevation"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border_color">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Asset Directory"
+                    android:textSize="@dimen/text_subtitle"
+                    android:textColor="@color/theme_text_primary"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Set a custom directory for iiSU assets (e.g., SD card or external storage)."
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary" />
+
+                <!-- Current Directory -->
+                <TextView
+                    android:id="@+id/textCustomAssetDir"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:text="Default (iiSU Launcher media folder)"
+                    android:textSize="13sp"
+                    android:textColor="@color/accent_cyan"
+                    android:background="@color/theme_input_background"
+                    android:padding="@dimen/spacing_sm" />
+
+                <!-- Directory Buttons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnSelectAssetDir"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="@dimen/spacing_xs"
+                        android:text="Select Directory"
+                        android:background="@drawable/bg_button_gradient"
+                        android:textColor="@color/theme_text_primary" />
+
+                    <Button
+                        android:id="@+id/btnClearAssetDir"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Reset"
+                        android:textColor="@color/theme_text_secondary"
+                        style="?attr/borderlessButtonStyle" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:text="Useful if your iiSU assets are stored on an SD card or different location."
                     android:textSize="11sp"
                     android:textColor="@color/theme_text_secondary" />
 

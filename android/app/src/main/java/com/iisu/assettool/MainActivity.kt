@@ -20,7 +20,6 @@ import androidx.fragment.app.Fragment
 import com.iisu.assettool.databinding.ActivityMainBinding
 import com.iisu.assettool.ui.DotGridDrawable
 import com.iisu.assettool.ui.IconGeneratorFragment
-import com.iisu.assettool.ui.CoverGeneratorFragment
 import com.iisu.assettool.ui.CustomImageFragment
 import com.iisu.assettool.ui.IisuBrowserFragment
 import com.iisu.assettool.ui.SettingsFragment
@@ -33,7 +32,6 @@ import com.iisu.assettool.util.IisuDirectoryManager
  * Features:
  * - iiSU Browser: Browse and manage iiSU platform assets directly
  * - Icon Generator: Scrape and generate game icons
- * - Cover Generator: Create cover artwork
  * - Custom Image: Process custom images with borders
  * - Settings: App configuration
  *
@@ -211,7 +209,6 @@ class MainActivity : AppCompatActivity() {
             val fragment: Fragment = when (item.itemId) {
                 R.id.nav_iisu_browser -> IisuBrowserFragment()
                 R.id.nav_icon_generator -> IconGeneratorFragment()
-                R.id.nav_cover_generator -> CoverGeneratorFragment()
                 R.id.nav_custom_image -> CustomImageFragment()
                 R.id.nav_settings -> SettingsFragment()
                 else -> return@setOnItemSelectedListener false
@@ -268,7 +265,6 @@ class MainActivity : AppCompatActivity() {
         val fragment: Fragment = when (currentFragmentId) {
             R.id.nav_iisu_browser -> IisuBrowserFragment()
             R.id.nav_icon_generator -> IconGeneratorFragment()
-            R.id.nav_cover_generator -> CoverGeneratorFragment()
             R.id.nav_custom_image -> CustomImageFragment()
             R.id.nav_settings -> SettingsFragment()
             else -> {
