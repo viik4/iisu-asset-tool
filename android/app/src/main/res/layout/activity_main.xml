@@ -24,6 +24,18 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
+    <!-- App Logo - Overlaid at top of navigation rail -->
+    <ImageView
+        android:id="@+id/appLogo"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginTop="8dp"
+        android:src="@drawable/app_logo"
+        android:contentDescription="@string/app_name"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="@id/navigationRail"
+        app:layout_constraintEnd_toEndOf="@id/navigationRail" />
+
     <!-- Fragment container for main content -->
     <FrameLayout
         android:id="@+id/fragment_container"

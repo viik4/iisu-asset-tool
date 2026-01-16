@@ -388,8 +388,8 @@ class IisuBrowserFragment : Fragment() {
         }
 
         binding.recyclerViewPlatforms.apply {
-            // Use 4 columns for landscape tablet-style layout
-            layoutManager = GridLayoutManager(context, 4)
+            // Use 5 columns for landscape tablet-style layout
+            layoutManager = GridLayoutManager(context, 5)
             adapter = platformAdapter
         }
 

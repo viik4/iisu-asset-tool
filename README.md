@@ -150,10 +150,11 @@ Edit `config.yaml` to customize:
 - Logo detection settings
 - Theme preferences
 
+## Credits
+
+- Logo by **Caddypillar**
+- Built for the [iiSU Network](https://iisu.network/) community
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-Built for the [iiSU Network](https://iisu.network/) community.
