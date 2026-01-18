@@ -320,13 +320,11 @@ class ROMBrowserTab(QWidget):
         # Selection controls
         self.btn_select_all_preview = QPushButton("All")
         self.btn_select_all_preview.setToolTip("Select all icons")
-        self.btn_select_all_preview.setFixedSize(60, 28)
         self.btn_select_all_preview.clicked.connect(self._select_all_previews)
         preview_controls.addWidget(self.btn_select_all_preview)
 
         self.btn_select_none_preview = QPushButton("None")
         self.btn_select_none_preview.setToolTip("Deselect all icons")
-        self.btn_select_none_preview.setFixedSize(60, 28)
         self.btn_select_none_preview.clicked.connect(self._select_none_previews)
         preview_controls.addWidget(self.btn_select_none_preview)
 
@@ -1305,6 +1303,19 @@ if ($device) {{
         preview_item.clicked.connect(self._on_preview_clicked)
         preview_item.selection_changed.connect(self._on_preview_selection_changed)
 
+        # Limit preview items to prevent memory issues (keep last 100)
+        max_preview_items = 100
+        if len(self.preview_items) >= max_preview_items:
+            # Remove oldest item
+            old_item = self.preview_items.pop(0)
+            self.preview_grid.removeWidget(old_item)
+            old_item.deleteLater()
+            # Rebuild grid positions
+            for i, item in enumerate(self.preview_items):
+                r = i // 5
+                c = i % 5
+                self.preview_grid.addWidget(item, r, c)
+
         row = len(self.preview_items) // 5  # 5 per row to accommodate wider widgets
         col = len(self.preview_items) % 5
         self.preview_grid.addWidget(preview_item, row, col)
@@ -2256,13 +2267,11 @@ if ($device) {{
 
         popout_select_all = QPushButton("All")
         popout_select_all.setToolTip("Select all icons")
-        popout_select_all.setFixedWidth(50)
         popout_select_all.clicked.connect(self._select_all_previews)
         controls_row.addWidget(popout_select_all)
 
         popout_select_none = QPushButton("None")
         popout_select_none.setToolTip("Deselect all icons")
-        popout_select_none.setFixedWidth(50)
         popout_select_none.clicked.connect(self._select_none_previews)
         controls_row.addWidget(popout_select_none)
 
@@ -2398,6 +2407,19 @@ if ($device) {{
         preview_item = ClickableIconPreview(path, title, platform)
         preview_item.clicked.connect(self._on_preview_clicked)
         preview_item.selection_changed.connect(self._on_popout_selection_changed)
+
+        # Limit popout preview items to prevent memory issues (keep last 100)
+        max_preview_items = 100
+        if len(self._popout_preview_items) >= max_preview_items:
+            # Remove oldest item
+            old_item = self._popout_preview_items.pop(0)
+            self._popout_preview_grid.removeWidget(old_item)
+            old_item.deleteLater()
+            # Rebuild grid positions
+            for i, item in enumerate(self._popout_preview_items):
+                r = i // 4
+                c = i % 4
+                self._popout_preview_grid.addWidget(item, r, c)
 
         row = len(self._popout_preview_items) // 4
         col = len(self._popout_preview_items) % 4
