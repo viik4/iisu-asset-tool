@@ -1658,6 +1658,13 @@ def fetch_multiple_art_from_steamgriddb(
         # Sort by score (highest first) to get the best quality artwork
         suitable_grids.sort(key=lambda x: (x.get("score", 0), x.get("upvotes", 0), x.get("id", 0)), reverse=True)
 
+        # Limit to max 25 artworks to prevent memory issues with large collections
+        # With 4 providers (steamgriddb, igdb, thegamesdb, libretro), this gives ~100 total options
+        MAX_ARTWORKS_PER_PROVIDER = 25
+        if len(suitable_grids) > MAX_ARTWORKS_PER_PROVIDER:
+            _emit_log(callbacks, f"[DEBUG] SteamGridDB: Limiting from {len(suitable_grids)} to {MAX_ARTWORKS_PER_PROVIDER} artworks")
+            suitable_grids = suitable_grids[:MAX_ARTWORKS_PER_PROVIDER]
+
         _emit_log(callbacks, f"[DEBUG] SteamGridDB: {len(suitable_grids)} suitable grids after filtering, sorted by score")
         if suitable_grids:
             top_scores = [(g.get("score", 0), g.get("style", "?")) for g in suitable_grids[:5]]
@@ -3443,13 +3450,18 @@ def run_job(
     done_lock = threading.Lock()
     errors = 0
 
-    # Prefetch cache for interactive mode - stores artwork fetched in background
+    # Prefetch cache for interactive mode - DISABLED to reduce memory usage
+    # With large ROM collections (1000+), prefetching doubles memory consumption
+    # as it holds artwork for the next game while current game is being processed
     prefetch_cache: Dict[str, List[Dict[str, Any]]] = {}
     prefetch_lock = threading.Lock()
     prefetch_thread: Optional[threading.Thread] = None
+    PREFETCH_ENABLED = False  # Set to True to re-enable prefetching
 
     def prefetch_artwork(platform_key: str, title: str, hints: List[str], cache_key: str):
         """Prefetch artwork in background and store in cache."""
+        if not PREFETCH_ENABLED:
+            return
         try:
             options = fetch_all_artwork_options_impl(platform_key, title, hints)
             with prefetch_lock:
@@ -3459,6 +3471,8 @@ def run_job(
 
     def start_prefetch(platform_key: str, title: str, hints: List[str]):
         """Start prefetching artwork for a game in the background."""
+        if not PREFETCH_ENABLED:
+            return  # Prefetching disabled for memory optimization
         nonlocal prefetch_thread
         cache_key = f"{platform_key}:{title}"
         with prefetch_lock:

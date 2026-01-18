@@ -1136,17 +1136,48 @@ if ($device) {{
         # Calculate total games across all platforms
         total_games = sum(len(titles) for titles in by_platform.values())
 
+        # Load config once to get output directory and format (avoid loading per-ROM)
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            output_dir = cfg_path.parent / cfg.get("paths", {}).get("output_dir", "./output")
+            export_format = str(cfg.get("export_format", "JPEG")).upper()
+            file_ext = "jpg" if export_format == "JPEG" else "png"
+        except Exception:
+            output_dir = cfg_path.parent / "output"
+            file_ext = "png"
+
         # Process each platform's games
         def _run():
             try:
                 done_count = 0
+                skipped_count = 0
                 for platform_key, titles in by_platform.items():
                     if self._cancel_token.is_cancelled:
                         break
 
+                    # Get platform output folder name from config
+                    platforms_cfg = cfg.get("platforms", {}) or {}
+                    pconf = platforms_cfg.get(platform_key, {})
+                    folder_name = pconf.get("folder_name", platform_key.lower())
+                    out_plat = output_dir / folder_name
+
                     for title in titles:
                         if self._cancel_token.is_cancelled:
                             break
+
+                        # Check if output already exists BEFORE calling run_job
+                        # This avoids expensive config parsing for already-scraped ROMs
+                        slug = run_backend.safe_slug(title)
+                        out_path = out_plat / slug / f"icon.{file_ext}"
+
+                        if out_path.exists():
+                            # Already scraped - skip without calling run_job
+                            callbacks.log.emit(f"[SKIP] {platform_key}: {title} - Already exists")
+                            done_count += 1
+                            skipped_count += 1
+                            callbacks.progress.emit(done_count, total_games)
+                            continue
 
                         # Emit current item being processed
                         callbacks.current_item.emit(title, platform_key)
@@ -1180,7 +1211,10 @@ if ($device) {{
                         done_count += 1
                         callbacks.progress.emit(done_count, total_games)
 
-                callbacks.finished.emit(True, "Processing complete")
+                if skipped_count > 0:
+                    callbacks.finished.emit(True, f"Processing complete ({skipped_count} already existed, skipped)")
+                else:
+                    callbacks.finished.emit(True, "Processing complete")
 
             except Exception as e:
                 callbacks.finished.emit(False, f"Error: {e}")
