@@ -859,7 +859,8 @@ class IconGeneratorTab(QWidget):
                 "steamgriddb": "SteamGridDB",
                 "libretro": "Libretro Thumbnails",
                 "igdb": "IGDB (Twitch)",
-                "thegamesdb": "TheGamesDB"
+                "thegamesdb": "TheGamesDB",
+                "steam": "Steam Store"
             }
 
             for p in providers:

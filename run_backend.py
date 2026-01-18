@@ -209,12 +209,37 @@ def fuzzy_match_title(search_term: str, database_titles: List[str], threshold: f
             results.append((title, 1.0))
             continue
 
-        # Strategy 2: One contains the other
+        # Strategy 2: One contains the other (with word boundary check)
+        # Be STRICT: only give high scores if lengths are very similar
+        # "Pac-Man" should NOT highly match "Jr. Pac-Man" or "Pac-Man Plus"
         if search_norm in title_norm or title_norm in search_norm:
-            # Score based on length ratio
-            len_ratio = min(len(search_norm), len(title_norm)) / max(len(search_norm), len(title_norm))
-            results.append((title, 0.85 + (len_ratio * 0.1)))
-            continue
+            # Check if it's a proper word boundary match, not just substring
+            is_word_boundary_match = False
+            if search_norm in title_norm:
+                idx = title_norm.find(search_norm)
+                end_idx = idx + len(search_norm)
+                before_ok = idx == 0 or title_norm[idx - 1] == ' '
+                after_ok = end_idx == len(title_norm) or title_norm[end_idx] == ' '
+                is_word_boundary_match = before_ok and after_ok
+            elif title_norm in search_norm:
+                idx = search_norm.find(title_norm)
+                end_idx = idx + len(title_norm)
+                before_ok = idx == 0 or search_norm[idx - 1] == ' '
+                after_ok = end_idx == len(search_norm) or search_norm[end_idx] == ' '
+                is_word_boundary_match = before_ok and after_ok
+
+            if is_word_boundary_match:
+                # Score based on length ratio - be strict about length differences
+                len_ratio = min(len(search_norm), len(title_norm)) / max(len(search_norm), len(title_norm))
+                # Only give high score (>= 0.85) if lengths are nearly identical (ratio > 0.95)
+                # This prevents "Pac-Man" from matching "Pac-Man Plus" with high score
+                if len_ratio > 0.95:
+                    results.append((title, 0.90 + (len_ratio * 0.05)))
+                else:
+                    # Significant length difference - lower score proportional to ratio
+                    # This allows the match but won't be considered "exact"
+                    results.append((title, 0.5 + (len_ratio * 0.3)))
+                continue
 
         # Strategy 3: Token overlap (Jaccard similarity)
         if search_tokens and title_tokens:
@@ -222,9 +247,18 @@ def fuzzy_match_title(search_term: str, database_titles: List[str], threshold: f
             union = len(search_tokens | title_tokens)
             jaccard = intersection / union if union > 0 else 0
 
-            # Boost if all search tokens are found
-            if search_tokens <= title_tokens:
-                jaccard = min(1.0, jaccard + 0.2)
+            # Only boost if tokens match exactly (same tokens, same count)
+            # Don't boost for "Pac-Man Plus" when searching "Pac-Man"
+            if search_tokens == title_tokens:
+                # Exact token match - high score
+                jaccard = min(1.0, jaccard + 0.3)
+            elif search_tokens <= title_tokens:
+                # All search tokens found, but title has extra tokens
+                # Give modest boost but cap below "exact match" threshold
+                extra_tokens = len(title_tokens - search_tokens)
+                # More extra tokens = lower score
+                boost = max(0, 0.15 - (extra_tokens * 0.05))
+                jaccard = min(0.80, jaccard + boost)  # Cap at 0.80, below 0.85 threshold
 
             if jaccard >= threshold:
                 results.append((title, jaccard))
@@ -233,12 +267,41 @@ def fuzzy_match_title(search_term: str, database_titles: List[str], threshold: f
         # Strategy 4: Sequence matching (handles typos, minor differences)
         seq_ratio = SequenceMatcher(None, search_norm, title_norm).ratio()
         if seq_ratio >= threshold:
-            results.append((title, seq_ratio))
-            continue
+            # Penalize cases where one is a prefix of the other
+            shorter, longer = (search_norm, title_norm) if len(search_norm) <= len(title_norm) else (title_norm, search_norm)
+            if longer.startswith(shorter) and len(longer) > len(shorter):
+                extra_part = longer[len(shorter):]
+                if extra_part and extra_part[0] != ' ':
+                    # No word boundary - definitely different game (e.g., "pacmania" vs "pacman")
+                    seq_ratio = max(0, seq_ratio - 0.4)
+                else:
+                    # Has word boundary but still different (e.g., "pac-man plus" vs "pac-man")
+                    # Penalize based on length difference
+                    len_ratio = len(shorter) / len(longer)
+                    if len_ratio < 0.9:
+                        # Significant length difference - cap the score
+                        seq_ratio = min(seq_ratio, 0.75)
+            if seq_ratio >= threshold:
+                results.append((title, seq_ratio))
+                continue
 
         # Strategy 5: Check if search starts with or title starts with
-        if search_norm.startswith(title_norm[:min(10, len(title_norm))]) or \
-           title_norm.startswith(search_norm[:min(10, len(search_norm))]):
+        # But only if it's at a word boundary to avoid "pac-man" matching "pac-mania"
+        prefix_match = False
+        if title_norm.startswith(search_norm):
+            # Title starts with search - check word boundary after search
+            if len(title_norm) == len(search_norm):
+                prefix_match = True
+            elif title_norm[len(search_norm)] in ' -:':
+                prefix_match = True
+        elif search_norm.startswith(title_norm):
+            # Search starts with title - check word boundary after title
+            if len(search_norm) == len(title_norm):
+                prefix_match = True
+            elif search_norm[len(title_norm)] in ' -:':
+                prefix_match = True
+
+        if prefix_match:
             results.append((title, 0.65))
 
     # Sort by score descending
@@ -1543,13 +1606,13 @@ def fetch_multiple_art_from_steamgriddb(
     platform_key: str,
     title: str,
     platform_hints: List[str],
-    max_results: int = 5,
     callbacks=None
 ) -> List[Tuple[bytes, str]]:
     """
-    Fetch multiple artwork options from SteamGridDB.
+    Fetch ALL artwork options from SteamGridDB.
     Returns list of (bytes, source_tag) tuples.
     Uses smart search with multiple variants for better matching.
+    Downloads are parallelized for speed.
     """
     results = []
 
@@ -1600,12 +1663,12 @@ def fetch_multiple_art_from_steamgriddb(
             top_scores = [(g.get("score", 0), g.get("style", "?")) for g in suitable_grids[:5]]
             _emit_log(callbacks, f"[DEBUG] SteamGridDB: Top scores: {top_scores}")
 
-        # Take up to max_results grids (now sorted by score)
-        for grid in suitable_grids[:max_results]:
+        # Download ALL grids in parallel for speed
+        def download_grid(idx_grid):
+            idx, grid = idx_grid
             url = grid.get("url")
             if not url:
-                continue
-
+                return None
             try:
                 cache_key = sha256_text(url)
                 cache_path = cache_dir / f"{cache_key}.bin"
@@ -1619,11 +1682,25 @@ def fetch_multiple_art_from_steamgriddb(
                 # Add grid style info to source tag
                 style = grid.get("style", "unknown")
                 source_tag = f"SteamGridDB - {style}"
-                results.append((img_bytes, source_tag))
+                return (idx, img_bytes, source_tag)
 
             except Exception as e:
                 _emit_log(callbacks, f"[DEBUG] SteamGridDB: Failed to download grid - {e}")
-                continue
+                return None
+
+        # Use ThreadPoolExecutor for parallel downloads
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        indexed_results = []
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(download_grid, (i, grid)) for i, grid in enumerate(suitable_grids)]
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    indexed_results.append(result)
+
+        # Sort results by original index to maintain score order
+        indexed_results.sort(key=lambda x: x[0])
+        results = [(img_bytes, source_tag) for idx, img_bytes, source_tag in indexed_results]
 
         _emit_log(callbacks, f"[DEBUG] SteamGridDB: Returning {len(results)} artwork options")
         return results
@@ -1746,7 +1823,7 @@ def logos_by_game(
 ) -> List[dict]:
     """Fetch logo images for a game from SteamGridDB.
 
-    Logo styles: official, white, black, custom
+    Logo styles: white, black, custom (avoid "official" - user-submitted and unreliable)
     """
     params = {}
     if styles:
@@ -1769,7 +1846,8 @@ def fetch_heroes_from_steamgriddb(
     title: str,
     platform_hints: List[str],
     max_heroes: int = 1,
-    callbacks=None
+    callbacks=None,
+    game_id: Optional[str] = None  # Allow passing pre-selected game_id
 ) -> List[Tuple[bytes, str]]:
     """
     Fetch hero images from SteamGridDB.
@@ -1787,20 +1865,47 @@ def fetch_heroes_from_steamgriddb(
     try:
         _emit_log(callbacks, f"[HERO] Searching SteamGridDB for heroes: '{title}'...")
 
-        # Search for game
-        autocomplete_results = search_autocomplete(api_key, base_url, title, timeout_s)
-        if not autocomplete_results:
-            _emit_log(callbacks, f"[HERO] No search results for '{title}'")
-            return results
+        # If no game_id provided, search for the game with STRICT matching
+        if not game_id:
+            # Search for game
+            autocomplete_results = search_autocomplete(api_key, base_url, title, timeout_s)
+            if not autocomplete_results:
+                _emit_log(callbacks, f"[HERO] No search results for '{title}'")
+                return results
 
-        if delay_s > 0:
-            time.sleep(delay_s)
+            if delay_s > 0:
+                time.sleep(delay_s)
 
-        # Get best game ID
-        game_id = choose_best_game_id(
-            api_key, base_url, timeout_s, delay_s,
-            title, platform_hints, autocomplete_results, 8, callbacks
-        )
+            # STRICT matching for heroes - only accept exact or very close matches
+            # This prevents getting heroes from fan games when searching for the main game
+            title_lower = title.lower().strip()
+            best_match = None
+            best_score = 0
+
+            for result in autocomplete_results[:5]:
+                name = (result.get("name") or "").lower().strip()
+                # Exact match
+                if name == title_lower:
+                    best_match = result
+                    best_score = 100
+                    break
+                # Title is the complete name
+                if name == title_lower or title_lower == name:
+                    if best_score < 90:
+                        best_match = result
+                        best_score = 90
+                # Title starts the name and is followed by space/colon
+                elif name.startswith(title_lower + " ") or name.startswith(title_lower + ":"):
+                    if best_score < 50:
+                        best_match = result
+                        best_score = 50
+
+            if not best_match:
+                _emit_log(callbacks, f"[HERO] No exact/close match for '{title}' - skipping heroes to avoid wrong game")
+                return results
+
+            game_id = str(best_match.get("id"))
+            _emit_log(callbacks, f"[HERO] Using strict match: '{best_match.get('name')}' (id={game_id})")
 
         if not game_id:
             _emit_log(callbacks, f"[HERO] No matching game ID for '{title}'")
@@ -1889,13 +1994,14 @@ def fetch_logos_from_steamgriddb(
     platform_key: str,
     title: str,
     platform_hints: List[str],
-    callbacks=None
+    callbacks=None,
+    game_id: Optional[str] = None  # Allow passing pre-selected game_id
 ) -> Optional[Tuple[bytes, str]]:
     """
     Fetch a logo image from SteamGridDB.
 
     Logo images are transparent PNG images of game titles/logos.
-    Styles: official, white, black, custom
+    Styles: white, black, custom (avoid "official" - user-submitted and unreliable)
 
     Returns (bytes, filename_hint) tuple or None if no logo found.
     """
@@ -1905,24 +2011,47 @@ def fetch_logos_from_steamgriddb(
     try:
         _emit_log(callbacks, f"[LOGO] Searching SteamGridDB for logo: '{title}'...")
 
-        # Search for game
-        autocomplete_results = search_autocomplete(api_key, base_url, title, timeout_s)
-        if not autocomplete_results:
-            _emit_log(callbacks, f"[LOGO] No search results for '{title}'")
-            return None
-
-        if delay_s > 0:
-            time.sleep(delay_s)
-
-        # Get best game ID
-        game_id = choose_best_game_id(
-            api_key, base_url, timeout_s, delay_s,
-            title, platform_hints, autocomplete_results, 8, callbacks
-        )
-
+        # If no game_id provided, search for the game
         if not game_id:
-            _emit_log(callbacks, f"[LOGO] No matching game ID for '{title}'")
-            return None
+            # Search for game
+            autocomplete_results = search_autocomplete(api_key, base_url, title, timeout_s)
+            if not autocomplete_results:
+                _emit_log(callbacks, f"[LOGO] No search results for '{title}'")
+                return None
+
+            if delay_s > 0:
+                time.sleep(delay_s)
+
+            # STRICT matching for logos - only accept exact or very close matches
+            # This prevents getting logos from fan games like "SwapFell" when searching "Undertale"
+            title_lower = title.lower().strip()
+            best_match = None
+            best_score = 0
+
+            for result in autocomplete_results[:5]:
+                name = (result.get("name") or "").lower().strip()
+                # Exact match
+                if name == title_lower:
+                    best_match = result
+                    best_score = 100
+                    break
+                # Title is the complete name (e.g., "Undertale" matches "Undertale")
+                if name == title_lower or title_lower == name:
+                    if best_score < 90:
+                        best_match = result
+                        best_score = 90
+                # Title starts the name and is followed by space/colon (e.g., "Undertale: " but not "Undertaley")
+                elif name.startswith(title_lower + " ") or name.startswith(title_lower + ":"):
+                    if best_score < 50:
+                        best_match = result
+                        best_score = 50
+
+            if not best_match:
+                _emit_log(callbacks, f"[LOGO] No exact/close match for '{title}' - skipping logo to avoid wrong game")
+                return None
+
+            game_id = str(best_match.get("id"))
+            _emit_log(callbacks, f"[LOGO] Using strict match: '{best_match.get('name')}' (id={game_id})")
 
         _emit_log(callbacks, f"[LOGO] Found game ID: {game_id}")
 
@@ -2572,6 +2701,339 @@ def fetch_art_from_thegamesdb(
         return None
 
 
+# ==========================
+# Steam Store Provider
+# ==========================
+
+# Global cache for Steam app list
+_steam_app_list_cache = None
+_steam_app_list_lock = threading.Lock()
+_steam_app_list_cache_time = None
+_STEAM_CACHE_HOURS = 24  # Cache app list for 24 hours
+
+
+def _get_steam_app_list(timeout_s: int, debug_log=None) -> Dict[str, int]:
+    """
+    Fetch and cache the Steam app list.
+    Returns dict mapping lowercase game names to app IDs.
+    """
+    global _steam_app_list_cache, _steam_app_list_cache_time
+
+    def _log(msg):
+        if debug_log and callable(debug_log):
+            debug_log(msg)
+
+    with _steam_app_list_lock:
+        # Check if cache is valid
+        if _steam_app_list_cache is not None and _steam_app_list_cache_time is not None:
+            age_hours = (time.time() - _steam_app_list_cache_time) / 3600
+            if age_hours < _STEAM_CACHE_HOURS:
+                _log(f"[DEBUG] Steam: Using cached app list ({len(_steam_app_list_cache)} apps)")
+                return _steam_app_list_cache
+
+        _log(f"[DEBUG] Steam: Fetching app list from API...")
+
+        try:
+            # Use the Steam Web API to get all apps
+            # Try multiple endpoints as some may be blocked regionally
+            apps = []
+            success = False
+
+            # Endpoints to try in order
+            endpoints = [
+                ("https://api.steampowered.com/ISteamApps/GetAppList/v0002/", "v0002"),
+                ("https://api.steampowered.com/ISteamApps/GetAppList/v2/", "v2"),
+                ("https://api.steampowered.com/ISteamApps/GetAppList/v1/", "v1"),
+            ]
+
+            for url, version in endpoints:
+                try:
+                    r = requests.get(url, timeout=timeout_s)
+                    r.raise_for_status()
+                    data = r.json()
+                    apps = data.get("applist", {}).get("apps", [])
+                    if apps:
+                        _log(f"[DEBUG] Steam: ISteamApps/{version} returned {len(apps)} apps")
+                        success = True
+                        break
+                except Exception as e:
+                    _log(f"[DEBUG] Steam: ISteamApps/{version} failed ({type(e).__name__})")
+                    continue
+
+            if not success or not apps:
+                _log(f"[DEBUG] Steam: All API endpoints failed, Steam search disabled")
+                return _steam_app_list_cache or {}
+
+            _log(f"[DEBUG] Steam: Retrieved {len(apps)} apps from API")
+
+            # Build lookup dict (lowercase name -> app_id)
+            # Handle duplicates by keeping first occurrence (usually the main game)
+            app_dict = {}
+            for app in apps:
+                name = app.get("name", "").strip()
+                app_id = app.get("appid")
+                if name and app_id:
+                    name_lower = name.lower()
+                    if name_lower not in app_dict:
+                        app_dict[name_lower] = app_id
+
+            _steam_app_list_cache = app_dict
+            _steam_app_list_cache_time = time.time()
+            _log(f"[DEBUG] Steam: Cached {len(app_dict)} unique apps")
+
+            return app_dict
+
+        except Exception as e:
+            _log(f"[DEBUG] Steam: Failed to fetch app list: {type(e).__name__}: {e}")
+            return _steam_app_list_cache or {}
+
+
+def _search_steam_apps(search_term: str, app_list: Dict[str, int], max_results: int = 10) -> List[Tuple[int, str, float]]:
+    """
+    Search Steam app list for matching games.
+    Returns list of (app_id, name, score) tuples sorted by match score.
+    """
+    if not search_term or not app_list:
+        return []
+
+    search_lower = search_term.lower().strip()
+    search_norm = normalize_for_search(search_term).lower()
+
+    results = []
+
+    for name_lower, app_id in app_list.items():
+        # Skip empty names or DLC-like entries
+        if not name_lower or "soundtrack" in name_lower or "artbook" in name_lower:
+            continue
+
+        # Exact match
+        if name_lower == search_lower or name_lower == search_norm:
+            results.append((app_id, name_lower, 1.0))
+            continue
+
+        # Contains match
+        if search_lower in name_lower:
+            # Score based on how much of the name matches
+            ratio = len(search_lower) / len(name_lower)
+            # Bonus if starts with search term
+            if name_lower.startswith(search_lower):
+                ratio = min(1.0, ratio + 0.2)
+            results.append((app_id, name_lower, ratio * 0.9))
+            continue
+
+        # Normalized match
+        name_norm = normalize_for_search(name_lower).lower()
+        if search_norm in name_norm:
+            ratio = len(search_norm) / len(name_norm)
+            results.append((app_id, name_lower, ratio * 0.85))
+
+    # Sort by score descending
+    results.sort(key=lambda x: x[2], reverse=True)
+    return results[:max_results]
+
+
+def fetch_art_from_steam(
+    *,
+    timeout_s: int,
+    delay_s: float,
+    platform_key: str,
+    title: str,
+    cache_dir: Path,
+    debug_log=None
+) -> Optional[Tuple[bytes, str]]:
+    """
+    Fetch artwork from Steam Store.
+    Steam has games for many platforms, so we search regardless of platform_key.
+    Returns (image_bytes, source_tag) or None.
+    """
+    def _log(msg):
+        if debug_log and callable(debug_log):
+            debug_log(msg)
+
+    # Clean and normalize title for better search
+    search_title = normalize_for_search(title)
+    _log(f"[DEBUG] Steam: Searching for '{title}' (normalized: '{search_title}')")
+
+    try:
+        # Get Steam app list
+        app_list = _get_steam_app_list(timeout_s, debug_log)
+
+        matches = []
+        if app_list:
+            # Search for matching games using cached app list
+            matches = _search_steam_apps(title, app_list, max_results=5)
+            if not matches:
+                matches = _search_steam_apps(search_title, app_list, max_results=5)
+
+        # If no app list or no matches, try Steam Store search API
+        if not matches:
+            _log(f"[DEBUG] Steam: Trying Steam Store search API...")
+            try:
+                search_url = "https://store.steampowered.com/api/storesearch/"
+                params = {"term": title, "cc": "us", "l": "en"}
+                r = requests.get(search_url, params=params, timeout=timeout_s)
+                r.raise_for_status()
+                data = r.json()
+                items = data.get("items", [])
+                for item in items[:5]:
+                    app_id = item.get("id")
+                    name = item.get("name", "")
+                    if app_id and name:
+                        matches.append((app_id, name.lower(), 0.9))
+                _log(f"[DEBUG] Steam: Store search returned {len(matches)} results")
+            except Exception as e:
+                _log(f"[DEBUG] Steam: Store search failed: {e}")
+
+        if not matches:
+            _log(f"[DEBUG] Steam: No matches found for '{title}'")
+            return None
+
+        # Try each match until we find one with artwork
+        for app_id, matched_name, score in matches:
+            _log(f"[DEBUG] Steam: Trying match '{matched_name}' (appid: {app_id}, score: {score:.2f})")
+
+            if delay_s > 0:
+                time.sleep(delay_s)
+
+            # Try to get the header image (most reliable)
+            # Steam CDN URLs: https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg
+            header_url = f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg"
+
+            # Check cache first
+            cache_key = sha256_text(header_url)
+            cache_path = cache_dir / f"{cache_key}.bin"
+
+            if cache_path.exists():
+                _log(f"[DEBUG] Steam: Using cached image for appid {app_id}")
+                return cache_path.read_bytes(), "steam_header"
+
+            try:
+                _log(f"[DEBUG] Steam: Downloading header image for appid {app_id}...")
+                img_bytes = download_bytes(header_url, timeout_s)
+
+                # Verify it's a valid image (not a placeholder)
+                if len(img_bytes) > 1000:  # Basic size check
+                    cache_path.write_bytes(img_bytes)
+                    _log(f"[DEBUG] Steam: Header image downloaded and cached")
+                    return img_bytes, "steam_header"
+                else:
+                    _log(f"[DEBUG] Steam: Image too small, likely placeholder")
+
+            except Exception as e:
+                _log(f"[DEBUG] Steam: Failed to download header for {app_id}: {e}")
+                continue
+
+        _log(f"[DEBUG] Steam: No valid artwork found for '{title}'")
+        return None
+
+    except Exception as e:
+        _log(f"[DEBUG] Steam: Error - {type(e).__name__}: {e}")
+        return None
+
+
+def fetch_multiple_art_from_steam(
+    *,
+    timeout_s: int,
+    delay_s: float,
+    platform_key: str,
+    title: str,
+    cache_dir: Path,
+    callbacks=None,
+    max_results: int = 10
+) -> List[Tuple[bytes, str]]:
+    """
+    Fetch multiple artwork options from Steam Store for interactive mode.
+    Returns list of (image_bytes, source_tag) tuples.
+    """
+    results = []
+
+    def _log(msg):
+        _emit_log(callbacks, msg)
+
+    # Clean and normalize title for better search
+    search_title = normalize_for_search(title)
+    _log(f"[DEBUG] Steam: Searching for multiple results: '{title}'")
+
+    try:
+        # Get Steam app list
+        app_list = _get_steam_app_list(timeout_s, lambda m: _emit_log(callbacks, m))
+
+        matches = []
+        if app_list:
+            # Search for matching games using cached app list
+            matches = _search_steam_apps(title, app_list, max_results=max_results)
+            if not matches:
+                matches = _search_steam_apps(search_title, app_list, max_results=max_results)
+
+        # If no app list or no matches, try Steam Store search API
+        if not matches:
+            _log(f"[DEBUG] Steam: Trying Steam Store search API...")
+            try:
+                search_url = "https://store.steampowered.com/api/storesearch/"
+                params = {"term": title, "cc": "us", "l": "en"}
+                r = requests.get(search_url, params=params, timeout=timeout_s)
+                r.raise_for_status()
+                data = r.json()
+                items = data.get("items", [])
+                for item in items[:max_results]:
+                    app_id = item.get("id")
+                    name = item.get("name", "")
+                    if app_id and name:
+                        matches.append((app_id, name.lower(), 0.9))
+                _log(f"[DEBUG] Steam: Store search returned {len(matches)} results")
+            except Exception as e:
+                _log(f"[DEBUG] Steam: Store search failed: {e}")
+
+        if not matches:
+            _log(f"[DEBUG] Steam: No matches found for '{title}'")
+            return results
+
+        _log(f"[DEBUG] Steam: Found {len(matches)} potential matches")
+
+        # Download images in parallel
+        def download_steam_image(match_data):
+            app_id, matched_name, score = match_data
+            try:
+                header_url = f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg"
+
+                # Check cache first
+                cache_key = sha256_text(header_url)
+                cache_path = cache_dir / f"{cache_key}.bin"
+
+                if cache_path.exists():
+                    return (cache_path.read_bytes(), f"steam:{matched_name}")
+
+                img_bytes = download_bytes(header_url, timeout_s)
+
+                if len(img_bytes) > 1000:
+                    cache_path.write_bytes(img_bytes)
+                    return (img_bytes, f"steam:{matched_name}")
+
+            except Exception:
+                pass
+            return None
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {executor.submit(download_steam_image, m): i for i, m in enumerate(matches)}
+            indexed_results = []
+            for future in as_completed(futures):
+                idx = futures[future]
+                result = future.result()
+                if result:
+                    indexed_results.append((idx, result))
+
+            # Sort by original index to maintain score order
+            indexed_results.sort(key=lambda x: x[0])
+            results = [r[1] for r in indexed_results]
+
+        _log(f"[DEBUG] Steam: Retrieved {len(results)} images")
+        return results
+
+    except Exception as e:
+        _log(f"[DEBUG] Steam: Error - {type(e).__name__}: {e}")
+        return results
+
+
 # Stub "elsewhere" provider you can implement later
 def fetch_art_from_custom_http(*, timeout_s: int, platform_key: str, title: str) -> Optional[Tuple[bytes, str]]:
     return None
@@ -2610,7 +3072,8 @@ def migrate_legacy_art_sources(art_sources: dict) -> dict:
     # Add new providers (disabled by default)
     providers.extend([
         {"id": "igdb", "enabled": False},
-        {"id": "thegamesdb", "enabled": False}
+        {"id": "thegamesdb", "enabled": False},
+        {"id": "steam", "enabled": False}
     ])
 
     return {"providers": providers, "mode": mode}  # Keep mode for reference
@@ -2767,6 +3230,11 @@ def run_job(
     tgdb_image_type = tgdb_cfg.get("prefer_image_type", "boxart")
     tgdb_platform_map = tgdb_cfg.get("platform_map", {}) or {}
 
+    # Steam Store config (no API key required - uses public API)
+    steam_cfg = cfg.get("steam", {}) or {}
+    steam_timeout = int(steam_cfg.get("request_timeout_seconds", 30))
+    steam_delay = float(steam_cfg.get("delay_seconds", 0.25))
+
     # Auto-centering config
     ac = cfg.get("auto_centering", {}) or {}
     ac_enabled = bool(ac.get("enabled", True))
@@ -2818,6 +3286,7 @@ def run_job(
     _emit_log(callbacks, f"[CONFIG] IGDB Client ID: {'SET' if igdb_client_id else 'NOT SET'}")
     _emit_log(callbacks, f"[CONFIG] IGDB Client Secret: {'SET' if igdb_client_secret else 'NOT SET'}")
     _emit_log(callbacks, f"[CONFIG] TheGamesDB API key: {'SET' if tgdb_api_key else 'NOT SET'}")
+    _emit_log(callbacks, f"[CONFIG] Steam Store: ENABLED (no API key required)")
 
     _emit_log(callbacks, f"[CONFIG] Using providers: {', '.join(provider_order)}")
 
@@ -3030,7 +3499,6 @@ def run_job(
                     platform_key=platform_key,
                     title=title,
                     platform_hints=hints,
-                    max_results=5,
                     callbacks=callbacks,
                 )
                 with options_lock:
@@ -3132,6 +3600,30 @@ def run_job(
             except Exception as e:
                 _emit_log(callbacks, f"[INTERACTIVE] {platform_key}: {title} - thegamesdb failed: {type(e).__name__}: {e}")
 
+        def fetch_from_steam():
+            if cancel.is_cancelled:
+                return
+            try:
+                _emit_log(callbacks, f"[INTERACTIVE] {platform_key}: {title} - Fetching from steam...")
+                results = fetch_multiple_art_from_steam(
+                    timeout_s=steam_timeout,
+                    delay_s=steam_delay,
+                    platform_key=platform_key,
+                    title=title,
+                    cache_dir=cache_dir,
+                    callbacks=callbacks,
+                )
+                with options_lock:
+                    for img_bytes, source_tag in results:
+                        options.append({
+                            'image_data': img_bytes,
+                            'source': source_tag,
+                            'provider': 'steam'
+                        })
+                _emit_log(callbacks, f"[INTERACTIVE] {platform_key}: {title} - Found {len(results)} from steam")
+            except Exception as e:
+                _emit_log(callbacks, f"[INTERACTIVE] {platform_key}: {title} - steam failed: {type(e).__name__}: {e}")
+
         def fetch_from_custom_http():
             if cancel.is_cancelled:
                 return
@@ -3160,6 +3652,7 @@ def run_job(
             'libretro': fetch_from_libretro,
             'igdb': fetch_from_igdb,
             'thegamesdb': fetch_from_thegamesdb,
+            'steam': fetch_from_steam,
             'custom_http': fetch_from_custom_http,
         }
 
@@ -3423,6 +3916,23 @@ def run_job(
                     else:
                         _emit_log(callbacks, f"[DB] {platform_key}: {title} - Not found in TheGamesDB")
 
+                elif prov == "steam":
+                    _emit_log(callbacks, f"[DB] {platform_key}: {title} - Searching Steam Store...")
+                    got = fetch_art_from_steam(
+                        timeout_s=steam_timeout,
+                        delay_s=steam_delay,
+                        platform_key=platform_key,
+                        title=title,
+                        cache_dir=cache_dir,
+                        debug_log=lambda m: _emit_log(callbacks, m),
+                    )
+                    if got:
+                        img_bytes, source_tag = got
+                        _emit_log(callbacks, f"[DB] {platform_key}: {title} - Found in Steam Store")
+                        break
+                    else:
+                        _emit_log(callbacks, f"[DB] {platform_key}: {title} - Not found in Steam Store")
+
                 elif prov == "custom_http":
                     _emit_log(callbacks, f"[DB] {platform_key}: {title} - Searching Custom HTTP...")
                     got = fetch_art_from_custom_http(timeout_s=timeout_s, platform_key=platform_key, title=title)
@@ -3518,7 +4028,9 @@ def run_job(
                 # Try to fetch logo from SteamGridDB
                 try:
                     logo_cfg = cfg.get("logos", {}) or {}
-                    logo_styles = logo_cfg.get("styles", ["official", "white", "black"])
+                    # Note: "official" style is user-submitted and unreliable (can be fan translations)
+                    # Prefer "white" and "black" which are more standardized
+                    logo_styles = logo_cfg.get("styles", ["white", "black"])
 
                     logo_result = fetch_logos_from_steamgriddb(
                         api_key=api_key,

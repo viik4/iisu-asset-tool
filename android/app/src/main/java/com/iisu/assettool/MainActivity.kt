@@ -24,6 +24,7 @@ import com.iisu.assettool.ui.CustomImageFragment
 import com.iisu.assettool.ui.IisuBrowserFragment
 import com.iisu.assettool.ui.SettingsFragment
 import com.iisu.assettool.util.IisuDirectoryManager
+import java.io.File
 
 /**
  * Main Activity for iiSU Asset Tool Android
@@ -60,11 +61,28 @@ class MainActivity : AppCompatActivity() {
 
         setupNavigation()
         applyDotGridBackground()
+        loadSavedCustomAssetDirectory()
         checkStoragePermissions()
 
         // Load default fragment only if we have permissions
         if (savedInstanceState == null) {
             loadDefaultFragment()
+        }
+    }
+
+    /**
+     * Load the saved custom asset directory from preferences and set it in IisuDirectoryManager.
+     * This ensures the custom directory is used even if the user doesn't visit Settings.
+     */
+    private fun loadSavedCustomAssetDirectory() {
+        val prefs = getSharedPreferences(SettingsFragment.PREFS_NAME, MODE_PRIVATE)
+        val savedPath = prefs.getString(SettingsFragment.PREF_CUSTOM_ASSET_DIR, null)
+        if (savedPath != null) {
+            val file = File(savedPath)
+            if (file.exists() && file.isDirectory) {
+                IisuDirectoryManager.setCustomRomPath(file)
+                Log.d(TAG, "Loaded saved custom asset directory: $savedPath")
+            }
         }
     }
 

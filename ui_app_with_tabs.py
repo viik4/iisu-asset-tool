@@ -402,7 +402,7 @@ class MainWindowWithTabs(QMainWindow):
         # Get the current icon generator tab to access its settings
         icon_tab = self.tabs.widget(1)  # Icon Scraper is now the second tab (index 1)
 
-        # Load current ROM settings from config
+        # Load all settings from config
         rom_settings = {}
         hero_settings = {}
         fallback_settings = {}
@@ -411,6 +411,9 @@ class MainWindowWithTabs(QMainWindow):
         logo_settings = {}
         custom_border_settings = {}
         custom_platforms = {}
+        processing_settings = {}
+        export_settings = {}
+
         if hasattr(icon_tab, 'config_path'):
             try:
                 cfg_path = Path(icon_tab.config_path)
@@ -425,15 +428,24 @@ class MainWindowWithTabs(QMainWindow):
                     logo_settings = cfg.get("logos", {})
                     custom_border_settings = cfg.get("custom_borders", {})
                     custom_platforms = cfg.get("custom_platforms", {})
+                    processing_settings = cfg.get("processing", {})
+                    export_settings = {
+                        "format": cfg.get("export_format", "PNG"),
+                        "jpeg_quality": cfg.get("jpeg_quality", 95)
+                    }
             except Exception:
                 pass
 
         if hasattr(icon_tab, 'config_path'):
+            # Use saved processing settings or current values
+            workers = processing_settings.get("workers", icon_tab.workers_value)
+            limit = processing_settings.get("limit", icon_tab.limit_value)
+
             dialog = OptionsDialog(
                 parent=self,
                 config_path=icon_tab.config_path,
-                workers=icon_tab.workers_value,
-                limit=icon_tab.limit_value,
+                workers=workers,
+                limit=limit,
                 source_priority_widget=icon_tab.source_priority,
                 rom_directory_settings=rom_settings
             )
@@ -461,6 +473,10 @@ class MainWindowWithTabs(QMainWindow):
             if logo_settings:
                 dialog.set_logo_settings(logo_settings)
 
+            # Set export settings if available
+            if export_settings:
+                dialog.set_export_settings(export_settings)
+
             # Set custom border settings if available
             if custom_border_settings:
                 dialog.set_custom_border_settings(custom_border_settings)
@@ -482,17 +498,22 @@ class MainWindowWithTabs(QMainWindow):
                 # Reload platforms if config changed
                 icon_tab.load_platforms_from_config()
 
-                # Update ROM browser tab with new settings
+                # Get all settings from dialog
                 rom_dir_settings = dialog.get_rom_directory_settings()
                 hero_settings = dialog.get_hero_settings()
                 fallback_settings = dialog.get_fallback_settings()
                 screenshot_settings = dialog.get_screenshot_settings()
                 device_settings = dialog.get_device_settings()
                 logo_settings = dialog.get_logo_settings()
+                export_settings = dialog.get_export_settings()
                 custom_border_settings = dialog.get_custom_border_settings()
                 custom_platforms = dialog.get_custom_platforms()
+                processing_settings = {
+                    "workers": dialog.get_workers(),
+                    "limit": dialog.get_limit()
+                }
 
-                # Save settings to config
+                # Save ALL settings to config
                 self._save_settings_to_config(
                     icon_tab.config_path,
                     rom_dir_settings,
@@ -502,10 +523,12 @@ class MainWindowWithTabs(QMainWindow):
                     device_settings,
                     logo_settings,
                     custom_border_settings,
-                    custom_platforms
+                    custom_platforms,
+                    processing_settings,
+                    export_settings
                 )
 
-                # Store fallback settings on icon tab for backend access
+                # Store settings on icon tab for backend access
                 icon_tab.fallback_settings = fallback_settings
                 icon_tab.screenshot_settings = screenshot_settings
                 icon_tab.device_settings = device_settings
@@ -523,8 +546,11 @@ class MainWindowWithTabs(QMainWindow):
                 self.rom_browser_tab.device_settings = device_settings
                 self.rom_browser_tab.logo_settings = logo_settings
 
-    def _save_settings_to_config(self, config_path, rom_settings, hero_settings, fallback_settings=None, screenshot_settings=None, device_settings=None, logo_settings=None, custom_border_settings=None, custom_platforms=None):
-        """Save ROM, hero, fallback, screenshot, device, logo, custom border, and custom platform settings to config file."""
+    def _save_settings_to_config(self, config_path, rom_settings, hero_settings, fallback_settings=None,
+                                  screenshot_settings=None, device_settings=None, logo_settings=None,
+                                  custom_border_settings=None, custom_platforms=None,
+                                  processing_settings=None, export_settings=None):
+        """Save all settings to config file for persistence between sessions."""
         import yaml
         from pathlib import Path
 
@@ -536,8 +562,11 @@ class MainWindowWithTabs(QMainWindow):
             with open(cfg_path, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
 
+            # Core settings
             cfg["rom_directory"] = rom_settings
             cfg["hero_images"] = hero_settings
+
+            # Optional settings
             if fallback_settings:
                 cfg["fallback_icons"] = fallback_settings
             if screenshot_settings:
@@ -548,13 +577,23 @@ class MainWindowWithTabs(QMainWindow):
                 cfg["logos"] = logo_settings
             if custom_border_settings:
                 cfg["custom_borders"] = custom_border_settings
+
+            # Processing settings (workers, limit)
+            if processing_settings:
+                cfg["processing"] = processing_settings
+
+            # Export settings (format, quality)
+            if export_settings:
+                cfg["export_format"] = export_settings.get("format", "PNG")
+                cfg["jpeg_quality"] = export_settings.get("jpeg_quality", 95)
+
+            # Custom platforms
             if custom_platforms:
                 cfg["custom_platforms"] = custom_platforms
                 # Also merge custom platforms into the main platforms dict
                 if "platforms" not in cfg:
                     cfg["platforms"] = {}
                 for platform_key, platform_config in custom_platforms.items():
-                    # Convert custom platform format to standard format
                     cfg["platforms"][platform_key] = {
                         "border_file": platform_config.get("border_file", ""),
                         "icon_file": platform_config.get("icon_file", ""),

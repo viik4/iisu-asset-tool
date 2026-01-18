@@ -10,7 +10,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
@@ -21,6 +23,7 @@ import com.iisu.assettool.BuildConfig
 import com.iisu.assettool.R
 import com.iisu.assettool.databinding.FragmentSettingsBinding
 import com.iisu.assettool.util.ArtworkSource
+import com.iisu.assettool.util.IisuDirectoryManager
 import com.iisu.assettool.util.SourcePriorityAdapter
 import org.json.JSONArray
 import org.json.JSONObject
@@ -622,8 +625,14 @@ class SettingsFragment : Fragment() {
     private fun setupCustomAssetDirSection() {
         val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-        // Load saved custom asset directory
+        // Load saved custom asset directory and set it in IisuDirectoryManager
         val savedPath = prefs.getString(PREF_CUSTOM_ASSET_DIR, null)
+        if (savedPath != null) {
+            val file = File(savedPath)
+            if (file.exists() && file.isDirectory) {
+                IisuDirectoryManager.setCustomRomPath(file)
+            }
+        }
         updateCustomAssetDirDisplay(savedPath)
 
         // Select directory button
@@ -634,6 +643,8 @@ class SettingsFragment : Fragment() {
         // Clear directory button
         binding.btnClearAssetDir.setOnClickListener {
             prefs.edit().remove(PREF_CUSTOM_ASSET_DIR).apply()
+            IisuDirectoryManager.setCustomRomPath(null)
+            IisuDirectoryManager.clearCache()
             updateCustomAssetDirDisplay(null)
             Toast.makeText(context, "Custom asset directory cleared", Toast.LENGTH_SHORT).show()
         }
@@ -645,26 +656,65 @@ class SettingsFragment : Fragment() {
             val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             requireContext().contentResolver.takePersistableUriPermission(uri, takeFlags)
 
-            // Save the URI string to preferences
-            val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            prefs.edit().putString(PREF_CUSTOM_ASSET_DIR, uri.toString()).apply()
+            // Convert URI to file path
+            val path = getPathFromUri(uri)
+            if (path != null) {
+                val file = File(path)
+                if (file.exists() && file.isDirectory) {
+                    // Save the file path to preferences
+                    val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().putString(PREF_CUSTOM_ASSET_DIR, path).apply()
 
-            updateCustomAssetDirDisplay(uri.toString())
-            Toast.makeText(context, "Custom asset directory saved", Toast.LENGTH_SHORT).show()
+                    // Set the custom path in IisuDirectoryManager so files save to this location
+                    IisuDirectoryManager.setCustomRomPath(file)
+                    IisuDirectoryManager.clearCache()
+
+                    updateCustomAssetDirDisplay(path)
+                    Toast.makeText(context, "Custom asset directory saved", Toast.LENGTH_SHORT).show()
+                    return
+                }
+            }
+
+            // Fallback: show error if we couldn't convert to file path
+            Toast.makeText(
+                context,
+                "Please select a folder from Internal Storage (e.g., Android/media or ROMs folder)",
+                Toast.LENGTH_LONG
+            ).show()
         } catch (e: Exception) {
+            Log.e("SettingsFragment", "Failed to save directory", e)
             Toast.makeText(context, "Failed to save directory: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun updateCustomAssetDirDisplay(uriString: String?) {
-        if (uriString != null) {
-            try {
-                val uri = Uri.parse(uriString)
-                val docFile = DocumentFile.fromTreeUri(requireContext(), uri)
-                binding.textCustomAssetDir.text = docFile?.name ?: "Custom directory set"
-            } catch (e: Exception) {
-                binding.textCustomAssetDir.text = "Custom directory set"
+    private fun getPathFromUri(uri: Uri): String? {
+        return when {
+            uri.scheme == "file" -> uri.path
+            uri.scheme == "content" -> {
+                try {
+                    val docId = DocumentsContract.getTreeDocumentId(uri)
+                    if (docId.startsWith("primary:")) {
+                        val path = docId.substringAfter("primary:")
+                        "${Environment.getExternalStorageDirectory().absolutePath}/$path"
+                    } else if (docId.contains(":")) {
+                        val split = docId.split(":")
+                        if (split.size >= 2) {
+                            "/storage/${split[0]}/${split[1]}"
+                        } else null
+                    } else null
+                } catch (e: Exception) {
+                    Log.e("SettingsFragment", "Failed to get path from URI", e)
+                    null
+                }
             }
+            else -> null
+        }
+    }
+
+    private fun updateCustomAssetDirDisplay(path: String?) {
+        if (path != null) {
+            val file = File(path)
+            binding.textCustomAssetDir.text = file.name
         } else {
             binding.textCustomAssetDir.text = "Default (iiSU Launcher media folder)"
         }
