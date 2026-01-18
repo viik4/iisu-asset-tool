@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtSvg import QSvgRenderer
 from io import BytesIO
 from psd_tools import PSDImage
-from app_paths import get_templates_dir, get_borders_dir
+from app_paths import get_templates_dir, get_borders_dir, get_platform_icons_dir
 
 
 def load_svg_as_image(svg_path: str, size: int = 512) -> Image.Image:
@@ -531,9 +531,23 @@ class BorderGeneratorTab(QWidget):
 
         right.addWidget(icon_group)
 
-        # Presets
-        preset_group = QGroupBox("Gradient Presets")
+        # Platform Presets
+        preset_group = QGroupBox("Platform Presets")
         preset_layout = QVBoxLayout(preset_group)
+
+        # Platform dropdown
+        platform_row = QHBoxLayout()
+        platform_row.addWidget(QLabel("Platform:"))
+        self.platform_preset_combo = QComboBox()
+        self._setup_platform_presets()
+        self.platform_preset_combo.currentIndexChanged.connect(self._apply_platform_preset)
+        platform_row.addWidget(self.platform_preset_combo, 1)
+        preset_layout.addLayout(platform_row)
+
+        # Quick presets
+        preset_label = QLabel("Quick Colors:")
+        preset_label.setStyleSheet("font-size: 11px; color: #888;")
+        preset_layout.addWidget(preset_label)
 
         preset_btns = QHBoxLayout()
         btn_pink_gold = QPushButton("Pink-Gold")
@@ -640,3 +654,65 @@ class BorderGeneratorTab(QWidget):
                 QMessageBox.information(self, "Export Success", f"Border saved to:\n{path}")
             except Exception as e:
                 QMessageBox.warning(self, "Export Error", f"Failed to export border: {e}")
+
+    def _setup_platform_presets(self):
+        """Setup platform preset dropdown with colors from existing borders."""
+        # Platform presets: (display_name, icon_filename, color1, color2)
+        # Colors extracted from border images (top-left and bottom-right corners)
+        self.platform_presets = [
+            ("Select Platform...", None, None, None),
+            ("Android", "Android.png", "#30dd81", "#a4dad5"),
+            ("Arcade", "Arcade.png", "#ff9f00", "#ff0000"),
+            ("Dreamcast", "Dreamcast.png", "#ff8400", "#db5823"),
+            ("eShop", "eshop.png", "#f47c20", "#d68494"),
+            ("Game Boy", "Game_Boy.png", "#88c99d", "#b3b1b4"),
+            ("Game Boy Advance", "Game_Boy_Advance.png", "#6550ce", "#95a6c9"),
+            ("Game Boy Color", "Game_Boy_Color.png", "#ffcc00", "#97c633"),
+            ("Game Gear", "GAME_GEAR.png", "#ee4164", "#80daaa"),
+            ("GameCube", "GAMECUBE.png", "#8863ff", "#8d96dc"),
+            ("Genesis", "GENESIS.png", "#0060a8", "#c23c5d"),
+            ("N64", "N64.png", "#2fb752", "#d64762"),
+            ("Neo Geo Pocket Color", "Neo_Geo_Pocket_Color.png", "#f25656", "#d5a96c"),
+            ("NES", "NES.png", "#e27a8c", "#cdbf39"),
+            ("Nintendo 3DS", "NINTENDO_3DS.png", "#ffb400", "#db81a6"),
+            ("Nintendo DS", "NINTENDO_DS.png", "#ff72a1", "#9ad7dc"),
+            ("PlayStation", "PS1.png", "#a6b4b8", "#b29edc"),
+            ("PlayStation 2", "PS2.png", "#4642ea", "#b05cff"),
+            ("PlayStation 3", "PS3.png", "#0059ff", "#0019c2"),
+            ("PlayStation 4", "PS4.png", "#0290d4", "#02497d"),
+            ("PS Vita", "PS_VITA.png", "#964aff", "#5aa4d5"),
+            ("PSP", "PSP.png", "#ff41e2", "#8357dc"),
+            ("Saturn", "SATURN.png", "#5e6ba0", "#ca7072"),
+            ("SNES", "SNES.png", "#f32b4c", "#928cc9"),
+            ("Switch", "Switch.png", "#ff0000", "#db7176"),
+            ("Wii", "Wii.png", "#14b5eb", "#b6d8dc"),
+            ("Wii U", "Wii_U.png", "#03a9f4", "#c1daa7"),
+            ("Xbox", "Xbox.png", "#007a00", "#001b00"),
+            ("Xbox 360", "Xbox_360.png", "#bdf001", "#57c201"),
+        ]
+
+        for preset in self.platform_presets:
+            self.platform_preset_combo.addItem(preset[0])
+
+    def _apply_platform_preset(self, index: int):
+        """Apply selected platform preset (icon and colors)."""
+        if index <= 0:  # "Select Platform..." option
+            return
+
+        preset = self.platform_presets[index]
+        _, icon_filename, color1, color2 = preset
+
+        # Load the platform icon
+        if icon_filename:
+            icon_path = get_platform_icons_dir() / icon_filename
+            if icon_path.exists():
+                try:
+                    icon = Image.open(icon_path).convert("RGBA")
+                    self.preview.set_icon(icon)
+                    self.icon_path_label.setText(icon_filename)
+                except Exception as e:
+                    QMessageBox.warning(self, "Error", f"Failed to load icon: {e}")
+
+        # Apply gradient colors
+        if color1 and color2:
+            self.apply_preset(color1, color2)

@@ -1,6 +1,43 @@
-# iiSU Asset Tool v1.2.1
+# iiSU Asset Tool v1.2.2
 
-## What's New in v1.2.1
+## What's New in v1.2.2
+
+### New Platform Support
+- **Arcade platform** - Added Arcade border and platform icon
+- **Steam platform** - Added Steam border and platform icon for PC games from Steam
+- **PC (Generic) platform** - Added generic PC border and platform icon for Windows/DOS games
+
+### Steam Store Integration
+- **New artwork source** - Steam Store added as an artwork provider (no API key required)
+- **Multiplatform search** - Steam searches across all games, providing artwork for both PC-exclusive and multiplatform titles
+- **Fast parallel fetching** - Downloads multiple Steam artwork options simultaneously
+- **Store search fallback** - Uses Steam Store search API when app list is unavailable
+
+### Artwork Picker Improvements
+- **Grid layout** - Artwork selection now displays in a 3-column grid instead of horizontal scroll
+- **All results shown** - SteamGridDB now returns ALL available artwork instead of limiting to 5
+- **Parallel downloads** - Artwork options download 8x faster using concurrent fetching
+- **Vertical scrolling** - Better usability on all screen sizes
+
+### Search & Matching Improvements
+- **Improved fuzzy matching** - Fixed false matches between similar titles:
+  - "Pac-Man" no longer matches "Pac-Mania", "Jr. Pac-Man", or "Pac-Man Plus"
+  - Better word boundary detection prevents substring false positives
+  - Prefix/suffix detection distinguishes sequels from originals
+- **Strict logo/hero matching** - Logos and hero images now use strict title matching to prevent wrong game artwork
+- **Removed "official" logo style** - Default logo styles changed to "white" and "black" to avoid unreliable user-submitted logos
+
+### Custom Covers Fix
+- **Icon size consistency** - Fixed bug where platform icon appeared larger in preview than in exported image
+- **Proper scaling** - Icons now scale correctly at all output resolutions
+
+### Settings Improvements
+- **Categorized settings** - Settings dialog redesigned with tabbed categories: General, Sources, Output, Processing, and Platforms
+- **Full settings persistence** - All settings now save between sessions, including worker count, limits, and export format
+
+---
+
+## Previous Release: v1.2.1
 
 ### Branding
 - **New app logo** - Fresh logo designed by Caddypillar
@@ -47,8 +84,6 @@
 - **Native Linux builds** - Linux releases now available alongside Windows and macOS
 - **PyInstaller packaging** - Standalone executable with all dependencies bundled
 
-## Features
-
 ### Custom Border Support
 - **Custom border upload** - Upload your own custom border image to use for all icons instead of platform-specific borders
 - **Works across all modes** - Custom borders work in both search-based scraping and ROM browser scraping
@@ -87,7 +122,7 @@
 ### Game Logo Scraping for title.png
 - **Logo scraping** - Now downloads game logos from SteamGridDB to use as `title.png` instead of duplicating the boxart
 - **Transparent PNG logos** - Logos are clean text/title images with transparent backgrounds
-- **Configurable styles** - Supports official, white, and black logo styles from SteamGridDB
+- **Configurable styles** - Supports white and black logo styles from SteamGridDB
 - **Fallback to boxart** - Optional setting to fall back to boxart duplicate when no logo is found
 - **Legacy mode** - Option to disable logo scraping and use the original boxart duplicate behavior
 
@@ -97,49 +132,6 @@
 - **Persistent preference** - Your theme preference is saved and remembered between sessions
 - **Updated styling** - Both themes feature rounded corners, subtle shadows, and modern UI elements matching the iiSU Launcher design
 
-## Bug Fixes
-
-### Android Stability
-- **Fixed navigation crash** - App no longer crashes when navigating away from game list during bulk scraping operations
-- **Lifecycle-aware coroutines** - Scraping operations now properly cancel when leaving the fragment
-- **Platform filtering** - Fixed search returning wrong games (e.g., GBA Minish Cap when searching NES Zelda)
-
-### Search & Matching Improvements
-- **New fuzzy matching system** - Completely rewritten game database matching with multiple strategies:
-  - Exact match after normalization
-  - Substring/contains matching
-  - Token-based Jaccard similarity
-  - Sequence matching for typo tolerance
-  - Prefix matching
-- **Direct search fallback** - When no database match is found, the tool now searches artwork providers directly with the ROM filename instead of failing
-
-### ROM Browser Fixes
-- **Fixed Interactive Mode in ROM Browser** - Interactive artwork selection now works correctly when processing ROMs from the ROM Browser tab
-- **Fixed clipboard copy in logs dialog** - The "Copy to Clipboard" button now properly copies log contents with visual feedback
-- **Improved progress tracking** - Progress bar now shows overall progress across all games (e.g., `3/10 (30%)`) with current game title displayed in status
-
-### UI Improvements
-- **Cleaner ROM Browser layout** - Reorganized UI with grouped controls, compact buttons, and better spacing
-- **Fixed Custom Covers tab** - Preview panel now properly centered with correct padding, artwork box no longer pushed to bottom
-
-### File Filtering
-- **Filter out non-ROM files** - System files (systeminfo, thumbs.db, desktop.ini, etc.), metadata files, save files, and other non-ROM files are now automatically excluded from scanning
-
-### Icon Overwriting
-- **Enhanced logging** - Added detailed logging for icon deletion and saving operations to help debug overwrite issues
-
-## Build & Distribution
-
-### macOS
-- **Native DMG installer** - macOS releases are now distributed as proper `.dmg` files with drag-to-Applications installation
-- **App icon** - macOS app bundle now includes a proper `.icns` icon
-
-### Linux
-- **Native Linux builds** - Standalone executable for Linux distributions
-
-### All Platforms
-- **Included missing files** - `logo.png` and `iisu_theme.qss` are now properly included in release packages
-
 ---
 
-**Full Changelog**: https://github.com/viik-4/iisu-asset-tool/compare/v1.2.0...v1.2.1
+**Full Changelog**: https://github.com/viik-4/iisu-asset-tool/compare/v1.2.1...v1.2.2

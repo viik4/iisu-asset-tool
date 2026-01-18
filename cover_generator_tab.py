@@ -14,10 +14,11 @@ from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFileDialog,
-    QGroupBox, QColorDialog, QMessageBox
+    QGroupBox, QColorDialog, QMessageBox,
+    QSlider, QSpinBox, QComboBox
 )
 from psd_tools import PSDImage
-from app_paths import get_templates_dir, get_src_dir
+from app_paths import get_templates_dir, get_src_dir, get_platform_icons_dir
 
 
 # Global caches to avoid repeated file loading and processing
@@ -182,7 +183,8 @@ def create_cover_from_template(
     psd_path: Optional[Path] = None,
     centering: tuple = (0.5, 0.5),
     scale: float = 1.0,
-    preview_size: int = 1024
+    preview_size: int = 1024,
+    icon_scale: int = 100
 ) -> Image.Image:
     """
     Generate a cover image from the PSD template's Cover Group.
@@ -336,7 +338,16 @@ def create_cover_from_template(
                 white_icon = make_icon_white(icon_copy)
 
                 # Resize icon to fit the bbox while maintaining aspect ratio
-                white_icon.thumbnail((bbox_w, bbox_h), Image.LANCZOS)
+                # Apply icon_scale percentage (100 = fit bbox, smaller = smaller icon)
+                icon_w, icon_h = white_icon.size
+                scale_w = bbox_w / icon_w
+                scale_h = bbox_h / icon_h
+                fit_scale = min(scale_w, scale_h)  # Fit within bbox
+                # Apply user's icon_scale percentage
+                final_scale = fit_scale * (icon_scale / 100.0)
+                new_icon_w = int(icon_w * final_scale)
+                new_icon_h = int(icon_h * final_scale)
+                white_icon = white_icon.resize((new_icon_w, new_icon_h), Image.LANCZOS)
 
                 # Create gradient for the icon
                 icon_gradient = create_gradient(white_icon.size, gradient_color1, gradient_color2)
@@ -421,6 +432,7 @@ class CoverPreview(QLabel):
         self.gradient_color1 = QColor("#D4849C")
         self.gradient_color2 = QColor("#E5B559")
         self.icon_image = None
+        self.icon_scale = 100  # Icon scale percentage (100 = full size)
 
         # Centering for artwork positioning
         self.centering = (0.5, 0.5)
@@ -503,6 +515,10 @@ class CoverPreview(QLabel):
         self.icon_image = image
         self.schedule_update()
 
+    def set_icon_scale(self, scale: int):
+        self.icon_scale = scale
+        self.schedule_update()
+
     def schedule_update(self, immediate=False):
         self._update_timer.stop()
         if immediate:
@@ -534,7 +550,8 @@ class CoverPreview(QLabel):
                 icon_image=self.icon_image,
                 centering=self.centering,
                 scale=self.scale,
-                preview_size=512  # Half resolution for fast preview
+                preview_size=512,  # Half resolution for fast preview
+                icon_scale=self.icon_scale
             )
 
             # Convert to QPixmap for display
@@ -693,7 +710,16 @@ class CoverGeneratorTab(QWidget):
         icon_group = QGroupBox("Platform Icon")
         icon_layout = QVBoxLayout(icon_group)
 
-        upload_icon_btn = QPushButton("Upload Icon")
+        # Platform preset dropdown
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel("Preset:"))
+        self.platform_preset_combo = QComboBox()
+        self._setup_platform_presets()
+        self.platform_preset_combo.currentIndexChanged.connect(self._apply_platform_preset)
+        preset_row.addWidget(self.platform_preset_combo, 1)
+        icon_layout.addLayout(preset_row)
+
+        upload_icon_btn = QPushButton("Upload Custom Icon")
         upload_icon_btn.clicked.connect(self._upload_icon)
         icon_layout.addWidget(upload_icon_btn)
 
@@ -701,6 +727,29 @@ class CoverGeneratorTab(QWidget):
         self.icon_info.setStyleSheet("font-size: 11px; opacity: 0.7;")
         self.icon_info.setWordWrap(True)
         icon_layout.addWidget(self.icon_info)
+
+        # Icon scale control
+        scale_row = QHBoxLayout()
+        scale_row.addWidget(QLabel("Size:"))
+
+        self.icon_scale_slider = QSlider(Qt.Horizontal)
+        self.icon_scale_slider.setMinimum(10)
+        self.icon_scale_slider.setMaximum(100)
+        self.icon_scale_slider.setValue(100)
+        self.icon_scale_slider.setTickPosition(QSlider.TicksBelow)
+        self.icon_scale_slider.setTickInterval(10)
+        self.icon_scale_slider.valueChanged.connect(self._update_icon_scale)
+        scale_row.addWidget(self.icon_scale_slider)
+
+        self.icon_scale_spinbox = QSpinBox()
+        self.icon_scale_spinbox.setMinimum(10)
+        self.icon_scale_spinbox.setMaximum(100)
+        self.icon_scale_spinbox.setValue(100)
+        self.icon_scale_spinbox.setSuffix("%")
+        self.icon_scale_spinbox.valueChanged.connect(self._update_icon_scale_from_spinbox)
+        scale_row.addWidget(self.icon_scale_spinbox)
+
+        icon_layout.addLayout(scale_row)
 
         left_layout.addWidget(icon_group)
 
@@ -806,7 +855,8 @@ class CoverGeneratorTab(QWidget):
                 gradient_color2=self.preview.gradient_color2,
                 icon_image=self.preview.icon_image,
                 centering=self.preview.centering,
-                scale=self.preview.scale
+                scale=self.preview.scale,
+                icon_scale=self.preview.icon_scale
             )
 
             cover_img.save(file_path, "PNG")
@@ -819,3 +869,83 @@ class CoverGeneratorTab(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to export cover:\n{e}")
+
+    def _update_icon_scale(self, value: int):
+        """Update icon scale from slider."""
+        self.icon_scale_spinbox.blockSignals(True)
+        self.icon_scale_spinbox.setValue(value)
+        self.icon_scale_spinbox.blockSignals(False)
+        self.preview.set_icon_scale(value)
+
+    def _update_icon_scale_from_spinbox(self, value: int):
+        """Update icon scale from spinbox."""
+        self.icon_scale_slider.blockSignals(True)
+        self.icon_scale_slider.setValue(value)
+        self.icon_scale_slider.blockSignals(False)
+        self.preview.set_icon_scale(value)
+
+    def _setup_platform_presets(self):
+        """Setup platform preset dropdown with colors from existing platform icons."""
+        # Platform presets: (display_name, icon_filename, color1, color2)
+        self.platform_presets = [
+            ("Select Platform...", None, None, None),
+            ("Android", "Android.png", "#69e6a4", "#c8fff8"),
+            ("Arcade", "Arcade.png", "#ff9f00", "#ff0000"),
+            ("Dreamcast", "Dreamcast.png", "#f89837", "#ff7d46"),
+            ("eShop", "eshop.png", "#f79d5a", "#faa8b6"),
+            ("Game Boy", "Game_Boy.png", "#a5d7b5", "#d6d7d7"),
+            ("Game Boy Advance", "Game_Boy_Advance.png", "#8e7fdb", "#b8c9ec"),
+            ("Game Boy Color", "Game_Boy_Color.png", "#ffda45", "#b4e54b"),
+            ("Game Gear", "GAME_GEAR.png", "#f3718a", "#a2ffcd"),
+            ("GameCube", "GAMECUBE.png", "#a186fd", "#aeb6ff"),
+            ("Genesis", "GENESIS.png", "#3d83ba", "#e55b7a"),
+            ("N64", "N64.png", "#62c77b", "#f26078"),
+            ("Neo Geo Pocket Color", "Neo_Geo_Pocket_Color.png", "#f68484", "#f8ca88"),
+            ("NES", "NES.png", "#ea9aa6", "#f1e457"),
+            ("Nintendo 3DS", "NINTENDO_3DS.png", "#fdc13c", "#fe9fc2"),
+            ("Nintendo DS", "NINTENDO_DS.png", "#fc91b4", "#bdfcff"),
+            ("PlayStation", "PS1.png", "#bcc6cb", "#d5bfff"),
+            ("PlayStation 2", "PS2.png", "#7370f0", "#c183ff"),
+            ("PlayStation 3", "PS3.png", "#005dff", "#0020c8"),
+            ("PlayStation 4", "PS4.png", "#0091d6", "#004a7f"),
+            ("PS Vita", "PS_VITA.png", "#b079ff", "#7fc9f8"),
+            ("PSP", "PSP.png", "#ff75ea", "#9f72fb"),
+            ("Saturn", "SATURN.png", "#7f89b1", "#ea8b8c"),
+            ("SNES", "SNES.png", "#f45e77", "#aba4e1"),
+            ("Switch", "Switch.png", "#fc3e3e", "#ff9093"),
+            ("Wii", "Wii.png", "#55c9f0", "#d0f6fb"),
+            ("Wii U", "Wii_U.png", "#3db9f2", "#e2ffc8"),
+            ("Xbox", "Xbox.png", "#007a00", "#001b00"),
+            ("Xbox 360", "Xbox_360.png", "#b7f000", "#3dc100"),
+        ]
+
+        for preset in self.platform_presets:
+            self.platform_preset_combo.addItem(preset[0])
+
+    def _apply_platform_preset(self, index: int):
+        """Apply selected platform preset (icon and colors)."""
+        if index <= 0:  # "Select Platform..." option
+            return
+
+        preset = self.platform_presets[index]
+        _, icon_filename, color1, color2 = preset
+
+        # Load the platform icon
+        if icon_filename:
+            icon_path = get_platform_icons_dir() / icon_filename
+            if icon_path.exists():
+                try:
+                    icon = Image.open(icon_path).convert("RGBA")
+                    self.preview.set_icon(icon)
+                    self.icon_info.setText(f"Loaded: {icon_filename}")
+                except Exception as e:
+                    QMessageBox.warning(self, "Error", f"Failed to load icon: {e}")
+
+        # Apply gradient colors
+        if color1 and color2:
+            c1 = QColor(color1)
+            c2 = QColor(color2)
+            self.preview.set_gradient_color1(c1)
+            self.preview.set_gradient_color2(c2)
+            self.color1_btn.setStyleSheet(f"background-color: {color1}; border: 1px solid #666;")
+            self.color2_btn.setStyleSheet(f"background-color: {color2}; border: 1px solid #666;")

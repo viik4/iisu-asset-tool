@@ -14,20 +14,33 @@ Download the latest release from the [Releases](https://github.com/viik-4/iisu-a
 | Linux | `iiSU_Asset_Tool.AppImage` |
 | Android | `iiSU_Asset_Tool.apk` |
 
+### macOS Installation
+
+macOS may show "app is damaged" because the app is not notarized. To fix this, open Terminal and run:
+
+```bash
+xattr -cr /Applications/iiSU\ Asset\ Tool.app
+```
+
+Or right-click the app and select "Open" to bypass Gatekeeper.
+
 ## Features
 
 ### Icon Scraper
 Automatically fetch game artwork from multiple sources and apply platform-specific borders.
 - Batch process hundreds of games at once
-- Smart logo detection and cropping
-- Multiple artwork sources with fallback
+- Smart title matching with fuzzy search
+- Multiple artwork sources with intelligent fallback
 - Region detection and preference filtering
+- Interactive mode to choose from all available artwork
+- Parallel downloads for fast processing
 
 ### Custom Icons
 Upload your own images and apply borders with interactive positioning.
 - Drag to position artwork
 - Rotate and zoom controls
 - Real-time preview
+- Per-platform or global custom borders
 
 ### Custom Borders
 Create gradient borders with custom colors and platform icons.
@@ -41,6 +54,7 @@ Generate cover artwork with gradients, overlays, and platform branding.
 - Drag to position artwork
 - Mouse wheel zoom
 - Gradient color customization
+- Consistent preview and export sizing
 
 ### ROM Browser
 Browse and process ROMs from local or external drives.
@@ -48,17 +62,36 @@ Browse and process ROMs from local or external drives.
 - USB drive scanning
 - ADB device support for Android
 - Platform detection from folder structure
+- Region filtering
 
-### Additional Features
-- **Logo Scraping** - Generate title.png files from game logos
-- **Hero Images** - Download banner/hero artwork
-- **Screenshot Scraping** - Capture 1-10 screenshots per game
-- **Light/Dark Themes** - System-aware theme switching
-- **Interactive Artwork Selection** - Choose from multiple artwork options
-- **Custom Border Upload** - Use your own border designs
-- **Fallback Platform Icons** - Automatic fallback for missing artwork
-- **Device Copying** - Transfer assets via ADB
-- **Export Formats** - PNG or JPEG with quality control
+## Settings
+
+All settings are organized into categories and persist between sessions:
+
+### General
+- API key management (SteamGridDB, IGDB)
+- ROM directory configuration
+- Config file location
+
+### Sources
+- Artwork source priority (drag to reorder)
+- Hero image downloads (1-5 per game)
+- Screenshot downloads (1-10 per game)
+- Logo/title image scraping
+- Fallback platform icons
+
+### Output
+- Export format (PNG or JPEG with quality control)
+- Auto-copy to Android device via ADB
+- Custom borders (global or per-platform)
+
+### Processing
+- Worker count for parallel processing
+- Per-platform game limits
+
+### Platforms
+- Add custom platforms (Steam, retro consoles, etc.)
+- Custom border and icon files per platform
 
 ## Artwork Sources
 
@@ -68,6 +101,7 @@ Browse and process ROMs from local or external drives.
 | [IGDB](https://www.igdb.com/) | Internet Game Database | Optional |
 | [TheGamesDB](https://thegamesdb.net/) | Game information database | Built-in |
 | [Libretro Thumbnails](https://thumbnails.libretro.com/) | RetroArch thumbnails | Built-in |
+| [Steam Store](https://store.steampowered.com/) | Steam game library with multiplatform support | None required |
 
 ### API Key Setup
 
@@ -76,7 +110,7 @@ Browse and process ROMs from local or external drives.
 | SteamGridDB | [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api) |
 | IGDB | [Twitch Developer Portal](https://dev.twitch.tv/console/apps) (Client ID + Secret) |
 
-Configure API keys in Settings (gear icon). Keys are encrypted and stored securely.
+Configure API keys in Settings > General. Keys are encrypted and stored securely.
 
 ## Supported Platforms
 
@@ -88,6 +122,12 @@ Configure API keys in Settings (gear icon). Keys are encrypted and stored secure
 
 **Sega:** Master System, Genesis, Saturn, Dreamcast, Game Gear
 
+**PC:** Steam, PC (Generic)
+
+**Other:** Arcade, TurboGrafx-16, Neo Geo, Atari, and more
+
+**Custom:** Add your own platforms with custom borders and icons
+
 ## Output
 
 Generated assets are saved to:
@@ -95,6 +135,11 @@ Generated assets are saved to:
 - **Review Queue:** `review/` folder (for manual review)
 - **Custom Exports:** Your chosen location
 
+Each game folder contains:
+- `icon.png/jpg` - Main game icon with border
+- `title.png` - Game logo or title image
+- `hero_1.png`, `hero_2.png`, etc. - Hero/banner images
+- `slide_1.png`, `slide_2.png`, etc. - Screenshots
 
 ## Configuration
 
@@ -104,7 +149,7 @@ Edit `config.yaml` to customize:
 - API timeouts and delays
 - Platform definitions
 - Artwork source priorities
-- Logo detection settings
+- Processing settings (workers, limits)
 - Theme preferences
 
 ## Credits
