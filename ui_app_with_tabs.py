@@ -94,6 +94,7 @@ from border_generator_tab import BorderGeneratorTab
 from custom_image_tab import CustomImageTab
 from cover_generator_tab import CoverGeneratorTab
 from rom_browser_tab import ROMBrowserTab
+from existing_assets_tab import ExistingAssetsTab
 
 
 class MainWindowWithTabs(QMainWindow):
@@ -201,6 +202,7 @@ class MainWindowWithTabs(QMainWindow):
         self.rom_browser_tab = ROMBrowserTab()
         self.tabs.addTab(self.rom_browser_tab, "ROM Browser")
         self.tabs.addTab(IconGeneratorTab(), "Icon Scraper")
+        self.tabs.addTab(ExistingAssetsTab(), "Existing Assets")
         self.tabs.addTab(CustomImageTab(), "Custom Icons")
         self.tabs.addTab(BorderGeneratorTab(), "Custom Borders")
         self.tabs.addTab(CoverGeneratorTab(), "Custom Covers")

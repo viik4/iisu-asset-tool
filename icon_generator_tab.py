@@ -26,12 +26,135 @@ from options_dialog import OptionsDialog
 from app_paths import get_borders_dir, get_config_path
 
 
+class ClickableIconPreview(QFrame):
+    """Clickable icon preview widget with title label and selection checkbox."""
+    clicked = Signal(object)  # Emits self when clicked (for single re-scrape)
+    selection_changed = Signal(object, bool)  # Emits (self, is_selected) when checkbox changes
+
+    def __init__(self, icon_path: str, game_title: str, platform: str, parent=None):
+        super().__init__(parent)
+        self.icon_path = icon_path
+        self.game_title = game_title
+        self.platform = platform
+        self._selected = False
+        self._click_count = 0
+        self._click_timer = None
+
+        self.setFixedSize(140, 175)  # Slightly taller to accommodate checkbox
+        self.setCursor(Qt.PointingHandCursor)
+        self._update_style()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(2)
+
+        # Checkbox for selection
+        self.checkbox = QCheckBox()
+        self.checkbox.setStyleSheet("QCheckBox { margin-left: 4px; }")
+        self.checkbox.stateChanged.connect(self._on_checkbox_changed)
+        layout.addWidget(self.checkbox, alignment=Qt.AlignLeft)
+
+        # Icon image
+        self.icon_label = QLabel()
+        self.icon_label.setFixedSize(128, 128)
+        self.icon_label.setScaledContents(True)
+        self.icon_label.setStyleSheet("QLabel { border: 2px solid #3A4048; border-radius: 8px; }")
+
+        pixmap = QPixmap(icon_path)
+        if not pixmap.isNull():
+            self.icon_label.setPixmap(pixmap)
+
+        layout.addWidget(self.icon_label, alignment=Qt.AlignCenter)
+
+        # Title label (truncated if too long)
+        self.title_label = QLabel(self._truncate_title(game_title))
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setStyleSheet("QLabel { font-size: 10px; color: #888; border: none; }")
+        self.title_label.setToolTip(f"{game_title}\nDouble-click to re-scrape")
+        layout.addWidget(self.title_label)
+
+        self.setToolTip(f"{game_title}\n[{platform}]\nDouble-click to re-scrape\nCheck to select for batch re-scrape")
+
+    def _update_style(self):
+        """Update style based on selection state."""
+        if self._selected:
+            self.setStyleSheet("""
+                ClickableIconPreview {
+                    background: rgba(100, 150, 255, 0.15);
+                    border: 2px solid rgba(100, 150, 255, 0.5);
+                    border-radius: 8px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                ClickableIconPreview {
+                    background: transparent;
+                    border: none;
+                }
+                ClickableIconPreview:hover {
+                    background: rgba(255, 255, 255, 0.05);
+                    border-radius: 8px;
+                }
+            """)
+
+    def _on_checkbox_changed(self, state):
+        """Handle checkbox state change."""
+        # In PySide6, state can be Qt.CheckState.Checked or the int value 2
+        self._selected = (state == Qt.CheckState.Checked or state == 2)
+        self._update_style()
+        self.selection_changed.emit(self, self._selected)
+
+    def is_selected(self) -> bool:
+        """Return whether this preview is selected."""
+        return self._selected
+
+    def set_selected(self, selected: bool):
+        """Set the selection state."""
+        self.checkbox.setChecked(selected)
+
+    def _truncate_title(self, title: str, max_len: int = 18) -> str:
+        """Truncate title with ellipsis if too long."""
+        if len(title) <= max_len:
+            return title
+        return title[:max_len - 2] + "..."
+
+    def mouseDoubleClickEvent(self, event):
+        """Handle double-click to trigger single re-scrape."""
+        if event.button() == Qt.LeftButton:
+            # Cancel any pending single-click action
+            self._click_count = 0
+            if self._click_timer:
+                self._click_timer.stop()
+            # Undo the checkbox toggle that happened on first click
+            self.checkbox.setChecked(not self.checkbox.isChecked())
+            # Emit the clicked signal for re-scrape
+            self.clicked.emit(self)
+        super().mouseDoubleClickEvent(event)
+
+    def mousePressEvent(self, event):
+        """Handle single click to toggle selection (with double-click detection)."""
+        if event.button() == Qt.LeftButton:
+            # Toggle checkbox on click
+            self.checkbox.setChecked(not self.checkbox.isChecked())
+        super().mousePressEvent(event)
+
+    @Slot()
+    def refresh_icon(self):
+        """Refresh the displayed icon from disk."""
+        from PySide6.QtGui import QPixmapCache
+        # Clear the cache to force reload from disk
+        QPixmapCache.remove(self.icon_path)
+        pixmap = QPixmap(self.icon_path)
+        if not pixmap.isNull():
+            self.icon_label.setPixmap(pixmap)
+
+
 class BackendCallbacks(QObject):
     # Backend emits progress as (done, total) and log lines as strings
     progress = Signal(int, int)
     log = Signal(str)
     finished = Signal(bool, str)
-    preview = Signal(str)  # Emits path to generated icon
+    preview = Signal(str, str, str)  # Emits path, title, platform to generated icon
     request_selection = Signal(str, str, list)  # title, platform, artwork_options
 
 
@@ -376,7 +499,7 @@ class IconGeneratorTab(QWidget):
         """Append log message to internal storage."""
         self.log_content += msg + "\n"
 
-    def add_preview_icon(self, icon_path: str):
+    def add_preview_icon(self, icon_path: str, title: str = "", platform: str = ""):
         """Add a generated icon to the live preview grid."""
         from pathlib import Path
 

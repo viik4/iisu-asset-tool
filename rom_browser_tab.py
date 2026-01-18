@@ -27,6 +27,7 @@ from rom_parser import (
 )
 from adb_setup import setup_adb, is_adb_installed, get_setup_instructions
 from app_paths import get_config_path, get_borders_dir, get_platform_icons_dir
+from icon_generator_tab import ClickableIconPreview
 import run_backend
 import subprocess
 
@@ -43,7 +44,7 @@ class BackendCallbacks(QObject):
     progress = Signal(int, int)  # done, total
     log = Signal(str)
     finished = Signal(bool, str)
-    preview = Signal(str)
+    preview = Signal(str, str, str)  # path, title, platform
     current_item = Signal(str, str)  # title, platform
 
 
@@ -66,6 +67,9 @@ class ROMBrowserTab(QWidget):
         self.screenshot_settings = {"enabled": False, "count": 3}  # Screenshot settings
         self.device_settings = {"enabled": False, "path": "/sdcard/Android/media/com.iisulauncher/iiSULauncher/assets/media/roms/consoles"}  # Device copy settings
         self.logo_settings = {"scrape_logos": True, "fallback_to_boxart": True}  # Logo/title settings
+
+        # Track selected ROMs across platform changes (key: "platform|path")
+        self._selected_roms = set()
 
         self._setup_ui()
         self._load_settings()
@@ -138,11 +142,28 @@ class ROMBrowserTab(QWidget):
 
         self.platform_tree = QTreeWidget()
         self.platform_tree.setHeaderHidden(True)
-        self.platform_tree.setSelectionMode(QTreeWidget.SingleSelection)
-        self.platform_tree.itemClicked.connect(self._on_platform_selected)
+        self.platform_tree.setSelectionMode(QTreeWidget.ExtendedSelection)
+        self.platform_tree.itemSelectionChanged.connect(self._on_platform_selected)
         self.platform_tree.setMinimumWidth(180)
         self.platform_tree.setObjectName("rom_platform_tree")
         left_layout.addWidget(self.platform_tree, 1)
+
+        # Platform selection buttons
+        platform_btn_row = QHBoxLayout()
+        platform_btn_row.setSpacing(4)
+        platform_btn_row.setContentsMargins(0, 4, 0, 0)
+
+        self.select_all_platforms_btn = QPushButton("All")
+        self.select_all_platforms_btn.setFixedHeight(24)
+        self.select_all_platforms_btn.clicked.connect(self._select_all_platforms)
+        platform_btn_row.addWidget(self.select_all_platforms_btn, 1)
+
+        self.deselect_all_platforms_btn = QPushButton("None")
+        self.deselect_all_platforms_btn.setFixedHeight(24)
+        self.deselect_all_platforms_btn.clicked.connect(self._deselect_all_platforms)
+        platform_btn_row.addWidget(self.deselect_all_platforms_btn, 1)
+
+        left_layout.addLayout(platform_btn_row)
 
         self.platform_stats = QLabel("No ROMs scanned")
         self.platform_stats.setStyleSheet("font-size: 10px; opacity: 0.6;")
@@ -166,14 +187,22 @@ class ROMBrowserTab(QWidget):
         search_row.addWidget(self.search_input, 1)
 
         self.btn_select_all = QPushButton("All")
+        self.btn_select_all.setToolTip("Select all visible games")
         self.btn_select_all.setMinimumWidth(50)
         self.btn_select_all.clicked.connect(self._select_all_games)
         search_row.addWidget(self.btn_select_all)
 
         self.btn_select_none = QPushButton("None")
+        self.btn_select_none.setToolTip("Deselect all visible games")
         self.btn_select_none.setMinimumWidth(50)
         self.btn_select_none.clicked.connect(self._select_no_games)
         search_row.addWidget(self.btn_select_none)
+
+        self.btn_clear_all = QPushButton("Clear All")
+        self.btn_clear_all.setToolTip("Clear all selections across all platforms")
+        self.btn_clear_all.setMinimumWidth(70)
+        self.btn_clear_all.clicked.connect(self._clear_all_selections)
+        search_row.addWidget(self.btn_clear_all)
 
         right_layout.addLayout(search_row)
 
@@ -287,12 +316,34 @@ class ROMBrowserTab(QWidget):
         preview_controls.addWidget(self.btn_hide_preview)
 
         preview_controls.addStretch()
+
+        # Selection controls
+        self.btn_select_all_preview = QPushButton("All")
+        self.btn_select_all_preview.setToolTip("Select all icons")
+        self.btn_select_all_preview.clicked.connect(self._select_all_previews)
+        preview_controls.addWidget(self.btn_select_all_preview)
+
+        self.btn_select_none_preview = QPushButton("None")
+        self.btn_select_none_preview.setToolTip("Deselect all icons")
+        self.btn_select_none_preview.clicked.connect(self._select_none_previews)
+        preview_controls.addWidget(self.btn_select_none_preview)
+
+        self.btn_rescrape_selected = QPushButton("Re-scrape Selected")
+        self.btn_rescrape_selected.setToolTip("Re-scrape selected icons with artwork selection")
+        self.btn_rescrape_selected.clicked.connect(self._rescrape_selected)
+        preview_controls.addWidget(self.btn_rescrape_selected)
+
         preview_layout.addLayout(preview_controls)
+
+        # Selection count label
+        self.preview_selection_label = QLabel("0 selected")
+        self.preview_selection_label.setStyleSheet("font-size: 10px; color: #888;")
+        preview_layout.addWidget(self.preview_selection_label)
 
         self.preview_scroll_area = QScrollArea()
         self.preview_scroll_area.setWidgetResizable(True)
-        self.preview_scroll_area.setMinimumHeight(120)
-        self.preview_scroll_area.setMaximumHeight(180)
+        self.preview_scroll_area.setMinimumHeight(150)
+        self.preview_scroll_area.setMaximumHeight(220)
 
         self.preview_widget = QWidget()
         self.preview_grid = QGridLayout(self.preview_widget)
@@ -305,6 +356,7 @@ class ROMBrowserTab(QWidget):
         # Track preview visibility and popout window
         self._preview_visible = True
         self._preview_popout_window = None
+        self._rescrape_in_progress = False
 
         self.preview_items = []
         self._log_messages = []
@@ -834,69 +886,123 @@ if ($device) {{
         # Auto-select first platform if available
         if self.platform_tree.topLevelItemCount() > 0:
             first_item = self.platform_tree.topLevelItem(0)
-            self.platform_tree.setCurrentItem(first_item)
-            self._on_platform_selected(first_item, 0)
+            first_item.setSelected(True)
+            self._on_platform_selected()
 
-    def _on_platform_selected(self, item, column):
-        """Handle platform selection in tree."""
-        if not item:
+    def _select_all_platforms(self):
+        """Select all platforms in the tree."""
+        self.platform_tree.blockSignals(True)
+        for i in range(self.platform_tree.topLevelItemCount()):
+            self.platform_tree.topLevelItem(i).setSelected(True)
+        self.platform_tree.blockSignals(False)
+        self._on_platform_selected()
+
+    def _deselect_all_platforms(self):
+        """Deselect all platforms in the tree."""
+        self.platform_tree.clearSelection()
+        self.games_list.clear()
+        self.games_info.setText("No platform selected")
+
+    def _on_platform_selected(self):
+        """Handle platform selection in tree - supports multiple platforms."""
+        selected_items = self.platform_tree.selectedItems()
+
+        if not selected_items:
+            self.games_list.clear()
+            self.games_info.setText("No platform selected")
             return
 
-        platform_key = item.data(0, Qt.UserRole)
-        games = item.data(0, Qt.UserRole + 1)
-
-        if not games:
-            return
+        # Save current selections before clearing the list
+        self._save_current_selections()
 
         self.games_list.clear()
 
         # Get selected region filter
         region_filter = self.region_combo.currentData()
 
-        region_counts = {}
+        total_games = 0
         filtered_count = 0
+        platform_names = []
 
-        for title, path in games:
-            # Detect region from filename
-            filename = Path(path).name if path else title
-            detected_region = detect_region(filename, Path(path) if path else None, platform_key)
-            region_counts[detected_region] = region_counts.get(detected_region, 0) + 1
+        for item in selected_items:
+            platform_key = item.data(0, Qt.UserRole)
+            games = item.data(0, Qt.UserRole + 1)
 
-            # Apply region filter
-            if region_filter != "any":
-                if detected_region != region_filter and detected_region != "World":
-                    # Skip games not matching filter (World matches any region)
-                    continue
+            if not games:
+                continue
 
-            filtered_count += 1
+            platform_names.append(platform_key)
+            total_games += len(games)
 
-            # Display title with region
-            display_text = f"{title}"
-            if detected_region and detected_region != "Unknown":
-                display_text = f"{title} [{detected_region}]"
+            for title, path in games:
+                # Detect region from filename
+                filename = Path(path).name if path else title
+                detected_region = detect_region(filename, Path(path) if path else None, platform_key)
 
-            list_item = QListWidgetItem(display_text)
-            list_item.setData(Qt.UserRole, {
-                "title": title,
-                "path": str(path),
-                "platform": platform_key,
-                "region": detected_region
-            })
-            list_item.setSelected(True)
-            self.games_list.addItem(list_item)
+                # Apply region filter
+                if region_filter != "any":
+                    if detected_region != region_filter and detected_region != "World":
+                        # Skip games not matching filter (World matches any region)
+                        continue
 
-        # Build region stats
-        region_stats = ", ".join(f"{k}: {v}" for k, v in sorted(region_counts.items()) if k != "Unknown")
-        if region_filter != "any":
-            self.games_info.setText(f"{filtered_count}/{len(games)} games in {platform_key} (filtered: {region_filter})")
+                filtered_count += 1
+
+                # Display title with region and platform
+                display_text = f"{title}"
+                if detected_region and detected_region != "Unknown":
+                    display_text = f"{title} [{detected_region}]"
+
+                # Add platform tag if multiple platforms selected
+                if len(selected_items) > 1:
+                    display_text = f"[{platform_key}] {display_text}"
+
+                list_item = QListWidgetItem(display_text)
+                list_item.setData(Qt.UserRole, {
+                    "title": title,
+                    "path": str(path),
+                    "platform": platform_key,
+                    "region": detected_region
+                })
+
+                # Check if this ROM was previously selected
+                rom_key = f"{platform_key}|{path}"
+                if rom_key in self._selected_roms:
+                    list_item.setSelected(True)
+                else:
+                    list_item.setSelected(False)
+
+                self.games_list.addItem(list_item)
+
+        # Build info text
+        if len(selected_items) == 1:
+            platform_text = platform_names[0] if platform_names else "Unknown"
         else:
-            self.games_info.setText(f"{len(games)} games in {platform_key}" + (f" ({region_stats})" if region_stats else ""))
+            platform_text = f"{len(selected_items)} platforms"
+
+        # Show selection count
+        selected_count = len(self._selected_roms)
+        if region_filter != "any":
+            self.games_info.setText(f"{filtered_count}/{total_games} games in {platform_text} (filtered: {region_filter}) | {selected_count} selected across all platforms")
+        else:
+            self.games_info.setText(f"{total_games} games in {platform_text} | {selected_count} selected across all platforms")
+
+    def _save_current_selections(self):
+        """Save currently selected ROMs to the persistent selection set."""
+        for i in range(self.games_list.count()):
+            item = self.games_list.item(i)
+            data = item.data(Qt.UserRole)
+            if data:
+                rom_key = f"{data.get('platform', '')}|{data.get('path', '')}"
+                if item.isSelected():
+                    self._selected_roms.add(rom_key)
+                else:
+                    self._selected_roms.discard(rom_key)
 
     def _on_region_changed(self, index):
         """Handle region filter change - refresh the current platform's games list."""
-        current_item = self.platform_tree.currentItem()
-        if current_item:
-            self._on_platform_selected(current_item, 0)
+        selected_items = self.platform_tree.selectedItems()
+        if selected_items:
+            self._on_platform_selected()
 
     def _filter_games(self, text):
         """Filter games list by search text."""
@@ -914,20 +1020,81 @@ if ($device) {{
             item = self.games_list.item(i)
             if not item.isHidden():
                 item.setSelected(True)
+                # Also add to persistent selection
+                data = item.data(Qt.UserRole)
+                if data:
+                    rom_key = f"{data.get('platform', '')}|{data.get('path', '')}"
+                    self._selected_roms.add(rom_key)
+        self._update_selection_info()
 
     def _select_no_games(self):
-        """Deselect all games."""
-        for i in range(self.games_list.count()):
-            self.games_list.item(i).setSelected(False)
-
-    def _get_selected_games(self) -> List[Dict]:
-        """Get list of selected games with their data."""
-        selected = []
+        """Deselect all visible games."""
         for i in range(self.games_list.count()):
             item = self.games_list.item(i)
-            if item.isSelected():
+            if not item.isHidden():
+                item.setSelected(False)
+                # Also remove from persistent selection
                 data = item.data(Qt.UserRole)
-                selected.append(data)
+                if data:
+                    rom_key = f"{data.get('platform', '')}|{data.get('path', '')}"
+                    self._selected_roms.discard(rom_key)
+        self._update_selection_info()
+
+    def _clear_all_selections(self):
+        """Clear all selections across all platforms."""
+        self._selected_roms.clear()
+        for i in range(self.games_list.count()):
+            self.games_list.item(i).setSelected(False)
+        self._update_selection_info()
+
+    def _update_selection_info(self):
+        """Update the selection count in the info label."""
+        selected_items = self.platform_tree.selectedItems()
+        if not selected_items:
+            return
+
+        total_games = self.games_list.count()
+        selected_count = len(self._selected_roms)
+
+        if len(selected_items) == 1:
+            platform_key = selected_items[0].data(0, Qt.UserRole)
+            platform_text = platform_key if platform_key else "Unknown"
+        else:
+            platform_text = f"{len(selected_items)} platforms"
+
+        self.games_info.setText(f"{total_games} games in {platform_text} | {selected_count} selected across all platforms")
+
+    def _get_selected_games(self) -> List[Dict]:
+        """Get list of selected games with their data from all platforms."""
+        # First, save current visible selections
+        self._save_current_selections()
+
+        # Now get all selected games from all platforms
+        selected = []
+
+        # Iterate through all platforms in the tree
+        for i in range(self.platform_tree.topLevelItemCount()):
+            platform_item = self.platform_tree.topLevelItem(i)
+            platform_key = platform_item.data(0, Qt.UserRole)
+            games = platform_item.data(0, Qt.UserRole + 1)
+
+            if not games:
+                continue
+
+            for title, path in games:
+                rom_key = f"{platform_key}|{path}"
+                if rom_key in self._selected_roms:
+                    # Detect region for this game
+                    filename = Path(path).name if path else title
+                    detected_region = detect_region(filename, Path(path) if path else None, platform_key)
+
+                    selected.append({
+                        "title": title,
+                        "path": str(path),
+                        "platform": platform_key,
+                        "region": detected_region
+                    })
+
         return selected
 
     def _start_processing(self):
@@ -969,17 +1136,48 @@ if ($device) {{
         # Calculate total games across all platforms
         total_games = sum(len(titles) for titles in by_platform.values())
 
+        # Load config once to get output directory and format (avoid loading per-ROM)
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            output_dir = cfg_path.parent / cfg.get("paths", {}).get("output_dir", "./output")
+            export_format = str(cfg.get("export_format", "JPEG")).upper()
+            file_ext = "jpg" if export_format == "JPEG" else "png"
+        except Exception:
+            output_dir = cfg_path.parent / "output"
+            file_ext = "png"
+
         # Process each platform's games
         def _run():
             try:
                 done_count = 0
+                skipped_count = 0
                 for platform_key, titles in by_platform.items():
                     if self._cancel_token.is_cancelled:
                         break
 
+                    # Get platform output folder name from config
+                    platforms_cfg = cfg.get("platforms", {}) or {}
+                    pconf = platforms_cfg.get(platform_key, {})
+                    folder_name = pconf.get("folder_name", platform_key.lower())
+                    out_plat = output_dir / folder_name
+
                     for title in titles:
                         if self._cancel_token.is_cancelled:
                             break
+
+                        # Check if output already exists BEFORE calling run_job
+                        # This avoids expensive config parsing for already-scraped ROMs
+                        slug = run_backend.safe_slug(title)
+                        out_path = out_plat / slug / f"icon.{file_ext}"
+
+                        if out_path.exists():
+                            # Already scraped - skip without calling run_job
+                            callbacks.log.emit(f"[SKIP] {platform_key}: {title} - Already exists")
+                            done_count += 1
+                            skipped_count += 1
+                            callbacks.progress.emit(done_count, total_games)
+                            continue
 
                         # Emit current item being processed
                         callbacks.current_item.emit(title, platform_key)
@@ -994,7 +1192,7 @@ if ($device) {{
                             cancel=self._cancel_token,
                             callbacks={
                                 "log": lambda m: callbacks.log.emit(str(m)),
-                                "preview": lambda p: callbacks.preview.emit(str(p)),
+                                "preview": lambda p, t="", pl="": callbacks.preview.emit(str(p), t, pl),
                                 "request_selection": self._request_artwork_selection,
                             },
                             search_term=title,
@@ -1013,7 +1211,10 @@ if ($device) {{
                         done_count += 1
                         callbacks.progress.emit(done_count, total_games)
 
-                callbacks.finished.emit(True, "Processing complete")
+                if skipped_count > 0:
+                    callbacks.finished.emit(True, f"Processing complete ({skipped_count} already existed, skipped)")
+                else:
+                    callbacks.finished.emit(True, "Processing complete")
 
             except Exception as e:
                 callbacks.finished.emit(False, f"Error: {e}")
@@ -1121,29 +1322,28 @@ if ($device) {{
             self.progress.setValue(100)
             self.progress.setFormat("Complete")
 
-    def _add_preview(self, path: str):
+    def _add_preview(self, path: str, title: str = "", platform: str = ""):
         """Add a generated icon to the preview grid."""
         path_obj = Path(path)
         if not path_obj.exists():
             return
 
-        label = QLabel()
-        label.setFixedSize(128, 128)  # Larger preview icons
-        label.setScaledContents(True)
-        label.setStyleSheet("border: 1px solid #3a3d42; border-radius: 6px;")
+        # Use filename as title fallback
+        if not title:
+            title = path_obj.stem
 
-        pixmap = QPixmap(path)
-        if not pixmap.isNull():
-            label.setPixmap(pixmap)
-            label.setToolTip(path_obj.stem)
+        # Create clickable preview widget
+        preview_item = ClickableIconPreview(path, title, platform)
+        preview_item.clicked.connect(self._on_preview_clicked)
+        preview_item.selection_changed.connect(self._on_preview_selection_changed)
 
-            row = len(self.preview_items) // 6  # 6 per row for larger icons
-            col = len(self.preview_items) % 6
-            self.preview_grid.addWidget(label, row, col)
-            self.preview_items.append(label)
+        row = len(self.preview_items) // 5  # 5 per row to accommodate wider widgets
+        col = len(self.preview_items) % 5
+        self.preview_grid.addWidget(preview_item, row, col)
+        self.preview_items.append(preview_item)
 
-            # Also add to popout window if open
-            self._add_preview_to_popout(path)
+        # Also add to popout window if open
+        self._add_preview_to_popout(path, title, platform)
 
     def _clear_preview(self):
         """Clear preview grid."""
@@ -1151,6 +1351,312 @@ if ($device) {{
             self.preview_grid.removeWidget(item)
             item.deleteLater()
         self.preview_items.clear()
+        self._update_selection_count()
+
+    def _on_preview_selection_changed(self, preview_widget: ClickableIconPreview, is_selected: bool):
+        """Handle selection change on a preview widget."""
+        self._update_selection_count()
+
+    def _update_selection_count(self):
+        """Update the selection count label."""
+        count = sum(1 for item in self.preview_items if isinstance(item, ClickableIconPreview) and item.is_selected())
+        total = len(self.preview_items)
+        self.preview_selection_label.setText(f"{count}/{total} selected")
+
+    def _select_all_previews(self):
+        """Select all preview icons."""
+        for item in self.preview_items:
+            if isinstance(item, ClickableIconPreview):
+                item.set_selected(True)
+        # Also select in popout if open
+        if hasattr(self, '_popout_preview_items'):
+            for item in self._popout_preview_items:
+                if isinstance(item, ClickableIconPreview):
+                    item.set_selected(True)
+
+    def _select_none_previews(self):
+        """Deselect all preview icons."""
+        for item in self.preview_items:
+            if isinstance(item, ClickableIconPreview):
+                item.set_selected(False)
+        # Also deselect in popout if open
+        if hasattr(self, '_popout_preview_items'):
+            for item in self._popout_preview_items:
+                if isinstance(item, ClickableIconPreview):
+                    item.set_selected(False)
+
+    def _rescrape_selected(self):
+        """Re-scrape all selected preview icons."""
+        if self._rescrape_in_progress:
+            QMessageBox.warning(self, "Re-scrape in Progress", "A re-scrape is already in progress. Please wait.")
+            return
+
+        # Collect selected items
+        selected_items = [item for item in self.preview_items
+                         if isinstance(item, ClickableIconPreview) and item.is_selected() and item.platform]
+
+        if not selected_items:
+            QMessageBox.information(self, "No Selection", "Please select at least one icon to re-scrape.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Re-scrape Selected",
+            f"Re-scrape {len(selected_items)} selected icon(s)?\n\n"
+            "You will be prompted to select artwork for each one.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        self._rescrape_in_progress = True
+        self._rescrape_cancelled = False
+        self.btn_rescrape_selected.setEnabled(False)
+        self.btn_rescrape_selected.setText("Re-scraping...")
+        self._on_log(f"[RE-SCRAPE] Starting batch re-scrape for {len(selected_items)} icons")
+
+        def do_batch_rescrape():
+            try:
+                cfg_path = Path(self.config_path)
+                if not cfg_path.exists():
+                    self._on_log("[RE-SCRAPE] Config file not found")
+                    return
+
+                for i, preview_widget in enumerate(selected_items):
+                    if self._rescrape_cancelled:
+                        self._on_log(f"[RE-SCRAPE] Batch cancelled by user")
+                        break
+
+                    game_title = preview_widget.game_title
+                    platform = preview_widget.platform
+
+                    self._on_log(f"[RE-SCRAPE] ({i+1}/{len(selected_items)}) Processing: {game_title}")
+
+                    cancel_token = run_backend.CancelToken()
+
+                    # Use the same run_job function with interactive_mode=True
+                    ok, msg = run_backend.run_job(
+                        config_path=cfg_path,
+                        platforms=[platform],
+                        workers=1,
+                        limit=1,
+                        cancel=cancel_token,
+                        callbacks={
+                            "log": lambda m: self._on_log(str(m)),
+                            "preview": lambda p, t="", pl="", pw=preview_widget: self._on_rescrape_preview_update(pw, p),
+                            "request_selection": self._request_artwork_selection_batch,
+                        },
+                        search_term=game_title,
+                        interactive_mode=True,  # Force interactive mode
+                        download_heroes=False,
+                        hero_count=0,
+                        fallback_settings={"enabled": False},
+                        download_screenshots=False,
+                        screenshot_count=0,
+                        copy_to_device=False,
+                        device_path="",
+                        scrape_logos=False,
+                        logo_fallback_to_boxart=False,
+                        force_rescrape=True,  # Override existing icons
+                        output_path_override=preview_widget.icon_path
+                    )
+
+                    if ok:
+                        self._on_log(f"[RE-SCRAPE] Completed: {game_title}")
+                        # Deselect after successful processing - store widget reference for main thread
+                        self._widget_to_deselect = preview_widget
+                        from PySide6.QtCore import QMetaObject, Qt
+                        QMetaObject.invokeMethod(
+                            self,
+                            "_deselect_preview_widget",
+                            Qt.ConnectionType.QueuedConnection
+                        )
+                    else:
+                        self._on_log(f"[RE-SCRAPE] Skipped or failed: {game_title}")
+
+                self._on_log(f"[RE-SCRAPE] Batch complete")
+
+            except Exception as e:
+                import traceback
+                self._on_log(f"[RE-SCRAPE] Error: {e}")
+                self._on_log(f"[RE-SCRAPE] {traceback.format_exc()}")
+            finally:
+                # Reset UI on main thread
+                from PySide6.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(
+                    self,
+                    "_on_batch_rescrape_finished",
+                    Qt.ConnectionType.QueuedConnection
+                )
+
+        thread = threading.Thread(target=do_batch_rescrape, daemon=True)
+        thread.start()
+
+    def _request_artwork_selection_batch(self, title: str, platform: str, artwork_options):
+        """
+        Request user to select artwork during batch re-scrape.
+        Returns selected index, None if skipped, -1 if cancelled all.
+        """
+        result = self._request_artwork_selection(title, platform, artwork_options)
+        if result == -1:
+            # User cancelled all - stop batch
+            self._rescrape_cancelled = True
+        return result
+
+    @Slot()
+    def _on_batch_rescrape_finished(self):
+        """Called when batch re-scrape is finished."""
+        self._rescrape_in_progress = False
+        self.btn_rescrape_selected.setEnabled(True)
+        self.btn_rescrape_selected.setText("Re-scrape Selected")
+        self._update_selection_count()
+
+    @Slot()
+    def _deselect_preview_widget(self):
+        """Deselect the preview widget stored in _widget_to_deselect (called from main thread)."""
+        if hasattr(self, '_widget_to_deselect') and self._widget_to_deselect:
+            self._widget_to_deselect.set_selected(False)
+            # Also sync with popout if open
+            if hasattr(self, '_popout_preview_items'):
+                for popout_item in self._popout_preview_items:
+                    if isinstance(popout_item, ClickableIconPreview) and popout_item.icon_path == self._widget_to_deselect.icon_path:
+                        popout_item.set_selected(False)
+                        break
+            self._widget_to_deselect = None
+            self._update_selection_count()
+            if hasattr(self, '_popout_selection_label'):
+                self._update_popout_selection_count()
+
+    def _on_preview_clicked(self, preview_widget: ClickableIconPreview):
+        """Handle click on a preview icon to re-scrape with artwork selection."""
+        game_title = preview_widget.game_title
+        platform = preview_widget.platform
+        icon_path = preview_widget.icon_path
+
+        if not platform:
+            QMessageBox.warning(
+                self,
+                "Cannot Re-scrape",
+                "Platform information is not available for this icon.\n"
+                "This may happen with icons generated in a previous session."
+            )
+            return
+
+        # Ask for confirmation
+        reply = QMessageBox.question(
+            self,
+            "Re-scrape Artwork",
+            f"Do you want to re-scrape artwork for:\n\n"
+            f"Game: {game_title}\n"
+            f"Platform: {platform}\n\n"
+            "This will fetch all available artwork and let you choose.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # Run re-scrape using the same pipeline as normal scraping
+        self._on_log(f"[RE-SCRAPE] Starting re-scrape for {game_title} ({platform})")
+
+        def do_rescrape():
+            try:
+                cfg_path = Path(self.config_path)
+                if not cfg_path.exists():
+                    self._on_log("[RE-SCRAPE] Config file not found")
+                    return
+
+                cancel_token = run_backend.CancelToken()
+
+                # Use the same run_job function with interactive_mode=True
+                # This will use the exact same artwork fetching logic as normal scraping
+                ok, msg = run_backend.run_job(
+                    config_path=cfg_path,
+                    platforms=[platform],
+                    workers=1,
+                    limit=1,
+                    cancel=cancel_token,
+                    callbacks={
+                        "log": lambda m: self._on_log(str(m)),
+                        "preview": lambda p, t="", pl="": self._on_rescrape_preview_update(preview_widget, p),
+                        "request_selection": self._request_artwork_selection,
+                    },
+                    search_term=game_title,
+                    interactive_mode=True,  # Force interactive mode for re-scrape
+                    download_heroes=False,  # Don't re-download heroes
+                    hero_count=0,
+                    fallback_settings={"enabled": False},  # No fallback for re-scrape
+                    download_screenshots=False,
+                    screenshot_count=0,
+                    copy_to_device=False,
+                    device_path="",
+                    scrape_logos=False,
+                    logo_fallback_to_boxart=False,
+                    force_rescrape=True,  # Override existing icons
+                    output_path_override=preview_widget.icon_path
+                )
+
+                if ok:
+                    self._on_log(f"[RE-SCRAPE] Completed for {game_title}")
+                else:
+                    self._on_log(f"[RE-SCRAPE] Failed for {game_title}: {msg}")
+
+            except Exception as e:
+                import traceback
+                self._on_log(f"[RE-SCRAPE] Error: {e}")
+                self._on_log(f"[RE-SCRAPE] {traceback.format_exc()}")
+
+        # Start in background thread
+        thread = threading.Thread(target=do_rescrape, daemon=True)
+        thread.start()
+
+    def _on_rescrape_preview_update(self, preview_widget: ClickableIconPreview, new_path: str):
+        """Update preview widget after re-scrape generates new icon."""
+        # Store reference for main thread update
+        self._widget_to_refresh = preview_widget
+        self._refresh_path = new_path
+        from PySide6.QtCore import QMetaObject, Qt
+        QMetaObject.invokeMethod(
+            self,
+            "_refresh_preview_widget",
+            Qt.ConnectionType.QueuedConnection
+        )
+
+    @Slot()
+    def _refresh_preview_widget(self):
+        """Refresh preview widget and sync with popout (called from main thread)."""
+        if hasattr(self, '_widget_to_refresh') and self._widget_to_refresh:
+            preview_widget = self._widget_to_refresh
+            # Refresh the main preview widget
+            preview_widget.refresh_icon()
+
+            # Also refresh corresponding popout widget if open
+            if hasattr(self, '_popout_preview_items') and self._popout_preview_items:
+                for popout_item in self._popout_preview_items:
+                    if isinstance(popout_item, ClickableIconPreview) and popout_item.icon_path == preview_widget.icon_path:
+                        popout_item.refresh_icon()
+                        break
+
+            # Also refresh main preview if update came from popout
+            for main_item in self.preview_items:
+                if isinstance(main_item, ClickableIconPreview) and main_item.icon_path == preview_widget.icon_path and main_item != preview_widget:
+                    main_item.refresh_icon()
+                    break
+
+            self._widget_to_refresh = None
+
+    @Slot()
+    def _show_rescrape_no_results(self):
+        """Show message when no artwork found for re-scrape."""
+        QMessageBox.information(
+            self,
+            "No Artwork Found",
+            "No artwork was found for this game from any source.\n"
+            "Try checking your API keys in Settings."
+        )
 
     def _open_output(self):
         """Open output directory."""
@@ -1769,12 +2275,40 @@ if ($device) {{
 
         self._preview_popout_window = QDialog(self)
         self._preview_popout_window.setWindowTitle("Preview - iiSU Asset Tool")
-        self._preview_popout_window.setMinimumSize(600, 400)
+        self._preview_popout_window.setMinimumSize(700, 500)
         self._preview_popout_window.setAttribute(Qt.WA_DeleteOnClose)
         self._preview_popout_window.finished.connect(self._on_popout_closed)
 
         popout_layout = QVBoxLayout(self._preview_popout_window)
         popout_layout.setContentsMargins(10, 10, 10, 10)
+
+        # Selection controls row
+        controls_row = QHBoxLayout()
+        controls_row.setSpacing(6)
+
+        popout_select_all = QPushButton("All")
+        popout_select_all.setToolTip("Select all icons")
+        popout_select_all.clicked.connect(self._select_all_previews)
+        controls_row.addWidget(popout_select_all)
+
+        popout_select_none = QPushButton("None")
+        popout_select_none.setToolTip("Deselect all icons")
+        popout_select_none.clicked.connect(self._select_none_previews)
+        controls_row.addWidget(popout_select_none)
+
+        popout_rescrape = QPushButton("Re-scrape Selected")
+        popout_rescrape.setToolTip("Re-scrape selected icons with artwork selection")
+        popout_rescrape.clicked.connect(self._rescrape_selected)
+        controls_row.addWidget(popout_rescrape)
+
+        controls_row.addStretch()
+
+        # Selection count label for popout
+        self._popout_selection_label = QLabel("0 selected")
+        self._popout_selection_label.setStyleSheet("font-size: 10px; color: #888;")
+        controls_row.addWidget(self._popout_selection_label)
+
+        popout_layout.addLayout(controls_row)
 
         # Create new scroll area for popout
         self._popout_scroll_area = QScrollArea()
@@ -1818,20 +2352,44 @@ if ($device) {{
             return
 
         # Copy all preview items to the popout
-        for i, preview_label in enumerate(self.preview_items):
-            pixmap = preview_label.pixmap()
-            if pixmap:
-                label = QLabel()
-                label.setFixedSize(160, 160)  # Larger in popout
-                label.setScaledContents(True)
-                label.setStyleSheet("border: 1px solid #3a3d42; border-radius: 8px;")
-                label.setPixmap(pixmap)
-                label.setToolTip(preview_label.toolTip())
+        for i, preview_widget in enumerate(self.preview_items):
+            if isinstance(preview_widget, ClickableIconPreview):
+                # Create a new clickable preview for the popout
+                popout_preview = ClickableIconPreview(
+                    preview_widget.icon_path,
+                    preview_widget.game_title,
+                    preview_widget.platform
+                )
+                popout_preview.clicked.connect(self._on_preview_clicked)
+                popout_preview.selection_changed.connect(self._on_popout_selection_changed)
+
+                # Copy selection state
+                popout_preview.set_selected(preview_widget.is_selected())
 
                 row = i // 4  # 4 per row in popout
                 col = i % 4
-                self._popout_preview_grid.addWidget(label, row, col)
-                self._popout_preview_items.append(label)
+                self._popout_preview_grid.addWidget(popout_preview, row, col)
+                self._popout_preview_items.append(popout_preview)
+
+        # Update popout selection count
+        self._update_popout_selection_count()
+
+    def _on_popout_selection_changed(self, preview_widget: ClickableIconPreview, is_selected: bool):
+        """Handle selection change in popout - sync to main preview."""
+        # Find corresponding item in main preview and sync
+        for item in self.preview_items:
+            if isinstance(item, ClickableIconPreview) and item.icon_path == preview_widget.icon_path:
+                item.set_selected(is_selected)
+                break
+        self._update_popout_selection_count()
+        self._update_selection_count()
+
+    def _update_popout_selection_count(self):
+        """Update the selection count label in popout."""
+        if hasattr(self, '_popout_selection_label') and hasattr(self, '_popout_preview_items'):
+            count = sum(1 for item in self._popout_preview_items if isinstance(item, ClickableIconPreview) and item.is_selected())
+            total = len(self._popout_preview_items)
+            self._popout_selection_label.setText(f"{count}/{total} selected")
 
     def _dock_preview(self):
         """Dock the preview back to inline view."""
@@ -1853,7 +2411,7 @@ if ($device) {{
         self.btn_popout_preview.setText("Pop Out")
         self.btn_popout_preview.setEnabled(True)
 
-    def _add_preview_to_popout(self, path: str):
+    def _add_preview_to_popout(self, path: str, title: str = "", platform: str = ""):
         """Add a preview to the popout window if it's open."""
         if not self._preview_popout_window or not hasattr(self, '_popout_preview_grid'):
             return
@@ -1862,17 +2420,19 @@ if ($device) {{
         if not path_obj.exists():
             return
 
-        label = QLabel()
-        label.setFixedSize(160, 160)
-        label.setScaledContents(True)
-        label.setStyleSheet("border: 1px solid #3a3d42; border-radius: 8px;")
+        # Use filename as title fallback
+        if not title:
+            title = path_obj.stem
 
-        pixmap = QPixmap(path)
-        if not pixmap.isNull():
-            label.setPixmap(pixmap)
-            label.setToolTip(path_obj.stem)
+        # Create clickable preview widget
+        preview_item = ClickableIconPreview(path, title, platform)
+        preview_item.clicked.connect(self._on_preview_clicked)
+        preview_item.selection_changed.connect(self._on_popout_selection_changed)
 
-            row = len(self._popout_preview_items) // 4
-            col = len(self._popout_preview_items) % 4
-            self._popout_preview_grid.addWidget(label, row, col)
-            self._popout_preview_items.append(label)
+        row = len(self._popout_preview_items) // 4
+        col = len(self._popout_preview_items) % 4
+        self._popout_preview_grid.addWidget(preview_item, row, col)
+        self._popout_preview_items.append(preview_item)
+
+        # Update popout selection count
+        self._update_popout_selection_count()

@@ -358,20 +358,20 @@ def _emit_progress(callbacks, done: int, total: int):
         except Exception:
             pass
 
-def _emit_preview(callbacks, img_path: Path):
+def _emit_preview(callbacks, img_path: Path, title: str = "", platform: str = ""):
     if callbacks is None:
         return
     # Handle dict-style callbacks (from GUI)
     if isinstance(callbacks, dict):
         if "preview" in callbacks and callable(callbacks["preview"]):
             try:
-                callbacks["preview"](str(img_path))
+                callbacks["preview"](str(img_path), title, platform)
             except Exception:
                 pass
     # Handle object-style callbacks
     elif hasattr(callbacks, "preview"):
         try:
-            callbacks.preview.emit(str(img_path))
+            callbacks.preview.emit(str(img_path), title, platform)
         except Exception:
             pass
 
@@ -1657,6 +1657,13 @@ def fetch_multiple_art_from_steamgriddb(
 
         # Sort by score (highest first) to get the best quality artwork
         suitable_grids.sort(key=lambda x: (x.get("score", 0), x.get("upvotes", 0), x.get("id", 0)), reverse=True)
+
+        # Limit to max 25 artworks to prevent memory issues with large collections
+        # With 4 providers (steamgriddb, igdb, thegamesdb, libretro), this gives ~100 total options
+        MAX_ARTWORKS_PER_PROVIDER = 25
+        if len(suitable_grids) > MAX_ARTWORKS_PER_PROVIDER:
+            _emit_log(callbacks, f"[DEBUG] SteamGridDB: Limiting from {len(suitable_grids)} to {MAX_ARTWORKS_PER_PROVIDER} artworks")
+            suitable_grids = suitable_grids[:MAX_ARTWORKS_PER_PROVIDER]
 
         _emit_log(callbacks, f"[DEBUG] SteamGridDB: {len(suitable_grids)} suitable grids after filtering, sorted by score")
         if suitable_grids:
@@ -3102,7 +3109,10 @@ def run_job(
     device_path: Optional[str] = None,
     scrape_logos: bool = True,
     logo_fallback_to_boxart: bool = True,
-    custom_border_settings: Optional[Dict[str, Any]] = None
+    custom_border_settings: Optional[Dict[str, Any]] = None,
+    force_rescrape: bool = False,
+    output_path_override: Optional[str] = None,
+    border_path_override: Optional[str] = None
 ) -> Tuple[bool, str]:
 
     config_path = Path(config_path)
@@ -3308,31 +3318,36 @@ def run_job(
 
         pconf = platforms_cfg.get(platform_key, {})
 
-        # Check for custom border override - now supports per-platform borders
-        custom_border_enabled = custom_border_settings.get("enabled", False) if custom_border_settings else False
-        custom_border_path_str = custom_border_settings.get("path", "") if custom_border_settings else ""
-        per_platform_borders = custom_border_settings.get("per_platform", {}) if custom_border_settings else {}
-
-        # Priority: 1) Per-platform custom border, 2) Global custom border, 3) Platform default border
-        if platform_key in per_platform_borders and per_platform_borders[platform_key] and Path(per_platform_borders[platform_key]).exists():
-            # Use per-platform custom border
-            border_path = Path(per_platform_borders[platform_key])
-            _emit_log(callbacks, f"[INFO] Using per-platform custom border for {platform_key}")
-        elif custom_border_enabled and custom_border_path_str and Path(custom_border_path_str).exists():
-            # Use global custom border for all platforms
-            border_path = Path(custom_border_path_str)
-            _emit_log(callbacks, f"[INFO] Using global custom border for {platform_key}")
+        # Check for border_path_override first (used for re-scrape from existing assets)
+        if border_path_override and Path(border_path_override).exists():
+            border_path = Path(border_path_override)
+            _emit_log(callbacks, f"[INFO] Using border override for {platform_key}")
         else:
-            # Use platform-specific border (default)
-            border_file = pconf.get("border_file")
-            # For custom platforms, the border_file might be an absolute path
-            if border_file and Path(border_file).is_absolute() and Path(border_file).exists():
-                border_path = Path(border_file)
+            # Check for custom border override - now supports per-platform borders
+            custom_border_enabled = custom_border_settings.get("enabled", False) if custom_border_settings else False
+            custom_border_path_str = custom_border_settings.get("path", "") if custom_border_settings else ""
+            per_platform_borders = custom_border_settings.get("per_platform", {}) if custom_border_settings else {}
+
+            # Priority: 1) Per-platform custom border, 2) Global custom border, 3) Platform default border
+            if platform_key in per_platform_borders and per_platform_borders[platform_key] and Path(per_platform_borders[platform_key]).exists():
+                # Use per-platform custom border
+                border_path = Path(per_platform_borders[platform_key])
+                _emit_log(callbacks, f"[INFO] Using per-platform custom border for {platform_key}")
+            elif custom_border_enabled and custom_border_path_str and Path(custom_border_path_str).exists():
+                # Use global custom border for all platforms
+                border_path = Path(custom_border_path_str)
+                _emit_log(callbacks, f"[INFO] Using global custom border for {platform_key}")
             else:
-                border_path = borders_dir / border_file if border_file else None
-            if not border_path or not border_path.exists():
-                _emit_log(callbacks, f"[WARN] Missing border for {platform_key}: {border_path}")
-                continue
+                # Use platform-specific border (default)
+                border_file = pconf.get("border_file")
+                # For custom platforms, the border_file might be an absolute path
+                if border_file and Path(border_file).is_absolute() and Path(border_file).exists():
+                    border_path = Path(border_file)
+                else:
+                    border_path = borders_dir / border_file if border_file else None
+                if not border_path or not border_path.exists():
+                    _emit_log(callbacks, f"[WARN] Missing border for {platform_key}: {border_path}")
+                    continue
 
         try:
             _, titles = resolve_platform_titles(
@@ -3351,8 +3366,13 @@ def run_job(
             else:
                 continue
 
+        # For re-scrape with output_path_override, use search_term directly as title
+        # This bypasses database lookup for existing assets
+        if output_path_override and search_term:
+            titles = [search_term]
+            _emit_log(callbacks, f"[INFO] Re-scrape mode: using search term '{search_term}' directly")
         # Apply search/filter before limit
-        if search_term:
+        elif search_term:
             # When user explicitly searches for something, only return that specific game
             # Don't return multiple fuzzy matches - user wants exactly what they searched for
             if titles:
@@ -3403,14 +3423,23 @@ def run_job(
         file_ext = get_export_extension(export_format)
 
         for title in titles:
-            # Create folder per game with icon and title images
-            game_folder = out_plat / safe_slug(title)
-            out_path = game_folder / f"icon.{file_ext}"
-            if out_path.exists():
+            # If output_path_override is provided, use it directly (for re-scrape of existing assets)
+            if output_path_override:
+                out_path = Path(output_path_override)
+                rev_plat = out_path.parent  # Use same folder for review
+                _emit_log(callbacks, f"[DEBUG] Using output_path_override: {out_path}")
+            else:
+                # Create folder per game with icon and title images
+                game_folder = out_plat / safe_slug(title)
+                out_path = game_folder / f"icon.{file_ext}"
+
+            # Skip if already exists (unless force_rescrape is True)
+            if out_path.exists() and not force_rescrape:
                 continue
             tasks.append((platform_key, title, border_path, out_path, rev_plat))
 
     total = len(tasks)
+    _emit_log(callbacks, f"[DEBUG] Total tasks: {total}, force_rescrape={force_rescrape}, output_path_override={output_path_override}")
     if total == 0:
         return True, "Nothing to do (already generated / missing borders / no matches)."
 
@@ -3421,13 +3450,18 @@ def run_job(
     done_lock = threading.Lock()
     errors = 0
 
-    # Prefetch cache for interactive mode - stores artwork fetched in background
+    # Prefetch cache for interactive mode - DISABLED to reduce memory usage
+    # With large ROM collections (1000+), prefetching doubles memory consumption
+    # as it holds artwork for the next game while current game is being processed
     prefetch_cache: Dict[str, List[Dict[str, Any]]] = {}
     prefetch_lock = threading.Lock()
     prefetch_thread: Optional[threading.Thread] = None
+    PREFETCH_ENABLED = False  # Set to True to re-enable prefetching
 
     def prefetch_artwork(platform_key: str, title: str, hints: List[str], cache_key: str):
         """Prefetch artwork in background and store in cache."""
+        if not PREFETCH_ENABLED:
+            return
         try:
             options = fetch_all_artwork_options_impl(platform_key, title, hints)
             with prefetch_lock:
@@ -3437,6 +3471,8 @@ def run_job(
 
     def start_prefetch(platform_key: str, title: str, hints: List[str]):
         """Start prefetching artwork for a game in the background."""
+        if not PREFETCH_ENABLED:
+            return  # Prefetching disabled for memory optimization
         nonlocal prefetch_thread
         cache_key = f"{platform_key}:{title}"
         with prefetch_lock:
@@ -4065,7 +4101,7 @@ def run_job(
                 if scrape_logos:
                     _emit_log(callbacks, f"[LOGO] No logo found, using boxart as fallback for title")
 
-            _emit_preview(callbacks, out_path)
+            _emit_preview(callbacks, out_path, title, platform_key)
             if source_tag:
                 _emit_log(callbacks, f"[OK] {platform_key}: {title} ({source_tag}) -> {out_path.parent.name}/")
             else:
