@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QWidget, QFrame, QComboBox, QButtonGroup, QRadioButton
+    QScrollArea, QWidget, QFrame, QComboBox, QButtonGroup, QRadioButton,
+    QGridLayout
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
@@ -149,9 +150,10 @@ class ArtworkPickerDialog(QDialog):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.grid_widget = QWidget()
-        self.grid_layout = QHBoxLayout(self.grid_widget)
+        self.grid_layout = QGridLayout(self.grid_widget)
         self.grid_layout.setSpacing(16)
         self.grid_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
 
@@ -161,8 +163,9 @@ class ArtworkPickerDialog(QDialog):
         # Button group for radio buttons
         self.button_group = QButtonGroup(self)
 
-        # Create artwork options
+        # Create artwork options in a grid (3 columns)
         self.artwork_widgets = []
+        self.num_columns = 3
         for i, opt in enumerate(self.artwork_options):
             widget = ArtworkOption(
                 image_data=opt['image_data'],
@@ -170,7 +173,9 @@ class ArtworkPickerDialog(QDialog):
                 index=i,
                 parent=self.grid_widget
             )
-            self.grid_layout.addWidget(widget)
+            row = i // self.num_columns
+            col = i % self.num_columns
+            self.grid_layout.addWidget(widget, row, col)
             self.button_group.addButton(widget.radio, i)
             self.artwork_widgets.append(widget)
 
@@ -205,14 +210,23 @@ class ArtworkPickerDialog(QDialog):
         layout.addLayout(button_layout)
 
     def _apply_filter(self):
-        """Filter artwork options by selected source."""
+        """Filter artwork options by selected source and re-layout grid."""
         filter_text = self.source_filter.currentText()
 
+        # Remove all widgets from grid
+        for widget in self.artwork_widgets:
+            self.grid_layout.removeWidget(widget)
+            widget.hide()
+
+        # Re-add visible widgets in grid order
+        visible_idx = 0
         for widget in self.artwork_widgets:
             if filter_text == "All Sources" or widget.source == filter_text:
+                row = visible_idx // self.num_columns
+                col = visible_idx % self.num_columns
+                self.grid_layout.addWidget(widget, row, col)
                 widget.show()
-            else:
-                widget.hide()
+                visible_idx += 1
 
     def _cancel_all(self):
         """Cancel interactive mode completely."""

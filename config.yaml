@@ -181,6 +181,23 @@ platforms:
     publisher: Google
     year: 2008
     type: mobile
+  ARCADE:
+    border_file: Arcade.png
+    publisher: Various
+    year: 1971
+    type: arcade
+  STEAM:
+    border_file: Steam.png
+    icon_file: Steam.png
+    publisher: Valve
+    year: 2003
+    type: pc
+  PC:
+    border_file: PC.png
+    icon_file: PC.png
+    publisher: Various
+    year: 1981
+    type: pc
 platform_aliases:
   NES:
   - NESGames
@@ -238,6 +255,17 @@ platform_aliases:
   - GAMEGEARGames
   ANDROID:
   - ANDROID
+  ARCADE:
+  - ARCADE
+  - ArcadeGames
+  STEAM:
+  - STEAM
+  - SteamGames
+  PC:
+  - PC
+  - PCGames
+  - Windows
+  - DOS
 libretro:
   base_url: https://thumbnails.libretro.com
   type_dir: Named_Boxarts
@@ -268,6 +296,9 @@ libretro:
     SATURN: Sega - Saturn
     DREAMCAST: Sega - Dreamcast
     GAME_GEAR: Sega - Game Gear
+    ARCADE: MAME
+    STEAM: Steam
+    PC: DOS
 igdb:
   client_id_env: IGDB_CLIENT_ID
   client_secret_env: IGDB_CLIENT_SECRET
@@ -305,6 +336,10 @@ igdb:
     SATURN: 32
     DREAMCAST: 23
     GAME_GEAR: 35
+    ANDROID: 34
+    ARCADE: 52
+    STEAM: 6
+    PC: 6
 thegamesdb:
   api_key_env: TGDB_API_KEY
   base_url: https://api.thegamesdb.net/v1
@@ -340,6 +375,13 @@ thegamesdb:
     SATURN: 17
     DREAMCAST: 16
     GAME_GEAR: 20
+    ANDROID: 4916
+    ARCADE: 23
+    STEAM: 1
+    PC: 1
+steam:
+  request_timeout_seconds: 30
+  delay_seconds: 0.25
 art_sources:
   mode: steamgriddb_then_libretro
   steamgriddb_square_only: true
@@ -352,6 +394,8 @@ art_sources:
   - id: libretro
     enabled: true
   - id: thegamesdb
+    enabled: true
+  - id: steam
     enabled: true
 auto_centering:
   enabled: true
@@ -387,14 +431,23 @@ fallback_icons:
   fallback_icons_path: ''
 screenshots:
   enabled: true
-  count: 2
+  count: 1
 device_copy:
   enabled: true
   path: /sdcard/Android/media/com.iisulauncher/iiSULauncher/assets/media/roms/consoles
 logos:
   scrape_logos: true
   fallback_to_boxart: true
+  # Logo styles to fetch from SteamGridDB
+  # Note: "official" is user-submitted and unreliable (can be fan translations/other languages)
+  # "white" and "black" are more standardized logo styles
+  styles:
+  - white
+  - black
 custom_borders:
   enabled: false
   path: ''
   per_platform: {}
+processing:
+  workers: 8
+  limit: 0
