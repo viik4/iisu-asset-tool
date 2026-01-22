@@ -5,7 +5,7 @@ Create custom icons, borders, and covers for your game library. Built for the [i
 
 ## Download
 
-Download the latest release from the [Releases](https://github.com/viik-4/iisu-asset-tool/releases) page.
+Download the latest release from the [Releases](https://github.com/viik4/iisu-asset-tool/releases) page.
 
 | Platform | File |
 |----------|------|
