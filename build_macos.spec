@@ -10,35 +10,33 @@ psd_tools_imports = collect_submodules('psd_tools')
 # Collect psd_tools data files (if any)
 psd_tools_datas = collect_data_files('psd_tools')
 
-# Bundle internal resources that are extracted by PyInstaller
-# User-modifiable files (config, borders, templates) should be copied alongside the app
+# Build datas list, skipping missing paths and excluding OST mp3s from src/
+_datas = []
+for src, dst in [
+    ('iisu_theme.qss', '.'),
+    ('iisu_theme_light.qss', '.'),
+    ('logo.png', '.'),
+    ('config.yaml', '.'),
+    ('fonts', 'fonts'),
+    ('platform_icons', 'platform_icons'),
+    ('fallback_icons', 'fallback_icons'),
+    ('borders', 'borders'),
+    ('templates', 'templates'),
+]:
+    if os.path.exists(src):
+        _datas.append((src, dst))
+
+# Only bundle PNGs from src/ (UI icons), not the iisuost/ mp3s
+if os.path.isdir('src'):
+    for f in os.listdir('src'):
+        if f.endswith('.png'):
+            _datas.append((os.path.join('src', f), 'src'))
+
 a = Analysis(
     ['run_gui.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        entry for entry in [
-            # Theme and styling
-            ('iisu_theme.qss', '.'),
-            ('iisu_theme_light.qss', '.'),
-            # Logo
-            ('logo.png', '.'),
-            # Configuration
-            ('config.yaml', '.'),
-            # Fonts directory
-            ('fonts', 'fonts'),
-            # Source assets (icons, grid pattern)
-            ('src', 'src'),
-            # Platform icons
-            ('platform_icons', 'platform_icons'),
-            # Fallback icons
-            ('fallback_icons', 'fallback_icons'),
-            # Border templates
-            ('borders', 'borders'),
-            # PSD templates
-            ('templates', 'templates'),
-        ] if os.path.exists(entry[0])
-    ] + psd_tools_datas,  # Include psd_tools data files
+    datas=_datas + psd_tools_datas,
     hiddenimports=[
         'PySide6.QtCore',
         'PySide6.QtGui',

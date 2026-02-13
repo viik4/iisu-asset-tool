@@ -39,7 +39,8 @@ jobs:
         Copy-Item -Recurse platform_icons releases\windows\iiSU_Asset_Tool\
         Copy-Item -Recurse fallback_icons releases\windows\iiSU_Asset_Tool\
         Copy-Item -Recurse templates releases\windows\iiSU_Asset_Tool\
-        Copy-Item -Recurse src releases\windows\iiSU_Asset_Tool\
+        New-Item -ItemType Directory -Force -Path releases\windows\iiSU_Asset_Tool\src
+        Copy-Item src\*.png releases\windows\iiSU_Asset_Tool\src\
         Copy-Item config.yaml releases\windows\iiSU_Asset_Tool\
         Copy-Item logo.png releases\windows\iiSU_Asset_Tool\
         Copy-Item iisu_theme.qss releases\windows\iiSU_Asset_Tool\
@@ -100,7 +101,8 @@ jobs:
         cp -r platform_icons releases/linux/iiSU_Asset_Tool/
         cp -r fallback_icons releases/linux/iiSU_Asset_Tool/
         cp -r templates releases/linux/iiSU_Asset_Tool/
-        cp -r src releases/linux/iiSU_Asset_Tool/
+        mkdir -p releases/linux/iiSU_Asset_Tool/src
+        cp src/*.png releases/linux/iiSU_Asset_Tool/src/
         cp config.yaml releases/linux/iiSU_Asset_Tool/
         cp logo.png releases/linux/iiSU_Asset_Tool/
         cp iisu_theme.qss releases/linux/iiSU_Asset_Tool/
