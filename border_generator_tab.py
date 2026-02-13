@@ -14,12 +14,14 @@ from PySide6.QtGui import QPixmap, QColor, QIcon, QImage
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFileDialog,
-    QGroupBox, QColorDialog, QComboBox, QMessageBox, QSlider, QSpinBox
+    QGroupBox, QColorDialog, QComboBox, QMessageBox, QSlider, QSpinBox,
+    QFrame
 )
 from PySide6.QtSvg import QSvgRenderer
 from io import BytesIO
 from psd_tools import PSDImage
 from app_paths import get_templates_dir, get_borders_dir, get_platform_icons_dir
+from iisu_image_utils import safe_load_image
 
 
 def load_svg_as_image(svg_path: str, size: int = 512) -> Image.Image:
@@ -69,7 +71,7 @@ def load_svg_as_image(svg_path: str, size: int = 512) -> Image.Image:
     buffer.close()
 
     # Read from buffer and convert to PIL
-    pil_image = Image.open(BytesIO(buffer.data())).convert("RGBA")
+    pil_image = safe_load_image(bytes(buffer.data()), "RGBA")
 
     return pil_image
 
@@ -209,14 +211,26 @@ def create_border_from_psd(color1: QColor, color2: QColor, gradient_angle: int,
         # Use thumbnail to maintain aspect ratio within max_size bounds
         white_icon.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
 
-        # Apply icon centering within bounding box
+        # Apply icon centering within bounding box (or centered on bbox if larger)
         icon_w, icon_h = white_icon.size
         cx, cy = icon_centering
 
         # Calculate paste position using centering parameters
         # cx, cy range from 0.0 to 1.0, where 0.5, 0.5 is center
-        paste_x = bbox_left + int((bbox_size - icon_w) * cx)
-        paste_y = bbox_top + int((bbox_size - icon_h) * cy)
+        # For icons larger than bbox, center them on the bbox center point
+        bbox_center_x = bbox_left + bbox_size // 2
+        bbox_center_y = bbox_top + bbox_size // 2
+
+        if icon_w > bbox_size or icon_h > bbox_size:
+            # For larger icons, center on bbox center with offset based on centering params
+            offset_range_x = (icon_w - bbox_size) // 2
+            offset_range_y = (icon_h - bbox_size) // 2
+            paste_x = bbox_center_x - icon_w // 2 + int((cx - 0.5) * 2 * offset_range_x)
+            paste_y = bbox_center_y - icon_h // 2 + int((cy - 0.5) * 2 * offset_range_y)
+        else:
+            # For smaller icons, position within bbox
+            paste_x = bbox_left + int((bbox_size - icon_w) * cx)
+            paste_y = bbox_top + int((bbox_size - icon_h) * cy)
 
         result.paste(white_icon, (paste_x, paste_y), white_icon)
 
@@ -231,7 +245,7 @@ class BorderPreview(QLabel):
         self.setMinimumSize(400, 400)
         self.setMaximumSize(512, 512)
         self.setScaledContents(True)
-        self.setStyleSheet("border: 2px solid #3A4048; border-radius: 8px;")
+        self.setObjectName("preview_border_frame")
 
         self.color1 = QColor("#D4849C")  # Pink from example
         self.color2 = QColor("#E5B559")  # Gold from example
@@ -256,40 +270,18 @@ class BorderPreview(QLabel):
         self._update_timer.timeout.connect(self._do_update)
 
         self._check_psd_availability()
-        self.schedule_update()
+        # Don't schedule_update() here — defer PSD rendering to first user interaction
 
     def _check_psd_availability(self):
-        """Check if the PSD template file exists and can be loaded."""
+        """Quick file-exists check. Full PSD validation is deferred to first use."""
         psd_path = get_templates_dir() / "iisuTemplates.psd"
-        if not psd_path.exists():
+        if psd_path.exists():
+            self._psd_available = True
+            self._psd_error = None
+        else:
             self._psd_available = False
             self._psd_error = f"PSD template not found at: {psd_path}"
             print(f"[BorderPreview] {self._psd_error}")
-            return
-
-        # Try to actually load the PSD to verify it works
-        try:
-            test_psd = PSDImage.open(str(psd_path))
-            # Verify we can find the expected layers
-            found_game_template = False
-            for layer in test_psd:
-                if layer.name == 'Game Template':
-                    found_game_template = True
-                    break
-            if not found_game_template:
-                self._psd_available = False
-                self._psd_error = "PSD loaded but 'Game Template' layer not found"
-                print(f"[BorderPreview] {self._psd_error}")
-                return
-            self._psd_available = True
-            self._psd_error = None
-            print(f"[BorderPreview] PSD template loaded successfully from: {psd_path}")
-        except Exception as e:
-            self._psd_available = False
-            self._psd_error = f"Failed to load PSD: {e}"
-            print(f"[BorderPreview] {self._psd_error}")
-            import traceback
-            traceback.print_exc()
 
     def set_color1(self, color: QColor):
         self.color1 = color
@@ -414,179 +406,268 @@ class BorderGeneratorTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._custom_icon_loaded = False  # Track if user uploaded a custom icon
         self.init_ui()
 
     def init_ui(self):
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(16)
+        from PySide6.QtWidgets import QScrollArea, QFrame, QSizePolicy
 
-        # Left: Preview
-        left = QVBoxLayout()
-        layout.addLayout(left, 2)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(0)
 
-        preview_label = QLabel("Border Preview (PSD Template)")
-        preview_label.setStyleSheet("font-size: 16px; font-weight: 700;")
-        left.addWidget(preview_label)
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(0)
+        content_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.preview = BorderPreview()
-        left.addWidget(self.preview, 1, Qt.AlignCenter)
+        # ── Left panel: Controls (scrollable) ──
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setFixedWidth(320)
 
-        # Export button
-        self.btn_export = QPushButton("Export Border")
-        self.btn_export.setObjectName("btn_start")
-        self.btn_export.clicked.connect(self.export_border)
-        left.addWidget(self.btn_export)
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setSpacing(8)
+        left_layout.setContentsMargins(5, 5, 10, 5)
 
-        # Right: Controls
-        right = QVBoxLayout()
-        layout.addLayout(right, 1)
+        # ── Gradient Colors card ──
+        color_card = QFrame()
+        color_card.setObjectName("card")
+        color_card_layout = QVBoxLayout(color_card)
+        color_card_layout.setContentsMargins(10, 10, 10, 10)
+        color_card_layout.setSpacing(6)
 
-        # Gradient colors
-        color_group = QGroupBox("Gradient Colors")
-        color_layout = QVBoxLayout(color_group)
+        color_title = QLabel("Gradient Colors")
+        color_title.setObjectName("label_card_title")
+        color_card_layout.addWidget(color_title)
 
         # Color 1
         color1_row = QHBoxLayout()
-        color1_row.addWidget(QLabel("Color 1:"))
-        self.color1_btn = QPushButton("Choose")
-        self.color1_btn.clicked.connect(self.choose_color1)
+        color1_row.setSpacing(8)
+        c1_lbl = QLabel("Color 1:")
+        c1_lbl.setObjectName("label_info")
+        color1_row.addWidget(c1_lbl)
         self.color1_preview = QLabel()
         self.color1_preview.setFixedSize(30, 30)
-        self.color1_preview.setStyleSheet("background: #D4849C; border: 2px solid #3A4048; border-radius: 4px;")
-        color1_row.addWidget(self.color1_btn)
+        self.color1_preview.setObjectName("color_swatch")
+        self.color1_preview.setStyleSheet("background: #D4849C;")
+        self.color1_preview.setCursor(Qt.PointingHandCursor)
+        self.color1_preview.mousePressEvent = lambda e: self.choose_color1()
         color1_row.addWidget(self.color1_preview)
+        self.color1_btn = QPushButton("Choose")
+        self.color1_btn.setObjectName("btn_small")
+        self.color1_btn.setMinimumHeight(24)
+        self.color1_btn.clicked.connect(self.choose_color1)
+        color1_row.addWidget(self.color1_btn)
         color1_row.addStretch()
-        color_layout.addLayout(color1_row)
+        color_card_layout.addLayout(color1_row)
 
         # Color 2
         color2_row = QHBoxLayout()
-        color2_row.addWidget(QLabel("Color 2:"))
-        self.color2_btn = QPushButton("Choose")
-        self.color2_btn.clicked.connect(self.choose_color2)
+        color2_row.setSpacing(8)
+        c2_lbl = QLabel("Color 2:")
+        c2_lbl.setObjectName("label_info")
+        color2_row.addWidget(c2_lbl)
         self.color2_preview = QLabel()
         self.color2_preview.setFixedSize(30, 30)
-        self.color2_preview.setStyleSheet("background: #E5B559; border: 2px solid #3A4048; border-radius: 4px;")
-        color2_row.addWidget(self.color2_btn)
+        self.color2_preview.setObjectName("color_swatch")
+        self.color2_preview.setStyleSheet("background: #E5B559;")
+        self.color2_preview.setCursor(Qt.PointingHandCursor)
+        self.color2_preview.mousePressEvent = lambda e: self.choose_color2()
         color2_row.addWidget(self.color2_preview)
+        self.color2_btn = QPushButton("Choose")
+        self.color2_btn.setObjectName("btn_small")
+        self.color2_btn.setMinimumHeight(24)
+        self.color2_btn.clicked.connect(self.choose_color2)
+        color2_row.addWidget(self.color2_btn)
         color2_row.addStretch()
-        color_layout.addLayout(color2_row)
+        color_card_layout.addLayout(color2_row)
 
         # Gradient angle
         angle_row = QHBoxLayout()
-        angle_row.addWidget(QLabel("Angle:"))
+        angle_row.setSpacing(8)
+        angle_lbl = QLabel("Angle:")
+        angle_lbl.setObjectName("label_info")
+        angle_row.addWidget(angle_lbl)
         self.angle_combo = QComboBox()
         self.angle_combo.addItems(["0° →", "45° ↗", "90° ↑", "135° ↖", "225° ↙", "315° ↘"])
         self.angle_combo.setCurrentIndex(3)  # 135° default
         self.angle_combo.currentIndexChanged.connect(self.update_angle)
-        angle_row.addWidget(self.angle_combo)
-        color_layout.addLayout(angle_row)
+        angle_row.addWidget(self.angle_combo, 1)
+        color_card_layout.addLayout(angle_row)
 
-        right.addWidget(color_group)
+        left_layout.addWidget(color_card)
 
-        # Platform icon
-        icon_group = QGroupBox("Platform Icon (93×93 area)")
-        icon_layout = QVBoxLayout(icon_group)
+        # ── Platform Icon card ──
+        icon_card = QFrame()
+        icon_card.setObjectName("card")
+        icon_card_layout = QVBoxLayout(icon_card)
+        icon_card_layout.setContentsMargins(10, 10, 10, 10)
+        icon_card_layout.setSpacing(6)
+
+        icon_title = QLabel("Platform Icon")
+        icon_title.setObjectName("label_card_title")
+        icon_card_layout.addWidget(icon_title)
 
         self.icon_path_label = QLabel("No icon selected")
         self.icon_path_label.setWordWrap(True)
-        self.icon_path_label.setStyleSheet("color: #888; font-size: 11px;")
-        icon_layout.addWidget(self.icon_path_label)
+        self.icon_path_label.setObjectName("label_muted")
+        icon_card_layout.addWidget(self.icon_path_label)
 
         icon_btn_row = QHBoxLayout()
+        icon_btn_row.setSpacing(6)
         self.btn_load_icon = QPushButton("Load Icon")
+        self.btn_load_icon.setObjectName("btn_primary")
+        self.btn_load_icon.setMinimumHeight(30)
         self.btn_load_icon.clicked.connect(self.load_icon)
         self.btn_clear_icon = QPushButton("Clear")
+        self.btn_clear_icon.setObjectName("btn_clear")
+        self.btn_clear_icon.setMinimumHeight(30)
         self.btn_clear_icon.clicked.connect(self.clear_icon)
         icon_btn_row.addWidget(self.btn_load_icon)
         icon_btn_row.addWidget(self.btn_clear_icon)
-        icon_layout.addLayout(icon_btn_row)
+        icon_card_layout.addLayout(icon_btn_row)
 
-        # Icon scale control
+        # Icon scale
         scale_row = QHBoxLayout()
-        scale_row.addWidget(QLabel("Icon Scale:"))
+        scale_row.setSpacing(6)
+        scale_lbl = QLabel("Scale:")
+        scale_lbl.setObjectName("label_info")
+        scale_lbl.setMinimumWidth(40)
+        scale_row.addWidget(scale_lbl)
 
         self.icon_scale_slider = QSlider(Qt.Horizontal)
-        self.icon_scale_slider.setMinimum(10)  # 10% minimum
-        self.icon_scale_slider.setMaximum(100)  # 100% maximum
-        self.icon_scale_slider.setValue(100)  # Default 100%
-        self.icon_scale_slider.setTickPosition(QSlider.TicksBelow)
-        self.icon_scale_slider.setTickInterval(10)
+        self.icon_scale_slider.setMinimum(10)
+        self.icon_scale_slider.setMaximum(300)
+        self.icon_scale_slider.setValue(100)
         self.icon_scale_slider.valueChanged.connect(self.update_icon_scale)
-        scale_row.addWidget(self.icon_scale_slider)
+        scale_row.addWidget(self.icon_scale_slider, 1)
 
         self.icon_scale_spinbox = QSpinBox()
         self.icon_scale_spinbox.setMinimum(10)
-        self.icon_scale_spinbox.setMaximum(100)
+        self.icon_scale_spinbox.setMaximum(300)
         self.icon_scale_spinbox.setValue(100)
         self.icon_scale_spinbox.setSuffix("%")
         self.icon_scale_spinbox.valueChanged.connect(self.update_icon_scale_from_spinbox)
         scale_row.addWidget(self.icon_scale_spinbox)
+        icon_card_layout.addLayout(scale_row)
 
-        icon_layout.addLayout(scale_row)
+        icon_hint = QLabel("Icon is rendered in white over the gradient")
+        icon_hint.setObjectName("label_muted")
+        icon_card_layout.addWidget(icon_hint)
 
-        info_label = QLabel("Icon will be rendered in white")
-        info_label.setStyleSheet("color: #888; font-size: 10px; font-style: italic;")
-        icon_layout.addWidget(info_label)
+        left_layout.addWidget(icon_card)
 
-        right.addWidget(icon_group)
+        # ── Platform Presets card ──
+        preset_card = QFrame()
+        preset_card.setObjectName("card")
+        preset_card_layout = QVBoxLayout(preset_card)
+        preset_card_layout.setContentsMargins(10, 10, 10, 10)
+        preset_card_layout.setSpacing(6)
 
-        # Platform Presets
-        preset_group = QGroupBox("Platform Presets")
-        preset_layout = QVBoxLayout(preset_group)
+        preset_title = QLabel("Platform Presets")
+        preset_title.setObjectName("label_card_title")
+        preset_card_layout.addWidget(preset_title)
 
-        # Platform dropdown
-        platform_row = QHBoxLayout()
-        platform_row.addWidget(QLabel("Platform:"))
         self.platform_preset_combo = QComboBox()
         self._setup_platform_presets()
         self.platform_preset_combo.currentIndexChanged.connect(self._apply_platform_preset)
-        platform_row.addWidget(self.platform_preset_combo, 1)
-        preset_layout.addLayout(platform_row)
+        preset_card_layout.addWidget(self.platform_preset_combo)
 
-        # Quick presets
-        preset_label = QLabel("Quick Colors:")
-        preset_label.setStyleSheet("font-size: 11px; color: #888;")
-        preset_layout.addWidget(preset_label)
+        # Quick color presets
+        quick_lbl = QLabel("Quick Colors:")
+        quick_lbl.setObjectName("label_muted")
+        preset_card_layout.addWidget(quick_lbl)
 
         preset_btns = QHBoxLayout()
+        preset_btns.setSpacing(4)
         btn_pink_gold = QPushButton("Pink-Gold")
+        btn_pink_gold.setObjectName("btn_small")
+        btn_pink_gold.setMinimumHeight(26)
         btn_pink_gold.clicked.connect(lambda: self.apply_preset("#D4849C", "#E5B559"))
-        btn_purple = QPushButton("Purple-Magenta")
+        btn_purple = QPushButton("Purple")
+        btn_purple.setObjectName("btn_small")
+        btn_purple.setMinimumHeight(26)
         btn_purple.clicked.connect(lambda: self.apply_preset("#2B1FD0", "#B71AEB"))
         preset_btns.addWidget(btn_pink_gold)
         preset_btns.addWidget(btn_purple)
-        preset_layout.addLayout(preset_btns)
+        preset_card_layout.addLayout(preset_btns)
 
         preset_btns2 = QHBoxLayout()
+        preset_btns2.setSpacing(4)
         btn_cyan = QPushButton("Cyan-Teal")
+        btn_cyan.setObjectName("btn_small")
+        btn_cyan.setMinimumHeight(26)
         btn_cyan.clicked.connect(lambda: self.apply_preset("#00DDFF", "#067DBA"))
         btn_green = QPushButton("Cyan-Green")
+        btn_green.setObjectName("btn_small")
+        btn_green.setMinimumHeight(26)
         btn_green.clicked.connect(lambda: self.apply_preset("#007C92", "#8FFFB1"))
         preset_btns2.addWidget(btn_cyan)
         preset_btns2.addWidget(btn_green)
-        preset_layout.addLayout(preset_btns2)
+        preset_card_layout.addLayout(preset_btns2)
 
-        right.addWidget(preset_group)
+        left_layout.addWidget(preset_card)
 
-        # Info
-        info = QLabel("Using PSD template: templates/iisuTemplates.psd")
-        info.setStyleSheet("color: #888; font-size: 11px;")
-        right.addWidget(info)
+        # ── Export card ──
+        export_card = QFrame()
+        export_card.setObjectName("card")
+        export_card_layout = QVBoxLayout(export_card)
+        export_card_layout.setContentsMargins(10, 10, 10, 10)
+        export_card_layout.setSpacing(6)
 
-        right.addStretch()
+        self.btn_export = QPushButton("Export Border")
+        self.btn_export.setObjectName("btn_export")
+        self.btn_export.setMinimumHeight(40)
+        self.btn_export.clicked.connect(self.export_border)
+        export_card_layout.addWidget(self.btn_export)
+
+        left_layout.addWidget(export_card)
+
+        left_layout.addStretch()
+        scroll_area.setWidget(left_panel)
+
+        # ── Right panel: Preview ──
+        right_panel = QFrame()
+        right_panel.setObjectName("preview_panel")
+        right_panel.setMinimumWidth(400)
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(12, 12, 12, 12)
+        right_layout.setSpacing(8)
+
+        preview_header = QHBoxLayout()
+        preview_title = QLabel("Preview")
+        preview_title.setObjectName("label_card_title")
+        preview_header.addWidget(preview_title)
+        preview_header.addStretch()
+        preview_help = QLabel("Drag icon to reposition | Scroll to zoom")
+        preview_help.setObjectName("label_muted")
+        preview_header.addWidget(preview_help)
+        right_layout.addLayout(preview_header)
+
+        self.preview = BorderPreview()
+        self.preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.preview.setMaximumSize(16777215, 16777215)  # Remove max size constraint
+        right_layout.addWidget(self.preview, 1, Qt.AlignCenter)
+
+        # Add panels to layout
+        content_layout.addWidget(scroll_area)
+        content_layout.addWidget(right_panel, 1)
+
+        layout.addLayout(content_layout)
 
     def choose_color1(self):
         color = QColorDialog.getColor(self.preview.color1, self, "Choose Gradient Color 1")
         if color.isValid():
             self.preview.set_color1(color)
-            self.color1_preview.setStyleSheet(f"background: {color.name()}; border: 2px solid #3A4048; border-radius: 4px;")
+            self.color1_preview.setStyleSheet(f"background: {color.name()};")
 
     def choose_color2(self):
         color = QColorDialog.getColor(self.preview.color2, self, "Choose Gradient Color 2")
         if color.isValid():
             self.preview.set_color2(color)
-            self.color2_preview.setStyleSheet(f"background: {color.name()}; border: 2px solid #3A4048; border-radius: 4px;")
+            self.color2_preview.setStyleSheet(f"background: {color.name()};")
 
     def update_angle(self, index):
         angles = [0, 45, 90, 135, 225, 315]
@@ -606,16 +687,18 @@ class BorderGeneratorTab(QWidget):
                     icon = load_svg_as_image(path, size=93)
                 else:
                     # Load raster image
-                    icon = Image.open(path).convert("RGBA")
+                    icon = safe_load_image(path, "RGBA")
 
                 self.preview.set_icon(icon)
                 self.icon_path_label.setText(Path(path).name)
+                self._custom_icon_loaded = True  # Mark that user uploaded custom icon
             except Exception as e:
                 QMessageBox.warning(self, "Load Error", f"Failed to load icon: {e}")
 
     def clear_icon(self):
         self.preview.set_icon(None)
         self.icon_path_label.setText("No icon selected")
+        self._custom_icon_loaded = False  # Reset custom icon flag
 
     def update_icon_scale(self, value: int):
         """Update icon scale from slider."""
@@ -636,8 +719,8 @@ class BorderGeneratorTab(QWidget):
         c2 = QColor(color2)
         self.preview.set_color1(c1)
         self.preview.set_color2(c2)
-        self.color1_preview.setStyleSheet(f"background: {color1}; border: 2px solid #3A4048; border-radius: 4px;")
-        self.color2_preview.setStyleSheet(f"background: {color2}; border: 2px solid #3A4048; border-radius: 4px;")
+        self.color1_preview.setStyleSheet(f"background: {color1};")
+        self.color2_preview.setStyleSheet(f"background: {color2};")
 
     def export_border(self):
         path, _ = QFileDialog.getSaveFileName(
@@ -702,12 +785,13 @@ class BorderGeneratorTab(QWidget):
         preset = self.platform_presets[index]
         _, icon_filename, color1, color2 = preset
 
-        # Load the platform icon
-        if icon_filename:
+        # Only load the platform icon if no custom icon was uploaded
+        # This preserves user's custom icon when changing presets
+        if not self._custom_icon_loaded and icon_filename:
             icon_path = get_platform_icons_dir() / icon_filename
             if icon_path.exists():
                 try:
-                    icon = Image.open(icon_path).convert("RGBA")
+                    icon = safe_load_image(icon_path, "RGBA")
                     self.preview.set_icon(icon)
                     self.icon_path_label.setText(icon_filename)
                 except Exception as e:

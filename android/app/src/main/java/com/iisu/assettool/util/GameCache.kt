@@ -62,44 +62,75 @@ object GameCache {
     /**
      * Get platforms with ROMs, using cache if available.
      */
-    suspend fun getPlatformsWithRoms(forceRefresh: Boolean = false): List<String> = cacheMutex.withLock {
-        if (!forceRefresh && isCacheValid() && platformsCache != null) {
-            Log.d(TAG, "Returning cached platforms: ${platformsCache?.size}")
-            return platformsCache!!
+    suspend fun getPlatformsWithRoms(forceRefresh: Boolean = false): List<String> {
+        // Check cache first
+        val cached = cacheMutex.withLock {
+            if (!forceRefresh && isCacheValid() && platformsCache != null) {
+                Log.d(TAG, "Returning cached platforms: ${platformsCache?.size}")
+                return@withLock platformsCache
+            }
+            null
         }
 
+        if (cached != null) {
+            return cached
+        }
+
+        // Do IO outside lock
         Log.d(TAG, "Scanning platforms from filesystem...")
         val platforms = withContext(Dispatchers.IO) {
             IisuDirectoryManager.getPlatformsWithRoms()
         }
 
-        platformsCache = platforms
-        cacheTimestamp = System.currentTimeMillis()
-        Log.d(TAG, "Cached ${platforms.size} platforms")
+        // Update cache
+        cacheMutex.withLock {
+            platformsCache = platforms
+            cacheTimestamp = System.currentTimeMillis()
+            Log.d(TAG, "Cached ${platforms.size} platforms")
+        }
 
-        platforms
+        return platforms
     }
 
     /**
      * Get games for a platform, using cache if available.
+     * @param platform The platform to get games for
+     * @param forceRefresh If true, bypass cache and scan filesystem
+     * @param deepSearch If true, scan subdirectories for games (e.g., Platform/Category/Game)
      */
-    suspend fun getGamesForPlatform(platform: String, forceRefresh: Boolean = false): List<GameInfo> = cacheMutex.withLock {
-        if (!forceRefresh && isCacheValid() && gamesCache.containsKey(platform)) {
-            Log.d(TAG, "Returning cached games for $platform: ${gamesCache[platform]?.size}")
-            return gamesCache[platform]!!
+    suspend fun getGamesForPlatform(platform: String, forceRefresh: Boolean = false,
+                                    deepSearch: Boolean = false): List<GameInfo> {
+        // Create a cache key that includes the deep search setting
+        val cacheKey = if (deepSearch) "${platform}_deep" else platform
+
+        // Check cache first
+        val cached = cacheMutex.withLock {
+            if (!forceRefresh && isCacheValid() && gamesCache.containsKey(cacheKey)) {
+                Log.d(TAG, "Returning cached games for $cacheKey: ${gamesCache[cacheKey]?.size}")
+                return@withLock gamesCache[cacheKey]!!
+            }
+            null
         }
 
-        Log.d(TAG, "Scanning games for $platform from filesystem...")
+        if (cached != null) {
+            return cached
+        }
+
+        // Do IO outside lock
+        Log.d(TAG, "Scanning games for $platform from filesystem (deepSearch=$deepSearch)...")
         val games = withContext(Dispatchers.IO) {
-            IisuDirectoryManager.getGamesForPlatform(platform)
+            IisuDirectoryManager.getGamesForPlatform(platform, deepSearch)
         }
 
-        gamesCache[platform] = games
-        // Update platform info cache as well
-        updatePlatformInfoCache(platform, games)
-        Log.d(TAG, "Cached ${games.size} games for $platform")
+        // Update cache
+        cacheMutex.withLock {
+            gamesCache[cacheKey] = games
+            // Update platform info cache as well
+            updatePlatformInfoCache(platform, games)
+            Log.d(TAG, "Cached ${games.size} games for $cacheKey")
+        }
 
-        games
+        return games
     }
 
     /**
@@ -107,59 +138,98 @@ object GameCache {
      * This is the fast path for loading the platform grid.
      */
     suspend fun getCachedPlatformInfoList(context: Context, forceRefresh: Boolean = false): List<CachedPlatformInfo> {
-        val platforms = getPlatformsWithRoms(forceRefresh)
+        Log.d(TAG, "getCachedPlatformInfoList called (forceRefresh=$forceRefresh)")
 
-        return cacheMutex.withLock {
-            // Check if we have cached info for all platforms
-            val allCached = platforms.all { platformInfoCache.containsKey(it) }
-
-            if (!forceRefresh && isCacheValid() && allCached) {
-                Log.d(TAG, "Returning cached platform info for ${platforms.size} platforms")
-                return@withLock platforms.mapNotNull { platformInfoCache[it] }
+        // First, check memory cache (quick, no IO)
+        val memoryCached = cacheMutex.withLock {
+            if (!forceRefresh && isCacheValid() && platformsCache != null) {
+                val platforms = platformsCache!!
+                val allCached = platforms.all { platformInfoCache.containsKey(it) }
+                if (allCached) {
+                    Log.d(TAG, "Returning cached platform info for ${platforms.size} platforms")
+                    return@withLock platforms.mapNotNull { platformInfoCache[it] }
+                }
             }
+            null
+        }
 
-            // Try to load from disk cache first
-            if (!forceRefresh) {
-                val diskCache = loadFromDiskCache(context)
-                if (diskCache != null && diskCache.isNotEmpty()) {
-                    Log.d(TAG, "Loaded ${diskCache.size} platforms from disk cache")
+        if (memoryCached != null) {
+            Log.d(TAG, "Returning memory cached result: ${memoryCached.size} platforms")
+            return memoryCached
+        }
+
+        // Try disk cache (IO outside lock)
+        if (!forceRefresh) {
+            Log.d(TAG, "Checking disk cache...")
+            val diskCache = withContext(Dispatchers.IO) {
+                loadFromDiskCache(context)
+            }
+            if (diskCache != null && diskCache.isNotEmpty()) {
+                Log.d(TAG, "Loaded ${diskCache.size} platforms from disk cache")
+                cacheMutex.withLock {
                     diskCache.forEach { platformInfoCache[it.name] = it }
+                    platformsCache = diskCache.map { it.name }
                     cacheTimestamp = System.currentTimeMillis()
-                    return@withLock diskCache
                 }
+                return diskCache
             }
+            Log.d(TAG, "Disk cache miss or empty")
+        }
 
-            // Build cache from filesystem
-            Log.d(TAG, "Building platform info cache from filesystem...")
-            val platformInfoList = withContext(Dispatchers.IO) {
-                platforms.map { platformName ->
-                    val games = IisuDirectoryManager.getGamesForPlatform(platformName)
-                    gamesCache[platformName] = games
+        // Do filesystem scan (IO outside lock)
+        Log.d(TAG, "Scanning platforms from filesystem...")
+        val scannedPlatforms = withContext(Dispatchers.IO) {
+            val result = IisuDirectoryManager.getPlatformsWithRoms()
+            Log.d(TAG, "IisuDirectoryManager.getPlatformsWithRoms returned: $result")
+            result
+        }
 
-                    val iconFile = IisuDirectoryManager.getPlatformIcon(platformName)
+        if (scannedPlatforms.isEmpty()) {
+            Log.w(TAG, "No platforms found! Root: ${IisuDirectoryManager.getIisuRoot().absolutePath}")
+            return emptyList()
+        }
 
-                    CachedPlatformInfo(
-                        name = platformName,
-                        displayName = formatPlatformName(platformName),
-                        gameCount = games.size,
-                        missingIcons = games.count { !it.hasIcon },
-                        missingHeroes = games.count { !it.hasHero },
-                        missingLogos = games.count { !it.hasLogo },
-                        iconPath = if (iconFile.exists()) iconFile.absolutePath else null
-                    )
-                }
+        Log.d(TAG, "Building platform info cache for ${scannedPlatforms.size} platforms...")
+        val platformInfoList = withContext(Dispatchers.IO) {
+            scannedPlatforms.map { platformName ->
+                Log.d(TAG, "Scanning games for platform: $platformName")
+                val games = IisuDirectoryManager.getGamesForPlatform(platformName)
+                Log.d(TAG, "Found ${games.size} games for $platformName")
+
+                val iconFile = IisuDirectoryManager.getPlatformIcon(platformName)
+
+                Pair(platformName, Triple(games, CachedPlatformInfo(
+                    name = platformName,
+                    displayName = formatPlatformName(platformName),
+                    gameCount = games.size,
+                    missingIcons = games.count { !it.hasIcon },
+                    missingHeroes = games.count { !it.hasHero },
+                    missingLogos = games.count { !it.hasLogo },
+                    iconPath = if (iconFile.exists()) iconFile.absolutePath else null
+                ), games))
             }
+        }
 
-            // Update in-memory cache
-            platformInfoList.forEach { platformInfoCache[it.name] = it }
+        // Update memory cache with lock (quick, no IO)
+        val infoList = cacheMutex.withLock {
+            platformsCache = scannedPlatforms
             cacheTimestamp = System.currentTimeMillis()
 
-            // Save to disk cache
-            saveToDiskCache(context, platformInfoList)
-
-            Log.d(TAG, "Built and cached info for ${platformInfoList.size} platforms")
-            platformInfoList
+            platformInfoList.map { (platformName, triple) ->
+                val (games, info, _) = triple
+                gamesCache[platformName] = games
+                platformInfoCache[platformName] = info
+                info
+            }
         }
+
+        // Save to disk cache (IO outside lock)
+        withContext(Dispatchers.IO) {
+            saveToDiskCache(context, infoList)
+        }
+
+        Log.d(TAG, "Built and cached info for ${infoList.size} platforms")
+        return infoList
     }
 
     /**

@@ -7,13 +7,13 @@
             <solid android:color="@color/surface_light" />
         </shape>
     </item>
-    <!-- Subtle vertical gradient from cyan to magenta -->
+    <!-- Subtle vertical gradient from cyan to pink -->
     <item>
         <shape android:shape="rectangle">
             <gradient
-                android:startColor="#2000D4FF"
+                android:startColor="#2000DDFF"
                 android:centerColor="#10000000"
-                android:endColor="#20FF00FF"
+                android:endColor="#20B71AEB"
                 android:angle="270" />
         </shape>
     </item>

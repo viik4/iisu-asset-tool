@@ -1,224 +1,321 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
+<androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:background="@color/theme_background"
+    android:padding="@dimen/spacing_lg">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <!-- Page Title -->
+    <TextView
+        android:id="@+id/textTitle"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="@dimen/spacing_lg">
+        android:text="@string/custom_image_title"
+        style="@style/IisuTextAppearance.PageTitle"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Title -->
-        <TextView
-            android:id="@+id/textTitle"
-            android:layout_width="wrap_content"
+    <TextView
+        android:id="@+id/textSubtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_xs"
+        android:text="@string/custom_image_subtitle"
+        android:textSize="14sp"
+        android:textColor="@color/theme_text_secondary"
+        app:layout_constraintTop_toBottomOf="@id/textTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <View
+        android:id="@+id/accentLine"
+        android:layout_width="0dp"
+        android:layout_height="2dp"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:background="@drawable/bg_accent_line"
+        app:layout_constraintTop_toBottomOf="@id/textSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Step Indicator -->
+    <LinearLayout
+        android:id="@+id/layoutSteps"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:orientation="horizontal"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/accentLine"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Step 1 -->
+        <LinearLayout
+            android:id="@+id/layoutStep1"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="@string/custom_image_title"
-            style="@style/IisuTextAppearance.PageTitle" />
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
 
-        <!-- Accent line under title -->
+            <TextView
+                android:id="@+id/textStep1Number"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:gravity="center"
+                android:text="1"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_step_active" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_xs"
+                android:text="Image"
+                android:textSize="11sp"
+                android:textColor="@color/theme_text_primary" />
+
+        </LinearLayout>
+
+        <!-- Connector -->
         <View
-            android:layout_width="match_parent"
+            android:layout_width="32dp"
             android:layout_height="2dp"
-            android:layout_marginTop="@dimen/spacing_sm"
-            android:layout_marginBottom="@dimen/spacing_lg"
-            android:background="@drawable/bg_accent_line" />
+            android:background="@color/theme_border" />
 
-        <!-- Select Image Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
+        <!-- Step 2 -->
+        <LinearLayout
+            android:id="@+id/layoutStep2"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/theme_surface"
-            app:cardCornerRadius="@dimen/card_corner_radius"
-            app:cardElevation="@dimen/card_elevation"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/theme_border_color">
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/textStep2Number"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:gravity="center"
+                android:text="2"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/theme_text_secondary"
+                android:background="@drawable/bg_step_inactive" />
+
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_lg">
+                android:layout_marginTop="@dimen/spacing_xs"
+                android:text="Border"
+                android:textSize="11sp"
+                android:textColor="@color/theme_text_secondary" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Step 1: Select Your Image"
-                    style="@style/IisuTextAppearance.SectionHeader"
-                    android:textColor="@color/accent_cyan" />
+        </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/spacing_xs"
-                    android:text="Choose any image from your device to use as the artwork."
-                    android:textSize="@dimen/text_caption"
-                    android:textColor="@color/theme_text_secondary" />
+        <!-- Connector -->
+        <View
+            android:layout_width="32dp"
+            android:layout_height="2dp"
+            android:background="@color/theme_border" />
 
-                <!-- Select Image Button -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/buttonSelectImage"
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/button_min_height"
-                    android:layout_marginTop="@dimen/spacing_md"
-                    android:text="@string/custom_select_image"
-                    android:textSize="@dimen/text_body"
-                    style="@style/IisuPrimaryButton"
-                    app:backgroundTint="@null"
-                    app:icon="@drawable/ic_image"
-                    app:iconGravity="textStart"
-                    app:cornerRadius="@dimen/card_corner_radius" />
-
-            </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Image Preview Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardPreview"
-            android:layout_width="match_parent"
+        <!-- Step 3 -->
+        <LinearLayout
+            android:id="@+id/layoutStep3"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/spacing_lg"
-            app:cardBackgroundColor="@color/theme_surface"
-            app:cardCornerRadius="@dimen/card_corner_radius"
-            app:cardElevation="@dimen/card_elevation"
-            app:strokeWidth="2dp"
-            app:strokeColor="@color/theme_border_color">
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
 
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
+            <TextView
+                android:id="@+id/textStep3Number"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:gravity="center"
+                android:text="3"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/theme_text_secondary"
+                android:background="@drawable/bg_step_inactive" />
 
-                <ImageView
-                    android:id="@+id/imagePreview"
-                    android:layout_width="match_parent"
-                    android:layout_height="240dp"
-                    android:scaleType="fitCenter"
-                    android:padding="@dimen/spacing_md"
-                    android:background="@color/theme_card_background"
-                    android:contentDescription="@string/custom_image_title"
-                    tools:src="@android:drawable/ic_menu_gallery" />
-
-                <com.google.android.material.progressindicator.CircularProgressIndicator
-                    android:id="@+id/progressBar"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:indeterminate="true"
-                    android:visibility="gone" />
-
-            </FrameLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Border Selection Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/spacing_lg"
-            app:cardBackgroundColor="@color/theme_surface"
-            app:cardCornerRadius="@dimen/card_corner_radius"
-            app:cardElevation="@dimen/card_elevation"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/theme_border_color">
-
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_lg">
+                android:layout_marginTop="@dimen/spacing_xs"
+                android:text="Save"
+                android:textSize="11sp"
+                android:textColor="@color/theme_text_secondary" />
 
-                <TextView
-                    android:id="@+id/labelBorders"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Step 2: Select a Border"
-                    style="@style/IisuTextAppearance.SectionHeader"
-                    android:textColor="@color/accent_cyan" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/spacing_xs"
-                    android:text="Choose a platform border to apply to your image."
-                    android:textSize="@dimen/text_caption"
-                    android:textColor="@color/theme_text_secondary" />
-
-                <!-- Border Grid -->
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recyclerViewBorders"
-                    android:layout_width="match_parent"
-                    android:layout_height="160dp"
-                    android:layout_marginTop="@dimen/spacing_md"
-                    android:clipToPadding="false"
-                    tools:listitem="@layout/item_border" />
-
-            </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Action Buttons Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/spacing_lg"
-            android:layout_marginBottom="@dimen/spacing_lg"
-            app:cardBackgroundColor="@color/theme_surface"
-            app:cardCornerRadius="@dimen/card_corner_radius"
-            app:cardElevation="@dimen/card_elevation"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/theme_border_color">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_lg">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Step 3: Apply &amp; Save"
-                    style="@style/IisuTextAppearance.SectionHeader"
-                    android:textColor="@color/accent_cyan" />
-
-                <!-- Apply Button -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/buttonApply"
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/button_min_height"
-                    android:layout_marginTop="@dimen/spacing_md"
-                    android:text="@string/custom_apply_border"
-                    android:textSize="@dimen/text_body"
-                    android:enabled="false"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    app:strokeColor="@color/theme_border_color"
-                    app:cornerRadius="@dimen/card_corner_radius" />
-
-                <!-- Save Button -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/buttonSave"
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/button_min_height"
-                    android:layout_marginTop="@dimen/spacing_sm"
-                    android:text="@string/custom_save_button"
-                    android:textSize="@dimen/text_body"
-                    android:enabled="false"
-                    style="@style/IisuSecondaryButton"
-                    app:backgroundTint="@null"
-                    app:icon="@drawable/ic_save"
-                    app:iconGravity="textStart"
-                    app:cornerRadius="@dimen/card_corner_radius" />
-
-            </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
 
     </LinearLayout>
 
-</ScrollView>
+    <!-- Main Content Area -->
+    <ScrollView
+        android:id="@+id/scrollContent"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:fillViewport="true"
+        app:layout_constraintTop_toBottomOf="@id/layoutSteps"
+        app:layout_constraintBottom_toTopOf="@id/buttonAction"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Preview Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardPreview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/theme_surface"
+                app:cardCornerRadius="@dimen/card_corner_radius"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/theme_border">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="220dp">
+
+                    <ImageView
+                        android:id="@+id/imagePreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="fitCenter"
+                        android:padding="@dimen/spacing_md"
+                        android:contentDescription="@string/cd_preview"
+                        tools:src="@android:drawable/ic_menu_gallery" />
+
+                    <!-- Empty state -->
+                    <LinearLayout
+                        android:id="@+id/layoutEmptyPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:orientation="vertical">
+
+                        <ImageView
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:src="@drawable/ic_image_placeholder"
+                            android:alpha="0.4"
+                            app:tint="@color/theme_text_secondary"
+                            android:contentDescription="@null" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/spacing_sm"
+                            android:text="Tap below to choose an image"
+                            android:textSize="13sp"
+                            android:textColor="@color/theme_text_hint" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.progressindicator.CircularProgressIndicator
+                        android:id="@+id/progressBar"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:indeterminate="true"
+                        android:visibility="gone"
+                        app:indicatorColor="@color/theme_accent" />
+
+                </FrameLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Select Image Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonSelectImage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_md"
+                android:text="@string/custom_select_image"
+                android:minHeight="48dp"
+                style="@style/IisuPrimaryButton"
+                app:backgroundTint="@null"
+                app:icon="@drawable/ic_image"
+                app:iconGravity="textStart"
+                app:cornerRadius="@dimen/card_corner_radius" />
+
+            <!-- Border Selection Section -->
+            <TextView
+                android:id="@+id/labelBorders"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_lg"
+                android:text="@string/custom_step_2"
+                style="@style/IisuTextAppearance.SectionHeader" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_xs"
+                android:text="@string/custom_step_2_desc"
+                android:textSize="12sp"
+                android:textColor="@color/theme_text_secondary" />
+
+            <!-- Border Grid -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerViewBorders"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_md"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false"
+                tools:listitem="@layout/item_border" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <!-- Action Button (changes based on step) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonAction"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:layout_marginBottom="@dimen/spacing_sm"
+        android:text="@string/custom_apply_border"
+        android:minHeight="48dp"
+        android:enabled="false"
+        style="@style/IisuSecondaryButton"
+        app:backgroundTint="@null"
+        app:cornerRadius="@dimen/card_corner_radius"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Hidden Save Button (shown after preview) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonSave"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:layout_marginBottom="@dimen/spacing_sm"
+        android:text="@string/custom_save_button"
+        android:minHeight="48dp"
+        android:visibility="gone"
+        style="@style/IisuSecondaryButton"
+        app:backgroundTint="@null"
+        app:icon="@drawable/ic_save"
+        app:iconGravity="textStart"
+        app:cornerRadius="@dimen/card_corner_radius"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

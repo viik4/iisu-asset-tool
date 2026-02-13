@@ -22,6 +22,7 @@ import com.iisu.assettool.util.GameCache
 import com.iisu.assettool.util.GameInfo
 import com.iisu.assettool.util.IisuDirectoryManager
 import com.iisu.assettool.util.PlatformAdapter
+import com.iisu.assettool.util.ViewAnimationUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,10 +44,17 @@ class IisuBrowserFragment : Fragment() {
 
     private lateinit var platformAdapter: PlatformAdapter
 
+    // Flag to track if grid has been set up (to avoid duplicate setup)
+    private var isGridSetUp = false
+    // Flag to track if we're already loading platforms
+    private var isLoadingPlatforms = false
+
     companion object {
         private const val TAG = "IisuBrowserFragment"
         private const val PREFS_NAME = "iisu_asset_tool_prefs"
         private const val PREF_ROM_PATH = "custom_rom_path"
+        // Special platform name for Android Apps entry
+        const val ANDROID_APPS_PLATFORM = "__android_apps__"
     }
 
     // Folder picker launcher
@@ -68,20 +76,26 @@ class IisuBrowserFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Load saved ROM path from preferences
-        loadSavedRomPath()
+        try {
+            // Load saved ROM path from preferences
+            loadSavedRomPath()
 
-        // Setup button click listener
-        binding.btnSelectRomFolder.setOnClickListener {
-            openFolderPicker()
-        }
+            // Setup button click listener
+            binding.btnSelectRomFolder.setOnClickListener {
+                openFolderPicker()
+            }
 
-        // Debug: Log iiSU detection
-        debugIisuDetection()
+            // Debug: Log iiSU detection (skip in production to avoid blocking)
+            // debugIisuDetection()
 
-        if (IisuDirectoryManager.isIisuInstalled()) {
-            showIisuBrowser()
-        } else {
+            // Check if iiSU is installed and show appropriate UI
+            if (IisuDirectoryManager.isIisuInstalled()) {
+                showIisuBrowser()
+            } else {
+                showNotInstalled()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onViewCreated", e)
             showNotInstalled()
         }
     }
@@ -139,7 +153,7 @@ class IisuBrowserFragment : Fragment() {
                     ).show()
 
                     // Clear caches and refresh the view
-                    lifecycleScope.launch {
+                    viewLifecycleOwner.lifecycleScope.launch {
                         GameCache.clearCache(requireContext())
                         IisuDirectoryManager.clearCache()
                         if (IisuDirectoryManager.isIisuInstalled()) {
@@ -345,8 +359,8 @@ class IisuBrowserFragment : Fragment() {
     }
 
     private fun showNotInstalled() {
-        binding.layoutNotInstalled.visibility = View.VISIBLE
-        binding.layoutBrowser.visibility = View.GONE
+        ViewAnimationUtils.fadeIn(binding.layoutNotInstalled)
+        ViewAnimationUtils.fadeOut(binding.layoutBrowser)
 
         // Check if iiSU package exists but is empty (vs not installed at all)
         val androidDataDir = java.io.File(Environment.getExternalStorageDirectory(), "Android/data")
@@ -374,23 +388,48 @@ class IisuBrowserFragment : Fragment() {
     }
 
     private fun showIisuBrowser() {
-        Log.d(TAG, "Showing iiSU browser")
-        binding.layoutNotInstalled.visibility = View.GONE
-        binding.layoutBrowser.visibility = View.VISIBLE
+        Log.d(TAG, "showIisuBrowser() called (isGridSetUp=$isGridSetUp, isLoadingPlatforms=$isLoadingPlatforms)")
 
-        setupPlatformGrid()
+        // Skip if we're already loading
+        if (isLoadingPlatforms) {
+            Log.d(TAG, "  Already loading platforms, skipping duplicate call")
+            return
+        }
+
+        Log.d(TAG, "  binding valid: ${_binding != null}")
+        ViewAnimationUtils.fadeOut(binding.layoutNotInstalled)
+        ViewAnimationUtils.fadeIn(binding.layoutBrowser)
+        Log.d(TAG, "  layoutBrowser visibility set to VISIBLE")
+
+        // Only set up grid once
+        if (!isGridSetUp) {
+            setupPlatformGrid()
+            isGridSetUp = true
+            Log.d(TAG, "  setupPlatformGrid() completed (first time)")
+        } else {
+            Log.d(TAG, "  Grid already set up, skipping setupPlatformGrid()")
+        }
+
         loadPlatforms()
+        Log.d(TAG, "  loadPlatforms() started")
     }
 
     private fun setupPlatformGrid() {
         platformAdapter = PlatformAdapter { platform ->
-            onPlatformSelected(platform)
+            // Check if this is the special Android Apps platform
+            if (platform.name == ANDROID_APPS_PLATFORM) {
+                navigateToAndroidAppList()
+            } else {
+                onPlatformSelected(platform)
+            }
         }
 
         binding.recyclerViewPlatforms.apply {
             // Use 5 columns for landscape tablet-style layout
             layoutManager = GridLayoutManager(context, 5)
             adapter = platformAdapter
+            // Staggered fade-in animation for platform cards
+            ViewAnimationUtils.applyLayoutAnimation(this)
         }
 
         // Refresh button
@@ -399,40 +438,124 @@ class IisuBrowserFragment : Fragment() {
         }
     }
 
+    /**
+     * Navigate to the Android App List fragment
+     */
+    private fun navigateToAndroidAppList() {
+        val androidAppListFragment = AndroidAppListFragment.newInstance()
+
+        parentFragmentManager.beginTransaction()
+            .setCustomAnimations(
+                R.anim.fragment_fade_enter,
+                R.anim.fragment_fade_exit,
+                R.anim.fragment_fade_enter,
+                R.anim.fragment_fade_exit
+            )
+            .replace(R.id.fragment_container, androidAppListFragment)
+            .addToBackStack("android_app_list")
+            .commit()
+    }
+
     private fun loadPlatforms(forceRefresh: Boolean = false) {
-        binding.progressBar.visibility = View.VISIBLE
-        Log.d(TAG, "Loading platforms (forceRefresh: $forceRefresh)...")
+        // Check binding is valid before starting
+        if (_binding == null) {
+            Log.w(TAG, "loadPlatforms called but binding is null, skipping")
+            return
+        }
 
-        lifecycleScope.launch {
-            val startTime = System.currentTimeMillis()
+        // Prevent duplicate loading
+        if (isLoadingPlatforms && !forceRefresh) {
+            Log.d(TAG, "loadPlatforms called but already loading, skipping")
+            return
+        }
 
-            // Use cached platform info for fast loading
-            val cachedPlatforms = GameCache.getCachedPlatformInfoList(requireContext(), forceRefresh)
+        isLoadingPlatforms = true
+        ViewAnimationUtils.fadeIn(binding.progressBar, 150)
+        Log.d(TAG, "loadPlatforms called (forceRefresh: $forceRefresh)")
+        Log.d(TAG, "  Custom ROM path: ${IisuDirectoryManager.getCustomRomPath()?.absolutePath}")
+        Log.d(TAG, "  iiSU root: ${IisuDirectoryManager.getIisuRoot().absolutePath}")
 
-            val platforms = cachedPlatforms.map { cached ->
-                PlatformInfo(
-                    name = cached.name,
-                    displayName = cached.displayName,
-                    icon = GameCache.getPlatformIconBitmap(cached.iconPath),
-                    gameCount = cached.gameCount,
-                    missingIcons = cached.missingIcons,
-                    missingHeroes = cached.missingHeroes,
-                    missingLogos = cached.missingLogos
-                )
-            }
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val startTime = System.currentTimeMillis()
+                Log.d(TAG, "Starting getCachedPlatformInfoList...")
 
-            val loadTime = System.currentTimeMillis() - startTime
-            Log.d(TAG, "Loaded ${platforms.size} platforms in ${loadTime}ms")
+                // Use cached platform info for fast loading
+                val cachedPlatforms = GameCache.getCachedPlatformInfoList(requireContext(), forceRefresh)
+                Log.d(TAG, "getCachedPlatformInfoList returned ${cachedPlatforms.size} platforms")
 
-            platformAdapter.submitList(platforms)
-            binding.progressBar.visibility = View.GONE
+                // Check binding is still valid after async operation
+                if (_binding == null) {
+                    Log.w(TAG, "Binding became null during platform loading, aborting UI update")
+                    isLoadingPlatforms = false
+                    return@launch
+                }
 
-            if (platforms.isEmpty()) {
-                binding.textEmptyState.visibility = View.VISIBLE
-                binding.textEmptyState.text = "No platforms found in iiSU directory.\nAdd games to your iiSU library first."
-                Log.d(TAG, "No platforms found - showing empty state")
-            } else {
-                binding.textEmptyState.visibility = View.GONE
+                val platforms = cachedPlatforms.map { cached ->
+                    PlatformInfo(
+                        name = cached.name,
+                        displayName = cached.displayName,
+                        icon = GameCache.getPlatformIconBitmap(cached.iconPath),
+                        gameCount = cached.gameCount,
+                        missingIcons = cached.missingIcons,
+                        missingHeroes = cached.missingHeroes,
+                        missingLogos = cached.missingLogos
+                    )
+                }.toMutableList()
+
+                // Check for Android apps and add as a platform entry if any exist
+                val androidApps = withContext(Dispatchers.IO) {
+                    IisuDirectoryManager.getAndroidApps()
+                }
+
+                if (androidApps.isNotEmpty()) {
+                    val missingCount = androidApps.sumOf { it.missingCount }
+                    val androidAppsPlatform = PlatformInfo(
+                        name = ANDROID_APPS_PLATFORM,
+                        displayName = "Android Apps",
+                        icon = null,  // Will use fallback icon from adapter
+                        gameCount = androidApps.size,
+                        missingIcons = missingCount,
+                        missingHeroes = 0,
+                        missingLogos = 0
+                    )
+                    platforms.add(androidAppsPlatform)
+                    Log.d(TAG, "Added Android Apps platform with ${androidApps.size} apps")
+                }
+
+                val loadTime = System.currentTimeMillis() - startTime
+                Log.d(TAG, "Loaded ${platforms.size} platforms in ${loadTime}ms")
+
+                platformAdapter.submitList(platforms)
+                Log.d(TAG, "Submitted ${platforms.size} platforms to adapter")
+
+                // Check binding is still valid
+                _binding?.let { b ->
+                    ViewAnimationUtils.fadeOut(b.progressBar)
+
+                    if (platforms.isEmpty()) {
+                        ViewAnimationUtils.fadeIn(b.textEmptyState)
+                        b.textEmptyState.text = "No platforms found in iiSU directory.\nAdd games to your iiSU library first."
+                        Log.d(TAG, "No platforms found - showing empty state")
+                    } else {
+                        ViewAnimationUtils.fadeOut(b.textEmptyState)
+                        // Re-run layout animation on the recycler
+                        b.recyclerViewPlatforms.scheduleLayoutAnimation()
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Job was cancelled (likely due to view being destroyed), don't try to update UI
+                Log.d(TAG, "Platform loading cancelled (view destroyed)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading platforms", e)
+                // Only update UI if binding is still valid
+                _binding?.let { b ->
+                    ViewAnimationUtils.fadeOut(b.progressBar)
+                    b.textEmptyState.text = "Error loading platforms: ${e.message}"
+                    ViewAnimationUtils.fadeIn(b.textEmptyState)
+                }
+            } finally {
+                isLoadingPlatforms = false
             }
         }
     }
@@ -441,7 +564,7 @@ class IisuBrowserFragment : Fragment() {
      * Force refresh platforms from filesystem (clears cache).
      */
     private fun refreshPlatforms() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             GameCache.clearCache(requireContext())
             loadPlatforms(forceRefresh = true)
             Toast.makeText(context, "Refreshed platform list", Toast.LENGTH_SHORT).show()
@@ -483,10 +606,10 @@ class IisuBrowserFragment : Fragment() {
 
         parentFragmentManager.beginTransaction()
             .setCustomAnimations(
-                android.R.anim.slide_in_left,
-                android.R.anim.slide_out_right,
-                android.R.anim.slide_in_left,
-                android.R.anim.slide_out_right
+                R.anim.fragment_fade_enter,
+                R.anim.fragment_fade_exit,
+                R.anim.fragment_fade_enter,
+                R.anim.fragment_fade_exit
             )
             .replace(R.id.fragment_container, gameListFragment)
             .addToBackStack("game_list")
@@ -496,6 +619,9 @@ class IisuBrowserFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        // Reset flags when view is destroyed
+        isGridSetUp = false
+        isLoadingPlatforms = false
     }
 }
 

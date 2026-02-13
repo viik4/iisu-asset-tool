@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import com.iisu.assettool.data.GameSearchResult
 import com.iisu.assettool.ui.SettingsFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,7 +24,26 @@ data class ArtworkOption(
     val thumbnail: Bitmap? = null,  // Low-res preview
     val width: Int = 0,
     val height: Int = 0
-)
+) {
+    /**
+     * Crop mode for hero images, selected interactively in the artwork picker.
+     * NONE = use original, CROP_LEFT/CROP_CENTER/CROP_RIGHT = preset positions,
+     * CROP_CUSTOM = user-chosen horizontal position via slider.
+     */
+    enum class CropMode {
+        NONE,
+        CROP_LEFT,
+        CROP_CENTER,
+        CROP_RIGHT,
+        CROP_CUSTOM
+    }
+
+    /** Crop mode selected by user in the picker dialog. Default: NONE (use original). */
+    var cropMode: CropMode = CropMode.NONE
+
+    /** Custom horizontal position (0.0=left, 1.0=right). Used when cropMode is CROP_CUSTOM. */
+    var customHorizontalPosition: Float = 0.5f
+}
 
 /**
  * Result of searching for artwork - contains multiple options.
@@ -82,83 +102,526 @@ class ArtworkScraper(private val context: Context) {
 
     // Platform ID mappings for TheGamesDB
     private val tgdbPlatformMap = mapOf(
-        "nes" to 7, "snes" to 6, "n64" to 3, "gamecube" to 2, "gc" to 2,
-        "wii" to 9, "wiiu" to 38, "switch" to 4971,
-        "gb" to 4912, "gbc" to 41, "gba" to 12,
-        "nds" to 8, "3ds" to 4912, "n3ds" to 4912,
-        "psx" to 10, "ps1" to 10, "ps2" to 11, "ps3" to 12, "ps4" to 15, "ps5" to 4919,
-        "psp" to 13, "psvita" to 39,
-        "xbox" to 14, "xbox360" to 15,
-        "mastersystem" to 35, "genesis" to 18, "megadrive" to 18,
-        "segacd" to 21, "sega32x" to 33, "saturn" to 17, "dreamcast" to 16,
-        "gamegear" to 20
+        // Nintendo
+        "nes" to 7, "snes" to 6, "n64" to 3, "n64dd" to 3,
+        "gamecube" to 2, "gc" to 2, "wii" to 9, "wiiu" to 38, "switch" to 4971,
+        "gb" to 4, "gbc" to 41, "gba" to 5,
+        "nds" to 8, "3ds" to 4912, "n3ds" to 4912, "vb" to 4918,
+        // Sony
+        "psx" to 10, "ps1" to 10, "ps2" to 11, "ps3" to 12, "ps4" to 4919, "ps5" to 4980,
+        "psp" to 13, "psvita" to 39, "vita" to 39,
+        // Microsoft
+        "xbox" to 14, "xbox360" to 15, "xboxone" to 4920, "xboxseries" to 4981,
+        // Sega
+        "mastersystem" to 35, "sms" to 35,
+        "genesis" to 18, "megadrive" to 18,
+        "segacd" to 21, "sega32x" to 33, "32x" to 33,
+        "saturn" to 17, "dreamcast" to 16, "dc" to 16,
+        "gamegear" to 20, "gg" to 20,
+        // Neo Geo
+        "neogeo" to 24, "ng" to 24, "neogeocd" to 24, "ngcd" to 24,
+        "ngp" to 4922, "ngpc" to 4923,
+        // Atari
+        "atari2600" to 22, "atari5200" to 26, "atari7800" to 27,
+        "jaguar" to 28, "lynx" to 29,
+        // Other
+        "arcade" to 23, "mame" to 23, "fba" to 23,
+        "tg16" to 34, "pce" to 34, "tgcd" to 4955, "pcecd" to 4955,
+        "ws" to 4925, "wsc" to 4926,
+        "coleco" to 31, "intv" to 32,
+        "pc" to 1, "dos" to 1, "scummvm" to 1
     )
 
     // Libretro playlist names
     private val libretroPlaylistMap = mapOf(
+        // Nintendo
         "nes" to "Nintendo - Nintendo Entertainment System",
         "snes" to "Nintendo - Super Nintendo Entertainment System",
-        "n64" to "Nintendo - Nintendo 64",
+        "n64" to "Nintendo - Nintendo 64", "n64dd" to "Nintendo - Nintendo 64DD",
         "gamecube" to "Nintendo - GameCube", "gc" to "Nintendo - GameCube",
-        "wii" to "Nintendo - Wii",
-        "wiiu" to "Nintendo - Wii U",
+        "wii" to "Nintendo - Wii", "wiiu" to "Nintendo - Wii U",
         "switch" to "Nintendo - Nintendo Switch",
         "gb" to "Nintendo - Game Boy",
         "gbc" to "Nintendo - Game Boy Color",
         "gba" to "Nintendo - Game Boy Advance",
         "nds" to "Nintendo - Nintendo DS",
         "3ds" to "Nintendo - Nintendo 3DS", "n3ds" to "Nintendo - Nintendo 3DS",
+        "vb" to "Nintendo - Virtual Boy",
+        // Sony
         "psx" to "Sony - PlayStation", "ps1" to "Sony - PlayStation",
         "ps2" to "Sony - PlayStation 2",
         "ps3" to "Sony - PlayStation 3",
         "psp" to "Sony - PlayStation Portable",
-        "psvita" to "Sony - PlayStation Vita",
+        "psvita" to "Sony - PlayStation Vita", "vita" to "Sony - PlayStation Vita",
+        // Microsoft
         "xbox" to "Microsoft - Xbox",
         "xbox360" to "Microsoft - Xbox 360",
-        "mastersystem" to "Sega - Master System - Mark III",
+        // Sega
+        "mastersystem" to "Sega - Master System - Mark III", "sms" to "Sega - Master System - Mark III",
         "genesis" to "Sega - Mega Drive - Genesis", "megadrive" to "Sega - Mega Drive - Genesis",
         "segacd" to "Sega - Mega-CD - Sega CD",
-        "sega32x" to "Sega - 32X",
+        "sega32x" to "Sega - 32X", "32x" to "Sega - 32X",
         "saturn" to "Sega - Saturn",
-        "dreamcast" to "Sega - Dreamcast",
-        "gamegear" to "Sega - Game Gear"
+        "dreamcast" to "Sega - Dreamcast", "dc" to "Sega - Dreamcast",
+        "gamegear" to "Sega - Game Gear", "gg" to "Sega - Game Gear",
+        // Neo Geo
+        "neogeo" to "SNK - Neo Geo", "ng" to "SNK - Neo Geo",
+        "neogeocd" to "SNK - Neo Geo CD", "ngcd" to "SNK - Neo Geo CD",
+        "ngp" to "SNK - Neo Geo Pocket", "ngpc" to "SNK - Neo Geo Pocket Color",
+        // Atari
+        "atari2600" to "Atari - 2600",
+        "atari5200" to "Atari - 5200",
+        "atari7800" to "Atari - 7800",
+        "jaguar" to "Atari - Jaguar",
+        "lynx" to "Atari - Lynx",
+        // Other
+        "arcade" to "MAME", "mame" to "MAME", "fba" to "FBNeo - Arcade Games",
+        "tg16" to "NEC - PC Engine - TurboGrafx 16", "pce" to "NEC - PC Engine - TurboGrafx 16",
+        "tgcd" to "NEC - PC Engine CD - TurboGrafx-CD", "pcecd" to "NEC - PC Engine CD - TurboGrafx-CD",
+        "ws" to "Bandai - WonderSwan",
+        "wsc" to "Bandai - WonderSwan Color",
+        "coleco" to "Coleco - ColecoVision",
+        "intv" to "Mattel - Intellivision",
+        "dos" to "DOS", "scummvm" to "ScummVM"
     )
 
     // Platform keywords for filtering SteamGridDB search results
     // Maps platform ID to keywords that should appear in the game's release_date or types
     private val platformKeywords = mapOf(
+        // Nintendo
         "nes" to listOf("nes", "nintendo entertainment system", "famicom"),
         "snes" to listOf("snes", "super nintendo", "super famicom", "super nes"),
-        "n64" to listOf("n64", "nintendo 64"),
+        "n64" to listOf("n64", "nintendo 64"), "n64dd" to listOf("n64", "nintendo 64", "64dd"),
         "gamecube" to listOf("gamecube", "gc"), "gc" to listOf("gamecube", "gc"),
-        "wii" to listOf("wii"),
-        "wiiu" to listOf("wii u", "wiiu"),
+        "wii" to listOf("wii"), "wiiu" to listOf("wii u", "wiiu"),
         "switch" to listOf("switch", "nintendo switch"),
         "gb" to listOf("game boy", "gameboy"),
         "gbc" to listOf("game boy color", "gbc"),
         "gba" to listOf("game boy advance", "gba"),
         "nds" to listOf("nintendo ds", "nds", "ds"),
         "3ds" to listOf("3ds", "nintendo 3ds"), "n3ds" to listOf("3ds", "nintendo 3ds"),
+        "vb" to listOf("virtual boy", "virtualboy"),
+        // Sony
         "psx" to listOf("playstation", "psx", "ps1"), "ps1" to listOf("playstation", "psx", "ps1"),
         "ps2" to listOf("playstation 2", "ps2"),
         "ps3" to listOf("playstation 3", "ps3"),
         "ps4" to listOf("playstation 4", "ps4"),
         "ps5" to listOf("playstation 5", "ps5"),
         "psp" to listOf("psp", "playstation portable"),
-        "psvita" to listOf("vita", "playstation vita", "psvita"),
+        "psvita" to listOf("vita", "playstation vita", "psvita"), "vita" to listOf("vita", "playstation vita", "psvita"),
+        // Microsoft
         "xbox" to listOf("xbox"),
         "xbox360" to listOf("xbox 360", "360"),
-        "mastersystem" to listOf("master system", "sms"),
+        "xboxone" to listOf("xbox one", "xbone"),
+        "xboxseries" to listOf("xbox series", "series x", "series s"),
+        // Sega
+        "mastersystem" to listOf("master system", "sms"), "sms" to listOf("master system", "sms"),
         "genesis" to listOf("genesis", "mega drive", "megadrive"), "megadrive" to listOf("genesis", "mega drive", "megadrive"),
         "segacd" to listOf("sega cd", "mega cd"),
-        "sega32x" to listOf("32x", "sega 32x"),
+        "sega32x" to listOf("32x", "sega 32x"), "32x" to listOf("32x", "sega 32x"),
         "saturn" to listOf("saturn", "sega saturn"),
-        "dreamcast" to listOf("dreamcast"),
-        "gamegear" to listOf("game gear", "gamegear")
+        "dreamcast" to listOf("dreamcast"), "dc" to listOf("dreamcast"),
+        "gamegear" to listOf("game gear", "gamegear"), "gg" to listOf("game gear", "gamegear"),
+        // Neo Geo
+        "neogeo" to listOf("neo geo", "neogeo", "aes", "mvs"), "ng" to listOf("neo geo", "neogeo"),
+        "neogeocd" to listOf("neo geo cd", "neogeocd"), "ngcd" to listOf("neo geo cd", "neogeocd"),
+        "ngp" to listOf("neo geo pocket", "ngp"),
+        "ngpc" to listOf("neo geo pocket color", "ngpc"),
+        // Atari
+        "atari2600" to listOf("atari 2600", "2600", "vcs"),
+        "atari5200" to listOf("atari 5200", "5200"),
+        "atari7800" to listOf("atari 7800", "7800"),
+        "jaguar" to listOf("jaguar", "atari jaguar"),
+        "lynx" to listOf("lynx", "atari lynx"),
+        // Other
+        "arcade" to listOf("arcade"), "mame" to listOf("mame", "arcade"), "fba" to listOf("fba", "fbneo", "arcade"),
+        "tg16" to listOf("turbografx", "pc engine", "tg16", "pce"),
+        "pce" to listOf("turbografx", "pc engine", "tg16", "pce"),
+        "tgcd" to listOf("turbografx cd", "pc engine cd", "tgcd"),
+        "pcecd" to listOf("turbografx cd", "pc engine cd", "pcecd"),
+        "ws" to listOf("wonderswan"),
+        "wsc" to listOf("wonderswan color"),
+        "coleco" to listOf("colecovision", "coleco"),
+        "intv" to listOf("intellivision"),
+        "pc" to listOf("pc", "windows"),
+        "dos" to listOf("dos", "dosbox"),
+        "scummvm" to listOf("scummvm")
     )
 
     fun setSteamGridDBApiKey(key: String) {
         sgdbApiKey = key
+    }
+
+    // ==================== Game Search (for manual game selection) ====================
+
+    /**
+     * Search for games by name using SteamGridDB autocomplete.
+     * Returns a list of matching games that the user can select from.
+     * This is used in the iiSU Browser to let users manually search and pick the correct game.
+     */
+    suspend fun searchGames(query: String): List<GameSearchResult> = withContext(Dispatchers.IO) {
+        // Check if query is a SteamGridDB URL or ID
+        val sgdbId = extractSteamGridDBId(query)
+        if (sgdbId != null) {
+            Log.d(TAG, "Query appears to be SteamGridDB ID: $sgdbId")
+            val game = getGameById(sgdbId)
+            return@withContext if (game != null) listOf(game) else emptyList()
+        }
+
+        // Otherwise, perform name search
+        searchGamesByName(query)
+    }
+
+    /**
+     * Extract SteamGridDB game ID from a URL or direct ID input.
+     * Supports formats:
+     * - https://www.steamgriddb.com/game/12345
+     * - www.steamgriddb.com/game/12345
+     * - steamgriddb.com/game/12345
+     * - 12345 (direct ID)
+     * Returns null if the input doesn't match any supported format.
+     */
+    private fun extractSteamGridDBId(input: String): Int? {
+        val trimmed = input.trim()
+
+        // Try to parse as direct number
+        trimmed.toIntOrNull()?.let { return it }
+
+        // Try to extract from URL patterns
+        val urlPatterns = listOf(
+            Regex("""(?:https?://)?(?:www\.)?steamgriddb\.com/game/(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""sgdb[:/](\d+)""", RegexOption.IGNORE_CASE)  // shorthand like "sgdb:12345"
+        )
+
+        for (pattern in urlPatterns) {
+            pattern.find(trimmed)?.let { match ->
+                return match.groupValues[1].toIntOrNull()
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Get game info by SteamGridDB game ID.
+     * Returns a GameSearchResult if found, null otherwise.
+     */
+    suspend fun getGameById(sgdbId: Int): GameSearchResult? = withContext(Dispatchers.IO) {
+        val apiKey = sgdbApiKey ?: return@withContext null
+
+        try {
+            val url = "$SGDB_BASE_URL/games/id/$sgdbId"
+            val response = httpGetWithAuth(url, apiKey, SGDB_TIMEOUT) ?: return@withContext null
+
+            val json = JSONObject(response)
+            if (!json.optBoolean("success", false)) return@withContext null
+
+            val data = json.optJSONObject("data") ?: return@withContext null
+
+            val id = data.getInt("id")
+            val name = data.getString("name")
+
+            // Parse release year from release_date (Unix timestamp)
+            val releaseDate = data.optLong("release_date", 0)
+            val releaseYear = if (releaseDate > 0) {
+                try {
+                    java.util.Calendar.getInstance().apply {
+                        timeInMillis = releaseDate * 1000
+                    }.get(java.util.Calendar.YEAR)
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
+
+            // Parse types array
+            val typesArray = data.optJSONArray("types")
+            val types = mutableListOf<String>()
+            if (typesArray != null) {
+                for (j in 0 until typesArray.length()) {
+                    types.add(typesArray.getString(j))
+                }
+            }
+
+            Log.d(TAG, "Found game by ID $sgdbId: $name")
+            GameSearchResult(id, name, releaseYear, types)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to get game by ID $sgdbId: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Search for games by name using SteamGridDB autocomplete.
+     */
+    private suspend fun searchGamesByName(query: String): List<GameSearchResult> = withContext(Dispatchers.IO) {
+        val results = mutableListOf<GameSearchResult>()
+        val apiKey = sgdbApiKey ?: return@withContext results
+
+        try {
+            val searchUrl = "$SGDB_BASE_URL/search/autocomplete/${URLEncoder.encode(query, "UTF-8")}"
+            val response = httpGetWithAuth(searchUrl, apiKey, SGDB_TIMEOUT) ?: return@withContext results
+
+            val json = JSONObject(response)
+            if (!json.optBoolean("success", false)) return@withContext results
+
+            val data = json.optJSONArray("data") ?: return@withContext results
+
+            for (i in 0 until data.length()) {
+                val game = data.getJSONObject(i)
+                val id = game.getInt("id")
+                val name = game.getString("name")
+
+                // Parse release year from release_date (Unix timestamp)
+                val releaseDate = game.optLong("release_date", 0)
+                val releaseYear = if (releaseDate > 0) {
+                    try {
+                        java.util.Calendar.getInstance().apply {
+                            timeInMillis = releaseDate * 1000
+                        }.get(java.util.Calendar.YEAR)
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else null
+
+                // Parse types array
+                val typesArray = game.optJSONArray("types")
+                val types = mutableListOf<String>()
+                if (typesArray != null) {
+                    for (j in 0 until typesArray.length()) {
+                        types.add(typesArray.getString(j))
+                    }
+                }
+
+                results.add(GameSearchResult(id, name, releaseYear, types))
+            }
+
+            Log.d(TAG, "Found ${results.size} games for '$query'")
+        } catch (e: Exception) {
+            Log.w(TAG, "Game search failed: ${e.message}")
+        }
+
+        results
+    }
+
+    // ==================== Search by SteamGridDB Game ID ====================
+
+    /**
+     * Search for icon options using a known SteamGridDB game ID.
+     * Use this when user has manually selected a game from search results.
+     * @param squareOnly When true, only returns square images. When false, returns all images
+     *                   and non-square images should be cropped using ImageCropActivity.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    suspend fun searchIconOptionsByGameId(sgdbGameId: Int, game: GameInfo, platform: String, squareOnly: Boolean = true): ArtworkSearchResult = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Searching icon options by SGDB ID $sgdbGameId for: ${game.displayName} (squareOnly: $squareOnly)")
+
+        val options = mutableListOf<ArtworkOption>()
+
+        // Load current icon if exists
+        val currentImage = game.iconFile?.let { loadBitmapFromFile(it) }
+
+        // Get icons from SteamGridDB using the specific game ID
+        try {
+            val sgdbOptions = getSteamGridDBIconOptionsByGameId(sgdbGameId, squareOnly)
+            options.addAll(sgdbOptions)
+            Log.d(TAG, "SteamGridDB returned ${sgdbOptions.size} icon options for game ID $sgdbGameId")
+        } catch (e: Exception) {
+            Log.w(TAG, "SteamGridDB icon search failed: ${e.message}")
+        }
+
+        Log.d(TAG, "Found ${options.size} icon options for ${game.displayName} (by ID)")
+
+        ArtworkSearchResult(
+            gameName = game.displayName,
+            options = options,
+            currentImage = currentImage
+        )
+    }
+
+    /**
+     * Search for hero options using a known SteamGridDB game ID.
+     */
+    suspend fun searchHeroOptionsByGameId(sgdbGameId: Int, game: GameInfo): ArtworkSearchResult = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Searching hero options by SGDB ID $sgdbGameId for: ${game.displayName}")
+
+        val options = mutableListOf<ArtworkOption>()
+
+        // Load current hero if exists
+        val currentImage = (findAssetFile(game.folder, "hero")
+            ?: findExternalHeroFile(game.folder))?.let { loadBitmapFromFile(it) }
+
+        try {
+            val heroOptions = getSteamGridDBHeroOptionsByGameId(sgdbGameId)
+            options.addAll(heroOptions)
+            Log.d(TAG, "SteamGridDB returned ${heroOptions.size} hero options for game ID $sgdbGameId")
+        } catch (e: Exception) {
+            Log.w(TAG, "SteamGridDB hero search failed: ${e.message}")
+        }
+
+        ArtworkSearchResult(
+            gameName = game.displayName,
+            options = options,
+            currentImage = currentImage
+        )
+    }
+
+    /**
+     * Search for logo options using a known SteamGridDB game ID.
+     */
+    suspend fun searchLogoOptionsByGameId(sgdbGameId: Int, game: GameInfo): ArtworkSearchResult = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Searching logo options by SGDB ID $sgdbGameId for: ${game.displayName}")
+
+        val options = mutableListOf<ArtworkOption>()
+
+        // Load current logo if exists
+        val currentImage = (findAssetFile(game.folder, "logo")
+            ?: findAssetFile(game.folder, "title"))?.let { loadBitmapFromFile(it) }
+
+        // Check if logo scraping is enabled
+        if (!SettingsFragment.isScrapeLogosEnabled(context)) {
+            Log.d(TAG, "Logo scraping disabled in settings")
+            return@withContext ArtworkSearchResult(
+                gameName = game.displayName,
+                options = emptyList(),
+                currentImage = currentImage
+            )
+        }
+
+        try {
+            val logoOptions = getSteamGridDBLogoOptionsByGameId(sgdbGameId)
+            options.addAll(logoOptions)
+            Log.d(TAG, "SteamGridDB returned ${logoOptions.size} logo options for game ID $sgdbGameId")
+        } catch (e: Exception) {
+            Log.w(TAG, "SteamGridDB logo search failed: ${e.message}")
+        }
+
+        ArtworkSearchResult(
+            gameName = game.displayName,
+            options = options,
+            currentImage = currentImage
+        )
+    }
+
+    /**
+     * Get icon options directly from SteamGridDB using a game ID.
+     * @param squareOnly When true, only returns square (1024x1024, 512x512) images.
+     *                   When false, returns all grid images including non-square.
+     */
+    private fun getSteamGridDBIconOptionsByGameId(gameId: Int, squareOnly: Boolean = true): List<ArtworkOption> {
+        val apiKey = sgdbApiKey ?: return emptyList()
+
+        // When squareOnly is true, filter to square dimensions. Otherwise get all dimensions.
+        val dimensionsParam = if (squareOnly) {
+            "dimensions=1024x1024,512x512"
+        } else {
+            "" // No dimension filter - get all available
+        }
+
+        val gridsUrl = if (dimensionsParam.isNotEmpty()) {
+            "$SGDB_BASE_URL/grids/game/$gameId?$dimensionsParam&types=static&limit=20"
+        } else {
+            "$SGDB_BASE_URL/grids/game/$gameId?types=static&limit=20"
+        }
+        val gridsResponse = httpGetWithAuth(gridsUrl, apiKey, SGDB_TIMEOUT) ?: return emptyList()
+
+        val gridsJson = JSONObject(gridsResponse)
+        if (!gridsJson.optBoolean("success", false)) return emptyList()
+
+        val grids = gridsJson.optJSONArray("data") ?: return emptyList()
+        val options = mutableListOf<ArtworkOption>()
+
+        for (i in 0 until grids.length()) {
+            val grid = grids.getJSONObject(i)
+            val imageUrl = grid.getString("url")
+            val thumbUrl = grid.optString("thumb", imageUrl)
+            val width = grid.optInt("width", 0)
+            val height = grid.optInt("height", 0)
+            val thumbnail = if (squareOnly || (width > 0 && width == height)) {
+                downloadThumbnail(thumbUrl)
+            } else {
+                downloadThumbnailPreserveAspect(thumbUrl)
+            }
+
+            options.add(ArtworkOption(
+                url = imageUrl,
+                source = "SteamGridDB",
+                thumbnail = thumbnail,
+                width = width,
+                height = height
+            ))
+        }
+
+        return options
+    }
+
+    /**
+     * Get hero options directly from SteamGridDB using a game ID.
+     */
+    private fun getSteamGridDBHeroOptionsByGameId(gameId: Int): List<ArtworkOption> {
+        val apiKey = sgdbApiKey ?: return emptyList()
+
+        val heroesUrl = "$SGDB_BASE_URL/heroes/game/$gameId?types=static&limit=10"
+        val heroesResponse = httpGetWithAuth(heroesUrl, apiKey, SGDB_TIMEOUT) ?: return emptyList()
+
+        val heroesJson = JSONObject(heroesResponse)
+        if (!heroesJson.optBoolean("success", false)) return emptyList()
+
+        val heroes = heroesJson.optJSONArray("data") ?: return emptyList()
+        val options = mutableListOf<ArtworkOption>()
+
+        for (i in 0 until heroes.length()) {
+            val hero = heroes.getJSONObject(i)
+            val imageUrl = hero.getString("url")
+            val thumbUrl = hero.optString("thumb", imageUrl)
+            val width = hero.optInt("width", 0)
+            val height = hero.optInt("height", 0)
+            val thumbnail = downloadThumbnailPreserveAspect(thumbUrl)
+
+            options.add(ArtworkOption(
+                url = imageUrl,
+                source = "SteamGridDB",
+                thumbnail = thumbnail,
+                width = width,
+                height = height
+            ))
+        }
+
+        return options
+    }
+
+    /**
+     * Get logo options directly from SteamGridDB using a game ID.
+     */
+    private fun getSteamGridDBLogoOptionsByGameId(gameId: Int): List<ArtworkOption> {
+        val apiKey = sgdbApiKey ?: return emptyList()
+
+        val logosUrl = "$SGDB_BASE_URL/logos/game/$gameId?types=static&limit=10"
+        val logosResponse = httpGetWithAuth(logosUrl, apiKey, SGDB_TIMEOUT) ?: return emptyList()
+
+        val logosJson = JSONObject(logosResponse)
+        if (!logosJson.optBoolean("success", false)) return emptyList()
+
+        val logos = logosJson.optJSONArray("data") ?: return emptyList()
+        val options = mutableListOf<ArtworkOption>()
+
+        for (i in 0 until logos.length()) {
+            val logo = logos.getJSONObject(i)
+            val imageUrl = logo.getString("url")
+            val thumbUrl = logo.optString("thumb", imageUrl)
+            val width = logo.optInt("width", 0)
+            val height = logo.optInt("height", 0)
+            val thumbnail = downloadThumbnailPreserveAspect(thumbUrl)
+
+            options.add(ArtworkOption(
+                url = imageUrl,
+                source = "SteamGridDB",
+                thumbnail = thumbnail,
+                width = width,
+                height = height
+            ))
+        }
+
+        return options
     }
 
     // ==================== Interactive Mode - Search for Options ====================
@@ -166,15 +629,21 @@ class ArtworkScraper(private val context: Context) {
     /**
      * Search for icon options from all sources. Returns multiple options for user selection.
      * Respects source priority ordering from settings.
+     * Uses search variants to improve matching when initial search fails.
+     * @param squareOnly When true, only returns square images. When false, returns all images
+     *                   and non-square images should be cropped using ImageCropActivity.
      */
-    suspend fun searchIconOptions(game: GameInfo, platform: String): ArtworkSearchResult = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Searching icon options for: ${game.name} -> ${game.searchName} (platform: $platform)")
+    suspend fun searchIconOptions(game: GameInfo, platform: String, squareOnly: Boolean = true): ArtworkSearchResult = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Searching icon options for: ${game.name} -> ${game.searchName} (platform: $platform, squareOnly: $squareOnly)")
 
-        val searchName = game.searchName
         val options = mutableListOf<ArtworkOption>()
 
         // Load current icon if exists
         val currentImage = game.iconFile?.let { loadBitmapFromFile(it) }
+
+        // Get search variants for better matching
+        val searchVariants = TitleCleaner.getSearchVariants(game.searchName)
+        Log.d(TAG, "Using search variants: $searchVariants")
 
         // Get enabled sources in priority order
         val enabledSources = SettingsFragment.getEnabledSources(context)
@@ -183,13 +652,23 @@ class ArtworkScraper(private val context: Context) {
         // Try sources in priority order
         for (source in enabledSources) {
             try {
-                val sourceOptions = when (source.id) {
-                    "steamgriddb" -> getSteamGridDBIconOptions(searchName, platform)
-                    "libretro" -> getLibretroIconOptions(searchName, platform)
-                    "thegamesdb" -> getTheGamesDBIconOptions(searchName, platform)
-                    "igdb" -> emptyList() // IGDB requires additional setup
-                    else -> emptyList()
+                var sourceOptions = emptyList<ArtworkOption>()
+
+                // Try each search variant until we get results
+                for (variant in searchVariants) {
+                    sourceOptions = when (source.id) {
+                        "steamgriddb" -> getSteamGridDBIconOptions(variant, platform, squareOnly)
+                        "libretro" -> getLibretroIconOptions(variant, platform)
+                        "thegamesdb" -> getTheGamesDBIconOptions(variant, platform)
+                        "igdb" -> emptyList() // IGDB requires additional setup
+                        else -> emptyList()
+                    }
+                    if (sourceOptions.isNotEmpty()) {
+                        Log.d(TAG, "Source ${source.id} found ${sourceOptions.size} results with variant: $variant")
+                        break
+                    }
                 }
+
                 options.addAll(sourceOptions)
                 Log.d(TAG, "Source ${source.id} returned ${sourceOptions.size} options")
             } catch (e: Exception) {
@@ -261,19 +740,30 @@ class ArtworkScraper(private val context: Context) {
     /**
      * Search for hero image options from SteamGridDB.
      * Heroes are wide banner images typically 1920x620 or similar.
+     * Uses search variants to improve matching when initial search fails.
      */
     suspend fun searchHeroOptions(game: GameInfo, platform: String): ArtworkSearchResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "Searching hero options for: ${game.name} -> ${game.searchName} (platform: $platform)")
 
-        val searchName = game.searchName
         val options = mutableListOf<ArtworkOption>()
 
         // Load current hero if exists (check both hero.png and hero_1.jpg, etc.)
         val currentImage = (findAssetFile(game.folder, "hero")
             ?: findExternalHeroFile(game.folder))?.let { loadBitmapFromFile(it) }
 
+        // Get search variants for better matching
+        val searchVariants = TitleCleaner.getSearchVariants(game.searchName)
+
         try {
-            options.addAll(getSteamGridDBHeroOptions(searchName, platform))
+            // Try each search variant until we get results
+            for (variant in searchVariants) {
+                val heroOptions = getSteamGridDBHeroOptions(variant, platform)
+                if (heroOptions.isNotEmpty()) {
+                    options.addAll(heroOptions)
+                    Log.d(TAG, "Found ${heroOptions.size} hero results with variant: $variant")
+                    break
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "SteamGridDB hero search failed: ${e.message}")
         }
@@ -291,7 +781,8 @@ class ArtworkScraper(private val context: Context) {
      * Download and save a selected hero image.
      * Saves as hero_1.png/jpg to match iiSU naming convention.
      * Uses export format settings from preferences.
-     * Optionally crops to 1920x1080 based on settings.
+     * Crops based on ArtworkOption.cropMode (set interactively in the picker dialog),
+     * or falls back to settings-based crop if cropMode is NONE.
      */
     suspend fun saveHeroFromOption(option: ArtworkOption, game: GameInfo, heroIndex: Int = 1): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -302,11 +793,32 @@ class ArtworkScraper(private val context: Context) {
                 deleteExistingAsset(game.folder, "hero")
             }
 
-            // Check if hero cropping is enabled
-            if (SettingsFragment.isHeroCropEnabled(context)) {
-                val cropPosition = SettingsFragment.getHeroCropPosition(context)
-                bitmap = cropHeroTo1080p(bitmap, cropPosition)
-                Log.d(TAG, "Cropped hero to 1920x1080 (position: $cropPosition)")
+            // Apply crop based on the option's cropMode (set in the picker dialog)
+            val verticalPosition = SettingsFragment.getHeroCropPosition(context)
+            when (option.cropMode) {
+                ArtworkOption.CropMode.CROP_LEFT -> {
+                    bitmap = cropHeroToSize(bitmap, 1920, 1080, verticalPosition, 0.0f)
+                    Log.d(TAG, "Cropped hero to 1920x1080 (Left)")
+                }
+                ArtworkOption.CropMode.CROP_CENTER -> {
+                    bitmap = cropHeroToSize(bitmap, 1920, 1080, verticalPosition, 0.5f)
+                    Log.d(TAG, "Cropped hero to 1920x1080 (Center)")
+                }
+                ArtworkOption.CropMode.CROP_RIGHT -> {
+                    bitmap = cropHeroToSize(bitmap, 1920, 1080, verticalPosition, 1.0f)
+                    Log.d(TAG, "Cropped hero to 1920x1080 (Right)")
+                }
+                ArtworkOption.CropMode.CROP_CUSTOM -> {
+                    bitmap = cropHeroToSize(bitmap, 1920, 1080, verticalPosition, option.customHorizontalPosition)
+                    Log.d(TAG, "Cropped hero to 1920x1080 (Custom: ${option.customHorizontalPosition})")
+                }
+                ArtworkOption.CropMode.NONE -> {
+                    // No crop from picker — fall back to settings-based crop for non-interactive mode
+                    if (SettingsFragment.isHeroCropEnabled(context)) {
+                        bitmap = cropHeroToSize(bitmap, SettingsFragment.HERO_TARGET_WIDTH, SettingsFragment.HERO_TARGET_HEIGHT, verticalPosition, 0.5f)
+                        Log.d(TAG, "Cropped hero to ${SettingsFragment.HERO_TARGET_WIDTH}x${SettingsFragment.HERO_TARGET_HEIGHT} (settings)")
+                    }
+                }
             }
 
             // Get export format settings
@@ -334,24 +846,25 @@ class ArtworkScraper(private val context: Context) {
     }
 
     /**
-     * Crop a hero image to 1920x1080 (16:9 aspect ratio).
+     * Crop a hero image to a specified target size with smart center-crop.
      * @param bitmap The source bitmap
+     * @param targetWidth Target width (e.g. 1920)
+     * @param targetHeight Target height (e.g. 620 for Steam hero, 1080 for Full HD)
      * @param verticalPosition 0.0 = crop from top, 0.5 = center, 1.0 = crop from bottom
-     * @return Cropped and scaled bitmap at 1920x1080
+     * @return Cropped and scaled bitmap at the target dimensions
      */
-    private fun cropHeroTo1080p(bitmap: Bitmap, verticalPosition: Float): Bitmap {
-        val targetWidth = SettingsFragment.HERO_TARGET_WIDTH
-        val targetHeight = SettingsFragment.HERO_TARGET_HEIGHT
-        val targetAspect = targetWidth.toFloat() / targetHeight  // 16:9 = 1.777...
+    private fun cropHeroToSize(bitmap: Bitmap, targetWidth: Int, targetHeight: Int, verticalPosition: Float, horizontalPosition: Float = 0.5f): Bitmap {
+        val targetAspect = targetWidth.toFloat() / targetHeight
 
         val srcWidth = bitmap.width
         val srcHeight = bitmap.height
         val srcAspect = srcWidth.toFloat() / srcHeight
 
         val (cropWidth, cropHeight, cropX, cropY) = if (srcAspect > targetAspect) {
-            // Source is wider than target - crop horizontally (left/right)
+            // Source is wider than target - crop horizontally based on position
             val newWidth = (srcHeight * targetAspect).toInt()
-            val x = ((srcWidth - newWidth) / 2)  // Center horizontally
+            val maxX = srcWidth - newWidth
+            val x = (maxX * horizontalPosition).toInt().coerceIn(0, maxX)
             arrayOf(newWidth, srcHeight, x, 0)
         } else {
             // Source is taller than target - crop vertically based on position
@@ -364,7 +877,7 @@ class ArtworkScraper(private val context: Context) {
         // Crop the bitmap
         val cropped = Bitmap.createBitmap(bitmap, cropX, cropY, cropWidth, cropHeight)
 
-        // Scale to exact 1920x1080
+        // Scale to exact target dimensions
         return Bitmap.createScaledBitmap(cropped, targetWidth, targetHeight, true)
     }
 
@@ -394,11 +907,11 @@ class ArtworkScraper(private val context: Context) {
      * Search for logo options from SteamGridDB.
      * Logos are transparent game title images.
      * If logo fallback is enabled and no logos found, falls back to boxart.
+     * Uses search variants to improve matching when initial search fails.
      */
     suspend fun searchLogoOptions(game: GameInfo, platform: String): ArtworkSearchResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "Searching logo options for: ${game.name} -> ${game.searchName}")
 
-        val searchName = game.searchName
         val options = mutableListOf<ArtworkOption>()
 
         // Load current logo if exists (check both logo.png and title.jpg)
@@ -415,9 +928,20 @@ class ArtworkScraper(private val context: Context) {
             )
         }
 
+        // Get search variants for better matching
+        val searchVariants = TitleCleaner.getSearchVariants(game.searchName)
+
         // Try SteamGridDB logos first (primary source for logos)
         try {
-            options.addAll(getSteamGridDBLogoOptions(searchName, platform))
+            // Try each search variant until we get results
+            for (variant in searchVariants) {
+                val logoOptions = getSteamGridDBLogoOptions(variant, platform)
+                if (logoOptions.isNotEmpty()) {
+                    options.addAll(logoOptions)
+                    Log.d(TAG, "Found ${logoOptions.size} logo results with variant: $variant")
+                    break
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "SteamGridDB logo search failed: ${e.message}")
         }
@@ -430,10 +954,15 @@ class ArtworkScraper(private val context: Context) {
             val enabledSources = SettingsFragment.getEnabledSources(context)
             for (source in enabledSources) {
                 try {
-                    val boxartOptions = when (source.id) {
-                        "libretro" -> getLibretroIconOptions(searchName, platform)
-                        "thegamesdb" -> getTheGamesDBIconOptions(searchName, platform)
-                        else -> emptyList()
+                    var boxartOptions = emptyList<ArtworkOption>()
+                    // Try each search variant until we get results
+                    for (variant in searchVariants) {
+                        boxartOptions = when (source.id) {
+                            "libretro" -> getLibretroIconOptions(variant, platform)
+                            "thegamesdb" -> getTheGamesDBIconOptions(variant, platform)
+                            else -> emptyList()
+                        }
+                        if (boxartOptions.isNotEmpty()) break
                     }
                     // Mark these as boxart fallback
                     boxartOptions.forEach { option ->
@@ -722,7 +1251,7 @@ class ArtworkScraper(private val context: Context) {
         return options
     }
 
-    private fun getSteamGridDBIconOptions(gameName: String, platform: String): List<ArtworkOption> {
+    private fun getSteamGridDBIconOptions(gameName: String, platform: String, squareOnly: Boolean = true): List<ArtworkOption> {
         val apiKey = sgdbApiKey ?: return emptyList()
 
         val searchUrl = "$SGDB_BASE_URL/search/autocomplete/${URLEncoder.encode(gameName, "UTF-8")}"
@@ -743,7 +1272,18 @@ class ArtworkScraper(private val context: Context) {
             return emptyList()
         }
 
-        val gridsUrl = "$SGDB_BASE_URL/grids/game/$gameId?dimensions=1024x1024,512x512&types=static&limit=10"
+        // When squareOnly is true, filter to square dimensions. Otherwise get all dimensions.
+        val dimensionsParam = if (squareOnly) {
+            "dimensions=1024x1024,512x512"
+        } else {
+            "" // No dimension filter - get all available
+        }
+
+        val gridsUrl = if (dimensionsParam.isNotEmpty()) {
+            "$SGDB_BASE_URL/grids/game/$gameId?$dimensionsParam&types=static&limit=20"
+        } else {
+            "$SGDB_BASE_URL/grids/game/$gameId?types=static&limit=20"
+        }
         val gridsResponse = httpGetWithAuth(gridsUrl, apiKey, SGDB_TIMEOUT) ?: return emptyList()
 
         val gridsJson = JSONObject(gridsResponse)
@@ -757,7 +1297,11 @@ class ArtworkScraper(private val context: Context) {
             val thumbUrl = grid.optString("thumb", imageUrl)
             val width = grid.optInt("width", 0)
             val height = grid.optInt("height", 0)
-            val thumbnail = downloadThumbnail(thumbUrl)
+            val thumbnail = if (squareOnly || (width > 0 && width == height)) {
+                downloadThumbnail(thumbUrl)
+            } else {
+                downloadThumbnailPreserveAspect(thumbUrl)
+            }
 
             options.add(ArtworkOption(
                 url = imageUrl,
@@ -1152,19 +1696,29 @@ class ArtworkScraper(private val context: Context) {
     /**
      * Search for screenshot options from multiple sources.
      * Tries IGDB first (best quality and quantity), then Libretro as fallback.
+     * Uses search variants to improve matching when initial search fails.
      */
     suspend fun searchScreenshotOptions(game: GameInfo, platform: String): ArtworkSearchResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "Searching screenshot options for: ${game.name} -> ${game.searchName} (platform: $platform)")
 
-        val searchName = game.searchName
         val options = mutableListOf<ArtworkOption>()
 
         // Load current screenshot if exists
         val currentImage = findScreenshotFile(game.folder)?.let { loadBitmapFromFile(it) }
 
+        // Get search variants for better matching
+        val searchVariants = TitleCleaner.getSearchVariants(game.searchName)
+
         // Try IGDB screenshots first (best quality and most screenshots per game)
         try {
-            options.addAll(getIGDBScreenshotOptions(searchName, platform))
+            for (variant in searchVariants) {
+                val igdbOptions = getIGDBScreenshotOptions(variant, platform)
+                if (igdbOptions.isNotEmpty()) {
+                    options.addAll(igdbOptions)
+                    Log.d(TAG, "Found ${igdbOptions.size} IGDB screenshot results with variant: $variant")
+                    break
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "IGDB screenshot search failed: ${e.message}")
         }
@@ -1172,7 +1726,14 @@ class ArtworkScraper(private val context: Context) {
         // Try Libretro screenshots as fallback (only has 1 screenshot per game)
         if (options.isEmpty()) {
             try {
-                options.addAll(getLibretroScreenshotOptions(searchName, platform))
+                for (variant in searchVariants) {
+                    val libretroOptions = getLibretroScreenshotOptions(variant, platform)
+                    if (libretroOptions.isNotEmpty()) {
+                        options.addAll(libretroOptions)
+                        Log.d(TAG, "Found ${libretroOptions.size} Libretro screenshot results with variant: $variant")
+                        break
+                    }
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Libretro screenshot search failed: ${e.message}")
             }
@@ -1307,6 +1868,7 @@ class ArtworkScraper(private val context: Context) {
      * Find the best matching game ID from SteamGridDB search results.
      * Uses string similarity scoring to find the closest match.
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun findBestMatchingGameId(data: org.json.JSONArray, gameName: String, platform: String): Int? {
         val normalizedQuery = normalizeForMatching(gameName)
         var bestMatchId: Int? = null

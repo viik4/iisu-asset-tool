@@ -186,6 +186,8 @@ class IconGenerator(private val context: Context) {
     private fun createCornerMaskFromBorder(border: Bitmap): Bitmap {
         val size = border.width
         val mask = Bitmap.createBitmap(size, size, Bitmap.Config.ALPHA_8)
+        // Canvas created for potential future drawing operations
+        @Suppress("UNUSED_VARIABLE")
         val canvas = Canvas(mask)
 
         // Extract alpha channel from border

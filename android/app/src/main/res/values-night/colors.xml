@@ -2,17 +2,35 @@
 <resources>
     <!--
     Night mode (dark theme) color overrides
-    These colors are used when dark mode is active
+    These colors are used when the system is in dark mode
     -->
 
-    <!-- Use dark theme colors in night mode -->
-    <color name="theme_background">@color/background</color>
-    <color name="theme_surface">@color/surface</color>
-    <color name="theme_surface_variant">@color/surface_variant</color>
-    <color name="theme_text_primary">@color/text_primary</color>
-    <color name="theme_text_secondary">@color/text_secondary</color>
-    <color name="theme_card_background">@color/card_background</color>
-    <color name="theme_border_color">@color/border_color</color>
-    <color name="theme_input_background">@color/input_background</color>
-    <color name="theme_input_border">@color/input_border</color>
+    <!-- Theme-aware aliases - Dark theme values -->
+    <color name="theme_background">@color/dark_background</color>
+    <color name="theme_background_variant">@color/dark_background_variant</color>
+    <color name="theme_surface">@color/dark_surface</color>
+    <color name="theme_surface_variant">@color/dark_surface_variant</color>
+    <color name="theme_surface_elevated">@color/dark_surface_elevated</color>
+
+    <color name="theme_text_primary">@color/dark_text_primary</color>
+    <color name="theme_text_secondary">@color/dark_text_secondary</color>
+    <color name="theme_text_tertiary">@color/dark_text_hint</color>
+    <color name="theme_text_hint">@color/dark_text_hint</color>
+    <color name="theme_text_disabled">@color/dark_text_disabled</color>
+
+    <color name="theme_border">@color/dark_border</color>
+    <color name="theme_divider">@color/dark_divider</color>
+
+    <color name="theme_accent">@color/iisu_cyan</color>
+    <color name="theme_accent_transparent">#4000DDFF</color>
+    <color name="theme_accent_secondary">@color/iisu_purple</color>
+
+    <color name="theme_nav_background">@color/nav_background_dark</color>
+
+    <!-- Legacy aliases for backward compatibility -->
+    <color name="theme_card_background">@color/theme_surface</color>
+    <color name="theme_border_color">@color/theme_border</color>
+    <color name="theme_input_background">@color/theme_surface_variant</color>
+    <color name="theme_input_border">@color/theme_border</color>
+
 </resources>

@@ -6,9 +6,9 @@
     android:viewportHeight="24">
     <!-- iiSU-style home icon -->
     <path
-        android:fillColor="#9575CD"
+        android:fillColor="#067DBA"
         android:pathData="M12,3L4,9v12h16V9L12,3zM12,5.5L18,10v9H6v-9L12,5.5z"/>
     <path
-        android:fillColor="#9575CD"
+        android:fillColor="#067DBA"
         android:pathData="M10,14h4v5h-4z"/>
 </vector>

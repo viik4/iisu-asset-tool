@@ -7,18 +7,18 @@
         android:title="@string/nav_iisu_browser" />
 
     <item
-        android:id="@+id/nav_icon_generator"
+        android:id="@+id/nav_icons"
         android:icon="@drawable/ic_icon_generator"
-        android:title="@string/nav_icon_generator" />
+        android:title="@string/nav_icons" />
 
     <item
-        android:id="@+id/nav_custom_image"
-        android:icon="@drawable/ic_custom_image"
-        android:title="@string/nav_custom_image" />
+        android:id="@+id/nav_community_db"
+        android:icon="@drawable/ic_existing_assets"
+        android:title="@string/nav_community_db" />
 
     <item
-        android:id="@+id/nav_settings"
-        android:icon="@drawable/ic_settings"
-        android:title="@string/nav_settings" />
+        android:id="@+id/nav_music"
+        android:icon="@drawable/ic_music"
+        android:title="@string/nav_music" />
 
 </menu>

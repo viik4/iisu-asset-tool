@@ -167,12 +167,17 @@ jobs:
         # Copy the app bundle
         cp -R "dist/iiSU Asset Tool.app" dmg_contents/
 
-        # Set the app icon
+        # Set the app icon - ensure Resources directory exists and copy icon
+        mkdir -p "dmg_contents/iiSU Asset Tool.app/Contents/Resources"
         cp app_icon.icns "dmg_contents/iiSU Asset Tool.app/Contents/Resources/app_icon.icns"
 
-        # Update Info.plist to use the icon
-        /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string app_icon" "dmg_contents/iiSU Asset Tool.app/Contents/Info.plist" 2>/dev/null || \
-        /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile app_icon" "dmg_contents/iiSU Asset Tool.app/Contents/Info.plist"
+        # Ensure Info.plist has the correct icon reference (should already be set by PyInstaller spec)
+        # This updates or adds the CFBundleIconFile key to point to app_icon (without .icns extension)
+        /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile app_icon" "dmg_contents/iiSU Asset Tool.app/Contents/Info.plist" 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string app_icon" "dmg_contents/iiSU Asset Tool.app/Contents/Info.plist"
+
+        # Touch the app to update modification time (helps with icon cache)
+        touch "dmg_contents/iiSU Asset Tool.app"
 
         # Create Applications symlink for drag-and-drop install
         ln -s /Applications dmg_contents/Applications

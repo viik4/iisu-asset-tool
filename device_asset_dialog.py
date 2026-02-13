@@ -223,34 +223,230 @@ class DeviceScanThread(QThread):
             self.error.emit(str(e))
 
 
+class RomFolderSyncThread(QThread):
+    """Thread to scan ROM directory on device and create matching asset folders."""
+    progress = Signal(str)
+    finished = Signal(int, int)  # created, already_existed
+    error = Signal(str)
+
+    # Common ROM file extensions
+    ROM_EXTENSIONS = {
+        '.nes', '.sfc', '.smc', '.z64', '.n64', '.v64', '.nds', '.3ds',
+        '.gba', '.gbc', '.gb', '.iso', '.bin', '.cue', '.chd', '.pbp',
+        '.nsp', '.xci', '.gcm', '.wbfs', '.wad', '.rvz', '.ciso',
+        '.zip', '.7z', '.rar', '.nca', '.cia', '.dsi', '.xiso',
+        '.gcz', '.tgc', '.dol', '.elf', '.rpx', '.wux',
+        '.pce', '.sgx', '.cdi', '.gdi', '.ecm', '.mds', '.mdf',
+        '.gen', '.md', '.smd', '.32x', '.sms', '.gg',
+        '.a26', '.a52', '.a78', '.lnx', '.jag', '.j64',
+        '.vec', '.col', '.int', '.sg', '.sc', '.ws', '.wsc',
+        '.ngp', '.ngc', '.psx',
+    }
+
+    # Known platform folder names
+    PLATFORM_FOLDERS = {
+        'nes', 'famicom', 'fc', 'snes', 'supernintendo', 'superfamicom', 'sfc',
+        'n64', 'nintendo64', 'gamecube', 'gc', 'ngc', 'wii', 'wiiu', 'switch',
+        'gb', 'gbc', 'gba', 'nds', 'ds', '3ds', 'n3ds',
+        'ps1', 'psx', 'ps2', 'ps3', 'psp', 'vita', 'psvita',
+        'genesis', 'megadrive', 'md', 'sega32x', '32x', 'segacd', 'scd',
+        'mastersystem', 'sms', 'gamegear', 'gg', 'saturn', 'dreamcast', 'dc',
+        'xbox', 'xbox360',
+        'atari2600', 'atari5200', 'atari7800', 'atarilynx', 'atarijaguar',
+        'turbografx', 'pcengine', 'pce', 'supergrafx', 'pcfx',
+        'neogeo', 'neogeocd', 'neogeopocket', 'ngp', 'ngpc',
+        'wonderswan', 'wonderswancolor', 'ws', 'wsc',
+        'colecovision', 'intellivision', 'vectrex', 'msx', 'msx2',
+        'arcade', 'mame', 'fbneo', 'fba',
+        'dos', 'scummvm', 'amiga',
+    }
+
+    def __init__(self, adb_path: str, rom_path: str, assets_path: str):
+        super().__init__()
+        self.adb_path = adb_path
+        self.rom_path = rom_path.rstrip("/")
+        self.assets_path = assets_path.rstrip("/")
+
+    def _is_platform_folder(self, name: str) -> bool:
+        """Check if a folder name looks like a platform folder."""
+        return name.lower().replace(' ', '').replace('-', '').replace('_', '') in self.PLATFORM_FOLDERS
+
+    def _clean_game_title(self, filename: str) -> str:
+        """Clean a ROM filename into a game title."""
+        # Remove extension
+        name = Path(filename).stem
+        # Remove region tags like (USA), (Europe), (Rev 1), etc.
+        name = re.sub(r'\s*\([^)]*\)\s*', ' ', name)
+        # Remove square bracket content like [!], [b1], etc.
+        name = re.sub(r'\s*\[[^\]]*\]\s*', ' ', name)
+        # Replace underscores with spaces
+        name = name.replace('_', ' ')
+        # Clean up whitespace
+        name = ' '.join(name.split()).strip()
+        return name
+
+    def _is_rom_file(self, filename: str) -> bool:
+        """Check if a filename looks like a ROM file."""
+        ext = Path(filename).suffix.lower()
+        return ext in self.ROM_EXTENSIONS
+
+    def run(self):
+        """Scan ROM directory and create matching asset folders."""
+        try:
+            created = 0
+            already_existed = 0
+            kwargs = get_subprocess_kwargs()
+
+            # 1. List platform folders in ROM directory
+            self.progress.emit("Scanning ROM directory for platforms...")
+            platform_items = list_device_directory(self.adb_path, self.rom_path)
+
+            if not platform_items:
+                self.progress.emit("No platform folders found in ROM directory.")
+                self.finished.emit(0, 0)
+                return
+
+            # Filter to platform-looking folders
+            platforms = []
+            for item in platform_items:
+                if not item or item.startswith('.'):
+                    continue
+                # Check if it's a directory
+                item_path = f"{self.rom_path}/{item}"
+                if check_path_is_directory(self.adb_path, item_path):
+                    if self._is_platform_folder(item):
+                        platforms.append(item)
+
+            if not platforms:
+                self.progress.emit("No recognized platform folders found.")
+                self.finished.emit(0, 0)
+                return
+
+            self.progress.emit(f"Found {len(platforms)} platforms. Scanning games...")
+
+            # 2. For each platform, scan for games
+            for platform in platforms:
+                platform_rom_path = f"{self.rom_path}/{platform}"
+                self.progress.emit(f"Scanning {platform}...")
+
+                # List contents of platform folder
+                try:
+                    result = subprocess.run(
+                        [self.adb_path, "shell", f'ls -la "{platform_rom_path}"'],
+                        timeout=60, **kwargs
+                    )
+
+                    if result.returncode != 0:
+                        continue
+
+                    game_names = set()
+
+                    for line in result.stdout.strip().split('\n'):
+                        line = line.strip()
+                        if not line or line.startswith('total'):
+                            continue
+
+                        if line.startswith('d'):
+                            # Directory entry — game folder
+                            parts = line.split()
+                            if len(parts) >= 8:
+                                name = ' '.join(parts[7:])
+                                if name and name not in ('.', '..') and not name.startswith('.'):
+                                    game_names.add(name)
+                        elif line.startswith('-'):
+                            # File entry — loose ROM file
+                            parts = line.split()
+                            if len(parts) >= 8:
+                                filename = ' '.join(parts[7:])
+                                if filename and self._is_rom_file(filename):
+                                    cleaned = self._clean_game_title(filename)
+                                    if cleaned:
+                                        game_names.add(cleaned)
+
+                except subprocess.TimeoutExpired:
+                    continue
+                except Exception as e:
+                    print(f"[ROM SYNC] Error scanning {platform}: {e}")
+                    continue
+
+                if not game_names:
+                    continue
+
+                # 3. Create asset folders for each game
+                self.progress.emit(f"Creating folders for {len(game_names)} games in {platform}...")
+
+                for game_name in sorted(game_names):
+                    target_path = f"{self.assets_path}/{platform}/{game_name}"
+
+                    # Check if folder already exists
+                    if check_path_is_directory(self.adb_path, target_path):
+                        already_existed += 1
+                        continue
+
+                    # Create the folder
+                    try:
+                        result = subprocess.run(
+                            [self.adb_path, "shell", f'mkdir -p "{target_path}"'],
+                            timeout=30, **kwargs
+                        )
+                        if result.returncode == 0:
+                            created += 1
+                            print(f"[ROM SYNC] Created: {target_path}")
+                        else:
+                            print(f"[ROM SYNC] Failed to create: {target_path} - {result.stderr}")
+                    except Exception as e:
+                        print(f"[ROM SYNC] Error creating {target_path}: {e}")
+
+            self.progress.emit(f"Done! Created {created} new folders, {already_existed} already existed.")
+            self.finished.emit(created, already_existed)
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+
 class DevicePushThread(QThread):
     """Thread for pushing assets to device."""
     progress = Signal(int, int, str)
     finished = Signal(int, int, list)  # copied, errors, list of successfully pushed game folders
     error = Signal(str)
 
-    def __init__(self, adb_path: str, items: List[Tuple[str, str]]):
+    def __init__(self, adb_path: str, items: List[Tuple[str, str]], folders_to_create: List[str] = None):
         super().__init__()
         self.adb_path = adb_path
         self.items = items  # List of (local_path, device_path) tuples
+        self.folders_to_create = folders_to_create or []
 
     def run(self):
-        """Push asset FILES to existing device folders (not creating new folders)."""
+        """Push asset files to device, creating new folders as needed."""
         try:
             copied = 0
             errors = 0
-            total = len(self.items)
             successful_folders = set()  # Track which LOCAL game folders were fully pushed
+            kwargs = get_subprocess_kwargs()
 
+            # Create any new game folders first
+            if self.folders_to_create:
+                for folder_path in self.folders_to_create:
+                    try:
+                        result = subprocess.run(
+                            [self.adb_path, "shell", f'mkdir -p "{folder_path}"'],
+                            timeout=30, **kwargs
+                        )
+                        if result.returncode == 0:
+                            print(f"[DEBUG] Created device folder: {folder_path}")
+                        else:
+                            print(f"[DEBUG] Failed to create folder: {folder_path} - {result.stderr}")
+                    except Exception as e:
+                        print(f"[DEBUG] Error creating folder {folder_path}: {e}")
+
+            # Push files
+            total = len(self.items)
             for i, (local_path, device_path) in enumerate(self.items):
                 self.progress.emit(i + 1, total, Path(local_path).name)
                 print(f"[DEBUG] Pushing FILE: {local_path}")
                 print(f"[DEBUG]      -> TO: {device_path}")
 
                 try:
-                    # Push file to existing device folder
-                    # adb push handles paths with spaces correctly
-                    kwargs = get_subprocess_kwargs()
                     result = subprocess.run(
                         [self.adb_path, "push", local_path, device_path],
                         timeout=60, **kwargs
@@ -382,6 +578,30 @@ class DeviceAssetDialog(QDialog):
 
         layout.addWidget(splitter, 1)
 
+        # ROM Folder Sync
+        sync_group = QGroupBox("Sync Game Folders from ROM Directory")
+        sync_group.setToolTip(
+            "If iiSU doesn't create game folders automatically, use this to scan\n"
+            "your ROM directory and create matching folders in the iiSU assets path.\n"
+            "This lets the asset tool detect games that are missing asset folders."
+        )
+        sync_layout = QHBoxLayout()
+
+        self.rom_path_input = QLineEdit()
+        self.rom_path_input.setPlaceholderText("/sdcard/ROMs  or  /sdcard/Download/roms  (your ROM directory on device)")
+        sync_layout.addWidget(self.rom_path_input, 1)
+
+        self.btn_sync_roms = QPushButton("Sync Folders")
+        self.btn_sync_roms.setToolTip(
+            "Scan the ROM directory for games and create matching\n"
+            "folders in the iiSU assets path so the asset tool can find them"
+        )
+        self.btn_sync_roms.clicked.connect(self._sync_rom_folders)
+        sync_layout.addWidget(self.btn_sync_roms)
+
+        sync_group.setLayout(sync_layout)
+        layout.addWidget(sync_group)
+
         # Options row
         options_layout = QHBoxLayout()
 
@@ -507,6 +727,87 @@ class DeviceAssetDialog(QDialog):
         self.progress_bar.setVisible(False)
         self.status_label.setText(f"Scan error: {error}")
         QMessageBox.critical(self, "Scan Error", f"Failed to scan device: {error}")
+
+    def _sync_rom_folders(self):
+        """Scan ROM directory on device and create matching asset folders."""
+        rom_path = self.rom_path_input.text().strip()
+        if not rom_path:
+            QMessageBox.warning(
+                self,
+                "No ROM Path",
+                "Please enter the path to your ROM directory on the device.\n\n"
+                "This is where your game ROMs are stored, e.g.:\n"
+                "  /sdcard/ROMs\n"
+                "  /sdcard/Download/roms\n"
+                "  /storage/emulated/0/RetroArch/roms"
+            )
+            return
+
+        assets_path = self.device_path_input.text().strip() or self.IISU_DEFAULT_PATH
+
+        # Confirm with user
+        reply = QMessageBox.question(
+            self,
+            "Sync Game Folders",
+            f"This will:\n\n"
+            f"1. Scan your ROM directory:\n   {rom_path}\n\n"
+            f"2. Create matching game folders in:\n   {assets_path}\n\n"
+            f"This ensures the asset tool can detect all your games.\n"
+            f"Existing folders will not be modified.\n\n"
+            f"Continue?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        self.btn_sync_roms.setEnabled(False)
+        self.btn_scan.setEnabled(False)
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, 0)  # Indeterminate
+        self.status_label.setText("Syncing game folders from ROM directory...")
+
+        self._sync_thread = RomFolderSyncThread(self.adb_path, rom_path, assets_path)
+        self._sync_thread.progress.connect(self._on_sync_progress)
+        self._sync_thread.finished.connect(self._on_sync_finished)
+        self._sync_thread.error.connect(self._on_sync_error)
+        self._sync_thread.start()
+
+    def _on_sync_progress(self, message: str):
+        """Handle ROM sync progress update."""
+        self.status_label.setText(message)
+
+    def _on_sync_finished(self, created: int, already_existed: int):
+        """Handle ROM sync completion."""
+        self.btn_sync_roms.setEnabled(True)
+        self.btn_scan.setEnabled(True)
+        self.progress_bar.setVisible(False)
+
+        if created > 0:
+            self.status_label.setText(f"Sync complete: {created} new folders created, {already_existed} already existed.")
+            QMessageBox.information(
+                self,
+                "Sync Complete",
+                f"Created {created} new game folders.\n"
+                f"{already_existed} game folders already existed.\n\n"
+                f"Click 'Scan iiSU Assets' to see the updated game list."
+            )
+        else:
+            self.status_label.setText(f"Sync complete: all {already_existed} folders already exist.")
+            QMessageBox.information(
+                self,
+                "Sync Complete",
+                f"All {already_existed} game folders already exist.\n"
+                f"No new folders needed to be created."
+            )
+
+    def _on_sync_error(self, error: str):
+        """Handle ROM sync error."""
+        self.btn_sync_roms.setEnabled(True)
+        self.btn_scan.setEnabled(True)
+        self.progress_bar.setVisible(False)
+        self.status_label.setText(f"Sync error: {error}")
+        QMessageBox.critical(self, "Sync Error", f"Failed to sync ROM folders: {error}")
 
     def _load_local_assets(self):
         """Load local output assets."""
@@ -657,22 +958,24 @@ class DeviceAssetDialog(QDialog):
 
         return items, matched_games, unmatched_games
 
-    def _get_all_local_items_with_matching(self) -> Tuple[List[Tuple[str, str]], List[str], List[str]]:
+    def _get_all_local_items_with_matching(self) -> Tuple[List[Tuple[str, str]], List[str], List[str], List[str]]:
         """Get list of all local items with fuzzy matching to device folders.
 
         Returns:
-            Tuple of (items, matched_games, unmatched_games)
+            Tuple of (items, matched_games, new_games, folders_to_create)
             - items: List of (local_path, device_path) tuples
             - matched_games: List of "local_name -> device_name" strings
-            - unmatched_games: List of local game names with no device match
+            - new_games: List of "platform/local_name" strings (folders will be created)
+            - folders_to_create: List of device paths to mkdir -p before pushing
         """
         items = []
         matched_games = []
-        unmatched_games = []
+        new_games = []
+        folders_to_create = []
 
         output_path = Path(self.output_dir)
         if not output_path.exists():
-            return items, matched_games, unmatched_games
+            return items, matched_games, new_games, folders_to_create
 
         for platform_folder in output_path.iterdir():
             if not platform_folder.is_dir():
@@ -691,6 +994,7 @@ class DeviceAssetDialog(QDialog):
 
                 local_game_name = game_folder.name
                 device_game_name = local_game_name  # Default to same name
+                is_new = False
 
                 # Try to find matching device folder
                 if device_game_names:
@@ -733,12 +1037,21 @@ class DeviceAssetDialog(QDialog):
                             matched_games.append(f"{local_game_name} -> {device_game_name}")
                             print(f"[DEBUG] Push match: '{local_game_name}' -> '{device_game_name}'")
                         else:
-                            unmatched_games.append(f"{platform_name}/{local_game_name}")
-                            continue  # Skip unmatched games
+                            # No match found — create new folder on device
+                            is_new = True
                     else:
                         matched_games.append(f"{local_game_name} (exact)")
+                else:
+                    # No device data at all — all games are new
+                    is_new = True
 
                 device_game_path = f"{self.device_base_path}/{platform_name}/{device_game_name}"
+
+                if is_new:
+                    new_games.append(f"{platform_name}/{local_game_name}")
+                    folders_to_create.append(device_game_path)
+                    print(f"[DEBUG] New game folder will be created: {device_game_path}")
+
                 print(f"[DEBUG] Device target folder: {device_game_path}")
 
                 for file_path in game_folder.iterdir():
@@ -750,7 +1063,7 @@ class DeviceAssetDialog(QDialog):
                             target_path
                         ))
 
-        return items, matched_games, unmatched_games
+        return items, matched_games, new_games, folders_to_create
 
     def _replace_selected(self):
         """Replace selected items on device with local versions."""
@@ -823,38 +1136,28 @@ class DeviceAssetDialog(QDialog):
 
     def _push_all_local(self):
         """Push all local assets to device."""
-        # Check if we have device data for matching
-        if not self.device_assets:
-            QMessageBox.warning(
-                self,
-                "Scan Required",
-                "Please scan the device first to enable fuzzy matching.\n\n"
-                "This ensures local assets are pushed to the correct device folders."
-            )
-            return
-
-        items, matched_games, unmatched_games = self._get_all_local_items_with_matching()
+        items, matched_games, new_games, folders_to_create = self._get_all_local_items_with_matching()
 
         if not items:
-            msg = "No matching local assets found to push.\n\n"
-            if unmatched_games:
-                msg += f"Unmatched games ({len(unmatched_games)}):\n"
-                msg += "\n".join(f"  - {g}" for g in unmatched_games[:10])
-                if len(unmatched_games) > 10:
-                    msg += f"\n  ... and {len(unmatched_games) - 10} more"
-            msg += "\n\nGenerate assets first using the Icon Generator tab."
+            msg = "No local assets found to push.\n\n"
+            msg += "Generate assets first using the Icon Generator tab."
             QMessageBox.information(self, "No Assets", msg)
             return
 
         # Show confirmation with match details
         msg = f"Push {len(items)} files to device?\n\n"
-        msg += f"Matched {len(matched_games)} games:\n"
-        for match in matched_games[:5]:
-            msg += f"  - {match}\n"
-        if len(matched_games) > 5:
-            msg += f"  ... and {len(matched_games) - 5} more\n"
-        if unmatched_games:
-            msg += f"\n{len(unmatched_games)} games had no device match and will be skipped."
+        if matched_games:
+            msg += f"Matched {len(matched_games)} existing games:\n"
+            for match in matched_games[:5]:
+                msg += f"  ✓ {match}\n"
+            if len(matched_games) > 5:
+                msg += f"  ... and {len(matched_games) - 5} more\n"
+        if new_games:
+            msg += f"\n{len(new_games)} new game folders will be created:\n"
+            for g in new_games[:5]:
+                msg += f"  + {g}\n"
+            if len(new_games) > 5:
+                msg += f"  ... and {len(new_games) - 5} more\n"
 
         reply = QMessageBox.question(
             self,
@@ -864,9 +1167,9 @@ class DeviceAssetDialog(QDialog):
         )
 
         if reply == QMessageBox.Yes:
-            self._push_items(items)
+            self._push_items(items, folders_to_create)
 
-    def _push_items(self, items: List[Tuple[str, str]]):
+    def _push_items(self, items: List[Tuple[str, str]], folders_to_create: List[str] = None):
         """Push items to device."""
         self.btn_replace_selected.setEnabled(False)
         self.btn_push_all.setEnabled(False)
@@ -875,7 +1178,7 @@ class DeviceAssetDialog(QDialog):
         self.progress_bar.setRange(0, len(items))
         self.progress_bar.setValue(0)
 
-        self.push_thread = DevicePushThread(self.adb_path, items)
+        self.push_thread = DevicePushThread(self.adb_path, items, folders_to_create or [])
         self.push_thread.progress.connect(self._on_push_progress)
         self.push_thread.finished.connect(self._on_push_finished)
         self.push_thread.error.connect(self._on_push_error)

@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AnimationUtils
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -24,6 +25,9 @@ class PlatformAdapter(
 
     companion object {
         private const val TAG = "PlatformAdapter"
+
+        // In-memory cache for platform icons loaded from assets
+        private val iconCache = mutableMapOf<String, Bitmap?>()
 
         // Map platform names to asset filenames
         private val platformIconMap = mapOf(
@@ -64,15 +68,21 @@ class PlatformAdapter(
         )
 
         /**
-         * Load a platform icon from the app's assets folder.
+         * Load a platform icon from the app's assets folder (with in-memory cache).
          */
         fun loadPlatformIconFromAssets(context: Context, platformName: String): Bitmap? {
             val normalizedName = platformName.lowercase().replace(" ", "").replace("-", "").replace("_", "")
+
+            // Check cache first
+            if (iconCache.containsKey(normalizedName)) {
+                return iconCache[normalizedName]
+            }
+
             val assetFileName = platformIconMap[normalizedName]
                 ?: platformIconMap.entries.find { normalizedName.contains(it.key) }?.value
 
-            if (assetFileName != null) {
-                return try {
+            val bitmap = if (assetFileName != null) {
+                try {
                     context.assets.open("platform_icons/$assetFileName").use { inputStream ->
                         BitmapFactory.decodeStream(inputStream)
                     }
@@ -80,10 +90,17 @@ class PlatformAdapter(
                     Log.w(TAG, "Failed to load platform icon from assets: $assetFileName", e)
                     null
                 }
+            } else {
+                null
             }
-            return null
+
+            // Cache the result (even null to avoid repeated file I/O)
+            iconCache[normalizedName] = bitmap
+            return bitmap
         }
     }
+
+    private var lastAnimatedPosition = -1
 
     inner class PlatformViewHolder(
         private val binding: ItemPlatformBinding
@@ -92,11 +109,21 @@ class PlatformAdapter(
         fun bind(platform: PlatformInfo) {
             val context = binding.root.context
 
-            // Set platform icon - try provided icon first, then assets, then fallback
-            if (platform.icon != null) {
+            // Check if this is the special Android Apps platform
+            if (platform.name == "__android_apps__") {
+                binding.imagePlatformIcon.setImageResource(R.drawable.ic_android_app)
+                binding.imagePlatformIcon.setColorFilter(
+                    context.getColor(R.color.accent_cyan),
+                    android.graphics.PorterDuff.Mode.SRC_IN
+                )
+            } else if (platform.icon != null) {
+                // Clear any color filter
+                binding.imagePlatformIcon.clearColorFilter()
                 binding.imagePlatformIcon.setImageBitmap(platform.icon)
             } else {
-                // Try to load from assets
+                // Clear any color filter
+                binding.imagePlatformIcon.clearColorFilter()
+                // Try to load from assets (cached)
                 val assetIcon = loadPlatformIconFromAssets(context, platform.name)
                 if (assetIcon != null) {
                     binding.imagePlatformIcon.setImageBitmap(assetIcon)
@@ -108,8 +135,9 @@ class PlatformAdapter(
             // Set platform name
             binding.textPlatformName.text = platform.displayName
 
-            // Set game count
-            binding.textRomCount.text = "${platform.gameCount} games"
+            // Set game/app count (use "apps" for Android Apps platform)
+            val countLabel = if (platform.name == "__android_apps__") "apps" else "games"
+            binding.textRomCount.text = "${platform.gameCount} $countLabel"
 
             // Show missing badge if there are missing assets
             val totalMissing = platform.missingIcons + platform.missingHeroes + platform.missingLogos
@@ -138,6 +166,22 @@ class PlatformAdapter(
 
     override fun onBindViewHolder(holder: PlatformViewHolder, position: Int) {
         holder.bind(getItem(position))
+
+        // Animate items as they appear
+        if (position > lastAnimatedPosition) {
+            val animation = AnimationUtils.loadAnimation(holder.itemView.context, R.anim.item_fade_in)
+            holder.itemView.startAnimation(animation)
+            lastAnimatedPosition = position
+        }
+    }
+
+    override fun onViewDetachedFromWindow(holder: PlatformViewHolder) {
+        super.onViewDetachedFromWindow(holder)
+        holder.itemView.clearAnimation()
+    }
+
+    fun resetAnimations() {
+        lastAnimatedPosition = -1
     }
 }
 

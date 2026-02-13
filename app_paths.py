@@ -72,12 +72,48 @@ def get_logo_path() -> Path:
     return get_app_dir() / "logo.png"
 
 
+def get_workshop_logo_path() -> Path:
+    return get_app_dir() / "workshoplogo.png"
+
+
 def get_theme_path() -> Path:
     return get_app_dir() / "iisu_theme.qss"
 
 
 def get_config_path() -> Path:
     return get_app_dir() / "config.yaml"
+
+
+# ── Shared config cache ──────────────────────────────────────────────
+_config_cache = None
+_config_mtime = 0.0
+
+
+def get_config() -> dict:
+    """Return the parsed config.yaml, cached and auto-reloaded on file change."""
+    global _config_cache, _config_mtime
+    cfg_path = get_config_path()
+    try:
+        mtime = cfg_path.stat().st_mtime if cfg_path.exists() else 0.0
+    except OSError:
+        mtime = 0.0
+
+    if _config_cache is None or mtime != _config_mtime:
+        try:
+            import yaml
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                _config_cache = yaml.safe_load(f) or {}
+            _config_mtime = mtime
+        except Exception:
+            _config_cache = {}
+    return _config_cache
+
+
+def invalidate_config_cache():
+    """Force the config cache to reload on next access."""
+    global _config_cache, _config_mtime
+    _config_cache = None
+    _config_mtime = 0.0
 
 
 def verify_required_assets() -> dict:

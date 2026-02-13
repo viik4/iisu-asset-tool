@@ -12,6 +12,7 @@ import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.ActivityCompat
@@ -20,9 +21,14 @@ import androidx.fragment.app.Fragment
 import com.iisu.assettool.databinding.ActivityMainBinding
 import com.iisu.assettool.ui.DotGridDrawable
 import com.iisu.assettool.ui.IconGeneratorFragment
+import com.iisu.assettool.ui.IconsFragment
 import com.iisu.assettool.ui.CustomImageFragment
 import com.iisu.assettool.ui.IisuBrowserFragment
 import com.iisu.assettool.ui.SettingsFragment
+import com.iisu.assettool.ui.CommunityDbFragment
+import com.iisu.assettool.ui.MusicFragment
+import com.iisu.assettool.ui.OnboardingActivity
+import com.iisu.assettool.util.BackgroundMusicManager
 import com.iisu.assettool.util.IisuDirectoryManager
 import java.io.File
 
@@ -47,10 +53,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var hasInitializedFragment = false
 
+    // Flag to prevent navigation listener from firing during initial setup
+    private var isSettingUpNavigation = false
+
+    // Modern ActivityResult API for storage permission
+    private val manageStorageLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Check if permission was granted after returning
+        onStoragePermissionResult()
+    }
+
     companion object {
         private const val TAG = "MainActivity"
         private const val STORAGE_PERMISSION_CODE = 100
-        private const val MANAGE_STORAGE_CODE = 101
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,13 +76,38 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupNavigation()
+        setupLogoClick()
         applyDotGridBackground()
         loadSavedCustomAssetDirectory()
+        loadSavedRomSourcePath()
         checkStoragePermissions()
+
+        // Show onboarding on first launch or major update
+        if (savedInstanceState == null && OnboardingActivity.shouldShowOnboarding(this)) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+        }
 
         // Load default fragment only if we have permissions
         if (savedInstanceState == null) {
             loadDefaultFragment()
+        }
+
+        // Initialize background music (iiSU OST by Thaddeus Silva)
+        BackgroundMusicManager.initialize(this)
+    }
+
+    /**
+     * Set up the logo click listener to open Settings.
+     */
+    private fun setupLogoClick() {
+        binding.appLogo.setOnClickListener {
+            loadFragment(SettingsFragment())
+            // Deselect nav items when settings is opened via logo
+            binding.navigationRail.menu.setGroupCheckable(0, true, false)
+            for (i in 0 until binding.navigationRail.menu.size()) {
+                binding.navigationRail.menu.getItem(i).isChecked = false
+            }
+            binding.navigationRail.menu.setGroupCheckable(0, true, true)
         }
     }
 
@@ -83,6 +124,19 @@ class MainActivity : AppCompatActivity() {
                 IisuDirectoryManager.setCustomRomPath(file)
                 Log.d(TAG, "Loaded saved custom asset directory: $savedPath")
             }
+        }
+    }
+
+    /**
+     * Load the saved ROM source directory from preferences and set it in IisuDirectoryManager.
+     * This ensures the ROM source is available even if the user doesn't visit Settings.
+     */
+    private fun loadSavedRomSourcePath() {
+        val savedPath = SettingsFragment.getRomSourcePath(this)
+        if (savedPath != null) {
+            val file = File(savedPath)
+            IisuDirectoryManager.setRomSourcePath(file)
+            Log.d(TAG, "Loaded saved ROM source path: $savedPath")
         }
     }
 
@@ -139,6 +193,20 @@ class MainActivity : AppCompatActivity() {
         if (hasStoragePermission()) {
             debugIisuPaths()
         }
+        // Resume background music if enabled
+        BackgroundMusicManager.resume(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Pause background music when app goes to background
+        BackgroundMusicManager.pause()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Release music resources when activity is destroyed
+        BackgroundMusicManager.release()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -159,16 +227,23 @@ class MainActivity : AppCompatActivity() {
         hasInitializedFragment = true
         debugIisuPaths()
 
-        // Start with iiSU Browser if iiSU is installed, otherwise Icon Generator
+        // Prevent the navigation listener from creating a duplicate fragment
+        // when we programmatically set selectedItemId
+        isSettingUpNavigation = true
+
+        // Start with iiSU Browser if iiSU is installed, otherwise Icons tab
         if (IisuDirectoryManager.isIisuInstalled()) {
             Log.d(TAG, "iiSU detected - loading browser")
             loadFragment(IisuBrowserFragment())
             binding.navigationRail.selectedItemId = R.id.nav_iisu_browser
         } else {
-            Log.d(TAG, "iiSU not detected - loading icon generator")
-            loadFragment(IconGeneratorFragment())
-            binding.navigationRail.selectedItemId = R.id.nav_icon_generator
+            Log.d(TAG, "iiSU not detected - loading icons tab")
+            loadFragment(IconsFragment())
+            binding.navigationRail.selectedItemId = R.id.nav_icons
         }
+
+        // Re-enable the navigation listener for user interactions
+        isSettingUpNavigation = false
     }
 
     private fun debugIisuPaths() {
@@ -200,10 +275,10 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
                     intent.data = Uri.parse("package:$packageName")
-                    startActivityForResult(intent, MANAGE_STORAGE_CODE)
+                    manageStorageLauncher.launch(intent)
                 } catch (e: Exception) {
                     val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    startActivityForResult(intent, MANAGE_STORAGE_CODE)
+                    manageStorageLauncher.launch(intent)
                 }
             }
         } else {
@@ -224,11 +299,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupNavigation() {
         binding.navigationRail.setOnItemSelectedListener { item ->
+            // Skip if we're setting up navigation programmatically (during initial setup)
+            if (isSettingUpNavigation) {
+                Log.d(TAG, "Skipping nav listener - initial setup in progress")
+                return@setOnItemSelectedListener true
+            }
+
             val fragment: Fragment = when (item.itemId) {
                 R.id.nav_iisu_browser -> IisuBrowserFragment()
-                R.id.nav_icon_generator -> IconGeneratorFragment()
-                R.id.nav_custom_image -> CustomImageFragment()
-                R.id.nav_settings -> SettingsFragment()
+                R.id.nav_icons -> IconsFragment()
+                R.id.nav_community_db -> CommunityDbFragment()
+                R.id.nav_music -> MusicFragment()
                 else -> return@setOnItemSelectedListener false
             }
             loadFragment(fragment)
@@ -238,6 +319,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadFragment(fragment: Fragment) {
         supportFragmentManager.beginTransaction()
+            .setCustomAnimations(
+                R.anim.fragment_fade_enter,
+                R.anim.fragment_fade_exit
+            )
             .replace(R.id.fragment_container, fragment)
             .commit()
     }
@@ -259,19 +344,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == MANAGE_STORAGE_CODE) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (Environment.isExternalStorageManager()) {
-                    Toast.makeText(this, "Storage access granted", Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, "MANAGE_EXTERNAL_STORAGE granted, reloading fragment")
-                    // Reload fragment now that we have permission
-                    reloadCurrentFragment()
-                } else {
-                    Toast.makeText(this, "Storage access required to manage iiSU files", Toast.LENGTH_LONG).show()
-                }
+    // Storage permission callback is now handled by manageStorageLauncher (ActivityResult API)
+    // The old onActivityResult method is no longer needed for storage permissions
+    private fun onStoragePermissionResult() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                Toast.makeText(this, "Storage access granted", Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "MANAGE_EXTERNAL_STORAGE granted, reloading fragment")
+                // Reload fragment now that we have permission
+                reloadCurrentFragment()
+            } else {
+                Toast.makeText(this, "Storage access required to manage iiSU files", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -282,17 +365,22 @@ class MainActivity : AppCompatActivity() {
         val currentFragmentId = binding.navigationRail.selectedItemId
         val fragment: Fragment = when (currentFragmentId) {
             R.id.nav_iisu_browser -> IisuBrowserFragment()
-            R.id.nav_icon_generator -> IconGeneratorFragment()
-            R.id.nav_custom_image -> CustomImageFragment()
-            R.id.nav_settings -> SettingsFragment()
+            R.id.nav_icons -> IconsFragment()
+            R.id.nav_community_db -> CommunityDbFragment()
+            R.id.nav_music -> MusicFragment()
             else -> {
                 // Default to checking iiSU again
-                if (IisuDirectoryManager.isIisuInstalled()) {
+                // Prevent the navigation listener from creating a duplicate fragment
+                isSettingUpNavigation = true
+                val defaultFragment = if (IisuDirectoryManager.isIisuInstalled()) {
                     binding.navigationRail.selectedItemId = R.id.nav_iisu_browser
                     IisuBrowserFragment()
                 } else {
-                    IconGeneratorFragment()
+                    binding.navigationRail.selectedItemId = R.id.nav_icons
+                    IconsFragment()
                 }
+                isSettingUpNavigation = false
+                defaultFragment
             }
         }
         loadFragment(fragment)

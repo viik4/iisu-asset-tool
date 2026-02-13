@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Page background with dot grid pattern and subtle glows (iiSU Network style) -->
+<!-- Page background with simplified gradients to prevent banding (iiSU Network style) -->
+<!-- Uses fewer gradient layers with higher alpha values and dithering -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Dark base color -->
     <item>
@@ -7,62 +8,56 @@
             <solid android:color="@color/background" />
         </shape>
     </item>
-    <!-- Dot grid pattern overlay - row 1 -->
-    <item android:top="0dp" android:left="0dp">
-        <shape android:shape="rectangle">
-            <gradient
-                android:type="linear"
-                android:angle="0"
-                android:startColor="#0800D4FF"
-                android:centerColor="#00000000"
-                android:endColor="#0800D4FF" />
-        </shape>
-    </item>
-    <!-- Dot grid pattern overlay - diagonal lines -->
-    <item>
-        <shape android:shape="rectangle">
-            <gradient
-                android:type="linear"
-                android:angle="45"
-                android:startColor="#00000000"
-                android:centerColor="#05FF00FF"
-                android:endColor="#00000000" />
-        </shape>
-    </item>
     <!-- Subtle top-right cyan glow -->
     <item>
-        <shape android:shape="rectangle">
+        <shape android:shape="rectangle" android:dither="true">
             <gradient
                 android:type="radial"
-                android:centerX="0.9"
-                android:centerY="0.1"
-                android:gradientRadius="400dp"
-                android:startColor="#1500D4FF"
-                android:endColor="#00000000" />
+                android:centerX="0.85"
+                android:centerY="0.15"
+                android:gradientRadius="50%p"
+                android:startColor="#2000DDFF"
+                android:endColor="#00000000"
+                android:dither="true" />
         </shape>
     </item>
-    <!-- Subtle bottom-left magenta glow -->
+    <!-- Subtle bottom-left pink glow -->
     <item>
-        <shape android:shape="rectangle">
+        <shape android:shape="rectangle" android:dither="true">
             <gradient
                 android:type="radial"
-                android:centerX="0.1"
-                android:centerY="0.9"
-                android:gradientRadius="400dp"
-                android:startColor="#12FF00FF"
-                android:endColor="#00000000" />
+                android:centerX="0.15"
+                android:centerY="0.85"
+                android:gradientRadius="50%p"
+                android:startColor="#18B71AEB"
+                android:endColor="#00000000"
+                android:dither="true" />
         </shape>
     </item>
-    <!-- Center purple accent -->
+    <!-- Center purple accent - subtle -->
     <item>
-        <shape android:shape="rectangle">
+        <shape android:shape="rectangle" android:dither="true">
             <gradient
                 android:type="radial"
                 android:centerX="0.5"
                 android:centerY="0.5"
-                android:gradientRadius="600dp"
-                android:startColor="#089575CD"
-                android:endColor="#00000000" />
+                android:gradientRadius="70%p"
+                android:startColor="#102B1FD0"
+                android:endColor="#00000000"
+                android:dither="true" />
+        </shape>
+    </item>
+    <!-- Bottom-right gold glow (matching website aesthetic) -->
+    <item>
+        <shape android:shape="rectangle" android:dither="true">
+            <gradient
+                android:type="radial"
+                android:centerX="0.80"
+                android:centerY="0.70"
+                android:gradientRadius="35%p"
+                android:startColor="#0CFFE57C"
+                android:endColor="#00000000"
+                android:dither="true" />
         </shape>
     </item>
 </layer-list>

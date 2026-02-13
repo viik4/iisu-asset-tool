@@ -24,6 +24,68 @@
         style="@style/IisuTextAppearance.Description"
         tools:text="Found 5 options from 3 sources" />
 
+    <!-- Filter Toggle for Icons (square only vs all results) -->
+    <LinearLayout
+        android:id="@+id/layoutFilterToggle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filter:"
+            android:textSize="13sp"
+            android:textColor="@color/theme_text_secondary"
+            android:fontFamily="@font/continuum" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupFilter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/spacing_sm"
+            app:singleSelection="true"
+            app:selectionRequired="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipSquareOnly"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Square Only"
+                android:textSize="12sp"
+                android:checked="true"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/selector_chip"
+                app:checkedIconVisible="false" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipAllResults"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="All Results"
+                android:textSize="12sp"
+                style="@style/Widget.Material3.Chip.Filter"
+                app:chipBackgroundColor="@color/selector_chip"
+                app:checkedIconVisible="false" />
+
+        </com.google.android.material.chip.ChipGroup>
+
+        <!-- Info icon with tooltip -->
+        <ImageView
+            android:id="@+id/iconFilterInfo"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:src="@drawable/ic_info"
+            android:contentDescription="Info"
+            app:tint="@color/theme_text_secondary" />
+
+    </LinearLayout>
+
     <!-- Current Image Section (only shown if exists) -->
     <LinearLayout
         android:id="@+id/layoutCurrentImage"

@@ -2,62 +2,272 @@
 <resources>
     <string name="app_name">iiSU Asset Tool</string>
 
-    <!-- Navigation -->
-    <string name="nav_iisu_browser">iiSU</string>
-    <string name="nav_icon_generator">Icons</string>
-    <string name="nav_cover_generator">Covers</string>
+    <!-- ==================== NAVIGATION ==================== -->
+    <!-- Navigation labels should be short and clear (1-2 words) -->
+    <string name="nav_iisu_browser">Library</string>
+    <string name="nav_existing_assets">My Assets</string>
+    <string name="nav_icon_generator">Search</string>
     <string name="nav_custom_image">Custom</string>
     <string name="nav_settings">Settings</string>
+    <string name="nav_icons">Icons</string>
+    <string name="nav_community_db">Workshop</string>
+    <string name="nav_music">Music</string>
 
-    <!-- iiSU Browser -->
-    <string name="iisu_browser_title">iiSU Browser</string>
-    <string name="iisu_not_installed">iiSU not installed</string>
-    <string name="iisu_not_installed_desc">Install iiSU to manage your game library assets directly.</string>
+    <!-- ==================== LIBRARY (iiSU BROWSER) ==================== -->
+    <string name="iisu_browser_title">Game Library</string>
+    <string name="iisu_browser_subtitle">Browse and manage artwork for your games</string>
+    <string name="iisu_not_installed">No Library Found</string>
+    <string name="iisu_not_installed_desc">Select your ROM folder to get started, or install iiSU Launcher for automatic detection.</string>
     <string name="iisu_platforms">Platforms</string>
     <string name="select_rom_folder">Select ROM Folder</string>
-    <string name="rom_folder_selected">ROM folder set: %1$s</string>
-    <string name="rom_folder_invalid">Selected folder doesn\'t contain ROM platforms</string>
-    <string name="iisu_roms">ROMs</string>
-    <string name="iisu_missing_icons">Missing Icons</string>
-    <string name="iisu_missing_covers">Missing Covers</string>
-    <string name="iisu_scrape_all">Scrape All Missing</string>
-    <string name="iisu_save_to_iisu">Save to iiSU</string>
+    <string name="rom_folder_selected">ROM folder: %1$s</string>
+    <string name="rom_folder_invalid">No valid platforms found in this folder</string>
+    <string name="iisu_roms">Games</string>
+    <string name="iisu_missing_icons">Missing Artwork</string>
+    <string name="iisu_scrape_all">Get All Missing</string>
+    <string name="iisu_save_to_iisu">Save to Library</string>
+    <string name="iisu_refresh_tooltip">Refresh library</string>
 
-    <!-- Icon Generator -->
-    <string name="icon_generator_title">Icon Generator</string>
-    <string name="icon_search_hint">Search for a game...</string>
+    <!-- ==================== MY ASSETS (EXISTING ASSETS) ==================== -->
+    <string name="existing_assets_title">My Assets</string>
+    <string name="existing_assets_subtitle">View and manage your generated artwork</string>
+    <string name="existing_assets_hint">Tap to select, long press for options</string>
+    <string name="existing_assets_empty">No artwork found.\n\nUse the Library or Search tabs to generate artwork for your games.</string>
+    <string name="existing_assets_scanning">Scanning for artwork…</string>
+    <string name="existing_assets_ready">Ready</string>
+    <string name="existing_assets_no_icons">No artwork found</string>
+    <string name="existing_assets_count">%1$d items</string>
+    <string name="existing_assets_selected">%1$d selected</string>
+
+    <!-- ==================== SEARCH (ICON GENERATOR) ==================== -->
+    <string name="icon_generator_title">Search</string>
+    <string name="icon_generator_subtitle">Find artwork for any game</string>
+    <string name="icon_search_hint">Enter game name…</string>
     <string name="icon_platform_label">Platform</string>
-    <string name="icon_generate_button">Generate Icon</string>
-    <string name="icon_save_button">Save to Gallery</string>
+    <string name="icon_artwork_type_label">Artwork Type</string>
+    <string name="icon_generate_button">Search</string>
+    <string name="icon_save_button">Save</string>
+    <string name="icon_results_count">%1$d results</string>
+    <string name="icon_no_results">No artwork found for this search</string>
 
-    <!-- Cover Generator -->
-    <string name="cover_generator_title">Cover Generator</string>
-    <string name="cover_search_hint">Search for cover artwork...</string>
-    <string name="cover_generate_button">Generate Cover</string>
-    <string name="cover_save_button">Save to Gallery</string>
+    <!-- Artwork types (for spinner) -->
+    <string name="artwork_type_icon">Icon (Square)</string>
+    <string name="artwork_type_boxart">Box Art</string>
+    <string name="artwork_type_hero">Hero Banner</string>
+    <string name="artwork_type_logo">Logo</string>
+    <string name="artwork_type_screenshot">Screenshot</string>
 
-    <!-- Custom Image -->
+    <!-- ==================== CUSTOM IMAGE ==================== -->
     <string name="custom_image_title">Custom Image</string>
-    <string name="custom_select_image">Select Image</string>
-    <string name="custom_select_border">Select Border</string>
-    <string name="custom_apply_border">Apply Border</string>
-    <string name="custom_save_button">Save to Gallery</string>
+    <string name="custom_image_subtitle">Apply borders to your own images</string>
+    <string name="custom_select_image">Choose Image</string>
+    <string name="custom_select_border">Choose Border</string>
+    <string name="custom_apply_border">Preview</string>
+    <string name="custom_save_button">Save</string>
+    <string name="custom_step_1">1. Choose an image</string>
+    <string name="custom_step_1_desc">Select any image from your device</string>
+    <string name="custom_step_2">2. Pick a border</string>
+    <string name="custom_step_2_desc">Choose a platform-style border</string>
+    <string name="custom_step_3">3. Save</string>
+    <string name="custom_step_3_desc">Preview and save your artwork</string>
 
-    <!-- Settings -->
+    <!-- ==================== SETTINGS ==================== -->
     <string name="settings_title">Settings</string>
+
+    <!-- Appearance -->
+    <string name="settings_section_appearance">Appearance</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_light">Light</string>
-    <string name="settings_theme_system">System Default</string>
-    <string name="settings_output_quality">Output Quality</string>
-    <string name="settings_about">About</string>
-    <string name="settings_version">Version</string>
+    <string name="settings_theme_system">Follow System</string>
+    <string name="settings_theme_desc">Choose your preferred color scheme</string>
 
-    <!-- Common -->
-    <string name="loading">Loading...</string>
-    <string name="error_network">Network error. Please check your connection.</string>
-    <string name="error_no_results">No results found.</string>
-    <string name="success_saved">Image saved to gallery!</string>
+    <!-- API Keys -->
+    <string name="settings_section_api">Artwork Sources</string>
+    <string name="settings_api_desc">Configure API keys for artwork databases</string>
+    <string name="settings_sgdb_key">SteamGridDB API Key</string>
+    <string name="settings_sgdb_hint">Enter your SteamGridDB API key</string>
+    <string name="settings_sgdb_help">Get a free key at steamgriddb.com</string>
+    <string name="settings_igdb_title">IGDB (Twitch)</string>
+    <string name="settings_igdb_client">Client ID</string>
+    <string name="settings_igdb_secret">Client Secret</string>
+    <string name="settings_igdb_help">Get credentials at api.igdb.com</string>
+    <string name="settings_save_keys">Save Keys</string>
+
+    <!-- Generation -->
+    <string name="settings_section_generation">Generation Options</string>
+    <string name="settings_parallel_downloads">Parallel Downloads</string>
+    <string name="settings_parallel_desc">Higher = faster but uses more bandwidth</string>
+    <string name="settings_interactive">Ask Before Saving</string>
+    <string name="settings_interactive_desc">Show artwork picker for each game during bulk generation</string>
+
+    <!-- Extended Assets (DS Mode) -->
+    <string name="settings_section_extended">Extended Assets</string>
+    <string name="settings_extended_desc">Additional artwork types for iiSU Launcher</string>
+    <string name="settings_ds_mode">Enable Extended Assets</string>
+    <string name="settings_ds_mode_desc">Download heroes, logos, and screenshots alongside icons</string>
+    <string name="settings_heroes">Hero Images</string>
+    <string name="settings_heroes_desc">Wide banner images (1920×620)</string>
+    <string name="settings_heroes_count">Heroes per game</string>
+    <string name="settings_heroes_crop">Crop to 16:9</string>
+    <string name="settings_logos">Game Logos</string>
+    <string name="settings_logos_desc">Transparent title images</string>
+    <string name="settings_screenshots">Screenshots</string>
+    <string name="settings_screenshots_desc">In-game screenshot images</string>
+    <string name="settings_screenshots_count">Screenshots per game</string>
+
+    <!-- Source Priority -->
+    <string name="settings_section_sources">Source Priority</string>
+    <string name="settings_sources_desc">Drag to reorder. Artwork is searched in order from top to bottom.</string>
+    <string name="settings_enable_all">Enable All</string>
+    <string name="settings_disable_all">Disable All</string>
+
+    <!-- Output -->
+    <string name="settings_section_output">Output</string>
+    <string name="settings_format">Image Format</string>
+    <string name="settings_format_png">PNG (Recommended)</string>
+    <string name="settings_format_jpeg">JPEG (Smaller files)</string>
+    <string name="settings_jpeg_quality">JPEG Quality</string>
+    <string name="settings_custom_border">Custom Border</string>
+    <string name="settings_custom_border_desc">Override platform borders with your own image</string>
+    <string name="settings_select_border">Select Image</string>
+    <string name="settings_clear_border">Clear</string>
+    <string name="settings_border_hint">1024×1024 PNG with transparency recommended</string>
+
+    <!-- Advanced -->
+    <string name="settings_section_advanced">Advanced</string>
+    <string name="settings_asset_dir">Asset Directory</string>
+    <string name="settings_asset_dir_desc">Where generated artwork is saved</string>
+    <string name="settings_asset_dir_default">Default (iiSU media folder)</string>
+    <string name="settings_select_dir">Select Folder</string>
+    <string name="settings_reset_dir">Reset</string>
+    <string name="settings_fallback">Fallback Behavior</string>
+    <string name="settings_fallback_platform">Use platform icon when no artwork found</string>
+    <string name="settings_skip_scraping">Skip search (always use platform icon)</string>
+
+    <!-- Background Music -->
+    <string name="settings_section_music">Background Music</string>
+    <string name="settings_music_enabled">Enable Background Music</string>
+    <string name="settings_music_enabled_desc">Play the iiSU OST while browsing</string>
+    <string name="settings_music_volume">Volume</string>
+    <string name="settings_music_credit">Music by Thaddeus Silva</string>
+
+    <!-- About -->
+    <string name="settings_section_about">About</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_about_desc">Give iiSU the visuals it deserves.</string>
+    <string name="settings_music_credits">iiSU OST by Thaddeus Silva</string>
+    <string name="settings_logo_credits">Logo by Caddypillar</string>
+
+    <!-- ==================== COMMON ==================== -->
+    <string name="loading">Loading…</string>
+    <string name="searching">Searching…</string>
+    <string name="saving">Saving…</string>
+    <string name="processing">Processing…</string>
+    <string name="error_network">Connection error. Check your network.</string>
+    <string name="error_no_results">No results found</string>
+    <string name="error_generic">Something went wrong</string>
+    <string name="success_saved">Saved!</string>
     <string name="cancel">Cancel</string>
     <string name="ok">OK</string>
+    <string name="save">Save</string>
+    <string name="refresh">Refresh</string>
+    <string name="select_all">Select All</string>
+    <string name="select_none">Clear Selection</string>
+    <string name="delete">Delete</string>
+    <string name="rescrape">Re-download</string>
+
+    <!-- ==================== WORKSHOP ==================== -->
+    <string name="community_db_title">Workshop</string>
+    <string name="community_db_subtitle">Browse and download community-made icons, covers, and logos</string>
+    <string name="community_db_search_hint">Search games…</string>
+    <string name="community_db_connecting">Connecting to Workshop…</string>
+    <string name="community_db_no_games">No games found</string>
+
+    <!-- ==================== MUSIC (SOUNDBYTES) ==================== -->
+    <string name="music_title">Music</string>
+    <string name="music_subtitle">Download game music for iiSU hover sounds</string>
+    <string name="music_search_hint">Enter game name…</string>
+    <string name="music_gamerip_only">Gamerip Only</string>
+    <string name="music_gamerip">GAMERIP</string>
+    <string name="music_ready">Search for a game to find soundtracks</string>
+    <string name="music_no_results">No albums found</string>
+    <string name="music_empty_title">Search for Soundtracks</string>
+    <string name="music_empty_subtitle">Enter a game name above to browse\navailable music from KHInsider</string>
+    <string name="music_select_game">Select Game</string>
+    <string name="music_select_game_desc">Choose which game to save this track to</string>
+
+    <!-- ==================== ICONS (COMBINED TAB) ==================== -->
+    <string name="icons_tab_search">Search</string>
+    <string name="icons_tab_custom">Custom</string>
+
+    <!-- Accessibility -->
+    <string name="cd_refresh">Refresh</string>
+    <string name="cd_search">Search</string>
+    <string name="cd_close">Close</string>
+    <string name="cd_menu">Menu</string>
+    <string name="cd_preview">Artwork preview</string>
+    <string name="cd_platform_icon">Platform icon</string>
+
+    <!-- Replace Launcher Assets -->
+    <string name="settings_replace_assets">Replace Launcher Assets</string>
+    <string name="settings_replace_assets_desc">Update iiSU Launcher platform covers and borders with new versions from this app</string>
+    <string name="settings_replace_covers">Replace Covers</string>
+    <string name="settings_replace_covers_desc">Update platform cover images</string>
+    <string name="settings_replace_borders">Replace Borders</string>
+    <string name="settings_replace_borders_desc">Update platform border frames</string>
+    <string name="settings_replace_all">Replace All Assets</string>
+    <string name="settings_launcher_not_found">iiSU Launcher assets folder not found</string>
+    <string name="settings_assets_replaced">%1$d assets replaced successfully</string>
+    <string name="settings_no_assets_replaced">No assets were replaced</string>
+
+    <!-- Settings Toast Messages -->
+    <string name="settings_keys_saved">API keys saved</string>
+    <string name="settings_border_set">Custom border set</string>
+    <string name="settings_no_border">No border selected</string>
+    <string name="settings_border_saved">Border saved</string>
+    <string name="settings_border_error">Error saving border</string>
+    <string name="settings_dir_reset">Directory reset to default</string>
+    <string name="settings_dir_set">Directory set</string>
+    <string name="settings_select_type">Please select at least one asset type</string>
+    <string name="settings_replacing">Replacing…</string>
+    <string name="settings_replaced_count">Replaced %1$d covers and %2$d borders</string>
+    <string name="settings_replace_error">Error replacing assets</string>
+    <string name="settings_iisu_not_found">iiSU Launcher directory not found</string>
+
+    <!-- ROM Source Path -->
+    <string name="settings_rom_source">ROM Source Directory</string>
+    <string name="settings_rom_source_desc">Set your ROM directory to create missing game folders in the iiSU assets path. Use this when games are not showing up in the library.</string>
+    <string name="settings_rom_source_hint">e.g. /sdcard/ROMs or /sdcard/Download/roms</string>
+    <string name="settings_rom_source_saved">ROM source path saved</string>
+    <string name="settings_rom_source_cleared">ROM source path cleared</string>
+    <string name="settings_rom_sync_now">Sync Game Folders</string>
+    <string name="settings_rom_sync_running">Syncing…</string>
+    <string name="settings_rom_sync_done">Created %1$d new game folders (%2$d already existed)</string>
+    <string name="settings_rom_sync_no_path">Please enter a ROM source path first</string>
+    <string name="settings_rom_sync_not_found">ROM source directory not found: %1$s</string>
+
+    <!-- ==================== ONBOARDING ==================== -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_get_started">Get Started</string>
+    <string name="onboarding_welcome_title">Welcome to v2.0</string>
+    <string name="onboarding_welcome_subtitle">A major update with a new Workshop, shareable per-game links, and full hero &amp; logo support.</string>
+    <string name="onboarding_workshop_title">Workshop</string>
+    <string name="onboarding_workshop_subtitle">The Community DB is now the Workshop. Browse, download, and apply icons, heroes, and logos from the community library.</string>
+    <string name="onboarding_editor_title">Per-Game Links</string>
+    <string name="onboarding_editor_subtitle">Every game in the Workshop now has its own shareable URL. Send a link to jump straight to any game\'s assets.</string>
+    <string name="onboarding_ready_title">Ready to Go</string>
+    <string name="onboarding_ready_subtitle">Your library and settings are exactly where you left them. Jump in and start creating!</string>
+    <string name="onboarding_icon_desc">Feature icon</string>
+
+    <!-- Android Apps Path -->
+    <string name="settings_android_apps">Android Apps Path</string>
+    <string name="settings_android_apps_desc">Path to Android app assets for editing existing app icons</string>
+    <string name="settings_android_apps_default">Default iiSU Launcher path</string>
+    <string name="settings_android_apps_path_set">Android apps path updated</string>
+    <string name="settings_android_apps_path_reset">Android apps path reset to default</string>
+
 </resources>

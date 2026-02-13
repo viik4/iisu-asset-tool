@@ -3,6 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <!-- Continuum Bold - for single word labels, tab names, buttons, short titles -->
+    <!-- Using native font weight with increased letter spacing for readability -->
     <font
         android:font="@font/continuum_bold"
         android:fontStyle="normal"

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from PIL import Image, ImageQt
+from iisu_image_utils import safe_load_image
 from PySide6.QtCore import Qt, QPoint, QRect, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter, QColor, QWheelEvent, QMouseEvent, QPen
 from PySide6.QtWidgets import (
@@ -27,7 +28,7 @@ def extract_artwork_from_composited(composited_img: Image.Image, border_path: Pa
     """
     try:
         # Load border to get the mask
-        border = Image.open(border_path).convert("RGBA")
+        border = safe_load_image(border_path, "RGBA")
         if border.size != (output_size, output_size):
             border = border.resize((output_size, output_size), Image.LANCZOS)
 
@@ -58,7 +59,7 @@ class InteractivePreviewCanvas(QLabel):
         super().__init__(parent)
         self.setMinimumSize(600, 600)
         self.setAlignment(Qt.AlignCenter)
-        self.setStyleSheet("background: #1a1a1a; border: 2px solid #3a3a3a;")
+        self.setObjectName("preview_canvas")
 
         self.source_img: Optional[Image.Image] = None
         self.border_path: Optional[Path] = None
@@ -219,7 +220,7 @@ class PreviewWindow(QDialog):
 
         # Title
         title = QLabel("Drag to reposition artwork • Mouse wheel for fine adjustment")
-        title.setStyleSheet("font-size: 14px; font-weight: 600; color: #e8e8e8; padding: 8px;")
+        title.setObjectName("label_muted")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
@@ -275,7 +276,7 @@ class PreviewWindow(QDialog):
 
         self.save_btn = QPushButton("Save & Apply")
         self.save_btn.clicked.connect(self.accept)
-        self.save_btn.setStyleSheet("background: #2d5a2d; font-weight: 600;")
+        self.save_btn.setObjectName("btn_success")
         btn_layout.addWidget(self.save_btn)
 
         cancel_btn = QPushButton("Cancel")
@@ -284,26 +285,7 @@ class PreviewWindow(QDialog):
 
         layout.addLayout(btn_layout)
 
-        # Dark theme
-        self.setStyleSheet("""
-            QDialog { background: #121212; color: #e8e8e8; }
-            QLabel { color: #e8e8e8; }
-            QPushButton {
-                background: #2a2a2a; border: 1px solid #3a3a3a;
-                padding: 10px 20px; border-radius: 6px; color: #e8e8e8;
-            }
-            QPushButton:hover { background: #353535; border-color: #4a4a4a; }
-            QSlider::groove:horizontal {
-                background: #2a2a2a; height: 8px; border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #3d7eff; width: 16px; margin: -4px 0; border-radius: 8px;
-            }
-            QSpinBox {
-                background: #1e1e1e; border: 1px solid #2a2a2a;
-                padding: 6px; border-radius: 4px;
-            }
-        """)
+        # Styled via QSS theme (iisu_theme.qss / iisu_theme_light.qss)
 
     def set_preview(self, source_img: Image.Image, border_path: Path,
                     output_size: int = 1024, initial_centering: Tuple[float, float] = (0.5, 0.5)):

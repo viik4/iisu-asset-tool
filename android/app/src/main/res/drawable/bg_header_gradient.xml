@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Header gradient with cyan to magenta accent (iiSU Network style) -->
+<!-- Header gradient with cyan accent (iiSU Network style) -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Dark base -->
     <item>
@@ -12,8 +12,8 @@
         <shape android:shape="rectangle">
             <gradient
                 android:startColor="#00000000"
-                android:centerColor="#1A00D4FF"
-                android:endColor="#3300D4FF"
+                android:centerColor="#1A00DDFF"
+                android:endColor="#3300DDFF"
                 android:angle="270" />
         </shape>
     </item>

@@ -45,6 +45,117 @@ class ArtworkScraper {
     }
 
     /**
+     * Search for games by name using SteamGridDB autocomplete.
+     * Returns a list of matching games that the user can select from.
+     */
+    suspend fun searchGames(query: String): List<GameSearchResult> {
+        return withContext(Dispatchers.IO) {
+            val results = mutableListOf<GameSearchResult>()
+            val apiKey = sgdbApiKey ?: return@withContext results
+
+            try {
+                val searchUrl = "$SGDB_BASE_URL/search/autocomplete/${URLEncoder.encode(query, "UTF-8")}"
+                val response = httpGetWithAuth(searchUrl, apiKey) ?: return@withContext results
+
+                val json = JSONObject(response)
+                if (!json.optBoolean("success", false)) return@withContext results
+
+                val data = json.optJSONArray("data") ?: return@withContext results
+
+                for (i in 0 until data.length()) {
+                    val game = data.getJSONObject(i)
+                    val id = game.getInt("id")
+                    val name = game.getString("name")
+
+                    // Parse release year from release_date (Unix timestamp)
+                    val releaseDate = game.optLong("release_date", 0)
+                    val releaseYear = if (releaseDate > 0) {
+                        try {
+                            java.util.Calendar.getInstance().apply {
+                                timeInMillis = releaseDate * 1000
+                            }.get(java.util.Calendar.YEAR)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    } else null
+
+                    // Parse types array
+                    val typesArray = game.optJSONArray("types")
+                    val types = mutableListOf<String>()
+                    if (typesArray != null) {
+                        for (j in 0 until typesArray.length()) {
+                            types.add(typesArray.getString(j))
+                        }
+                    }
+
+                    results.add(GameSearchResult(id, name, releaseYear, types))
+                }
+
+                Log.d(TAG, "Found ${results.size} games for '$query'")
+            } catch (e: Exception) {
+                Log.w(TAG, "Game search failed: ${e.message}")
+            }
+
+            results
+        }
+    }
+
+    /**
+     * Fetch artwork for a specific game by its SteamGridDB ID.
+     * Returns artwork URLs that can be used to generate icons.
+     */
+    suspend fun fetchArtworkForGame(gameId: Int, type: ArtworkType = ArtworkType.ICON): List<ArtworkResult> {
+        return withContext(Dispatchers.IO) {
+            val results = mutableListOf<ArtworkResult>()
+            val apiKey = sgdbApiKey ?: return@withContext results
+
+            try {
+                // Get artwork based on type
+                val artworkUrl = when (type) {
+                    ArtworkType.ICON, ArtworkType.COVER -> "$SGDB_BASE_URL/grids/game/$gameId?dimensions=1024x1024,512x512&types=static&limit=20"
+                    ArtworkType.HERO -> "$SGDB_BASE_URL/heroes/game/$gameId?types=static&limit=20"
+                    ArtworkType.LOGO -> "$SGDB_BASE_URL/logos/game/$gameId?types=static&limit=20"
+                    ArtworkType.SCREENSHOT -> "$SGDB_BASE_URL/grids/game/$gameId?dimensions=920x430,460x215&types=static&limit=20"
+                    else -> return@withContext results
+                }
+
+                val response = httpGetWithAuth(artworkUrl, apiKey) ?: return@withContext results
+                val json = JSONObject(response)
+                if (!json.optBoolean("success", false)) return@withContext results
+
+                val artworks = json.optJSONArray("data") ?: return@withContext results
+
+                for (i in 0 until artworks.length()) {
+                    val artwork = artworks.getJSONObject(i)
+                    val imageUrl = artwork.getString("url")
+                    val width = artwork.optInt("width", 0)
+                    val height = artwork.optInt("height", 0)
+                    val score = artwork.optInt("score", 0)
+
+                    results.add(ArtworkResult(
+                        url = imageUrl,
+                        title = "SteamGridDB",
+                        platform = Platform.PC, // Will be overridden when applying border
+                        type = type,
+                        width = width,
+                        height = height,
+                        source = "SteamGridDB",
+                        score = score
+                    ))
+                }
+
+                // Sort by score
+                results.sortByDescending { it.score }
+                Log.d(TAG, "Found ${results.size} artwork for game $gameId")
+            } catch (e: Exception) {
+                Log.w(TAG, "Artwork fetch failed: ${e.message}")
+            }
+
+            results
+        }
+    }
+
+    /**
      * Search for game icons from multiple sources.
      * Returns results from SteamGridDB (if API key set), TheGamesDB, and Libretro.
      */
@@ -173,8 +284,8 @@ class ArtworkScraper {
         val data = searchJson.optJSONArray("data") ?: return results
         if (data.length() == 0) return results
 
-        // Find best matching game from results
-        val gameId = findBestMatchingGame(query, data)
+        // Find best matching game from results, considering platform year range
+        val gameId = findBestMatchingGameForPlatform(query, data, platform)
 
         // Get artwork based on type
         val artworkUrl = when (type) {
@@ -447,20 +558,60 @@ class ArtworkScraper {
 
     /**
      * Find the best matching game from SteamGridDB search results.
-     * Uses string similarity to find the closest match to the query.
+     * Uses string similarity and platform year matching for better accuracy.
      */
     private fun findBestMatchingGame(query: String, searchResults: JSONArray): Int {
+        return findBestMatchingGameForPlatform(query, searchResults, null)
+    }
+
+    /**
+     * Find the best matching game from SteamGridDB search results considering platform.
+     * Uses string similarity and release year to prioritize games that match the platform era.
+     */
+    private fun findBestMatchingGameForPlatform(query: String, searchResults: JSONArray, platform: Platform?): Int {
         val normalizedQuery = normalizeGameName(query)
         var bestMatchId = searchResults.getJSONObject(0).getInt("id")
-        var bestScore = 0.0
+        var bestScore = -1000.0
+
+        // Get platform year range if available
+        val platformYearRange = platform?.let { getPlatformYearRange(it) }
 
         for (i in 0 until searchResults.length()) {
             val game = searchResults.getJSONObject(i)
             val gameName = game.optString("name", "")
             val gameId = game.getInt("id")
+            val releaseDate = game.optLong("release_date", 0)
 
             val normalizedName = normalizeGameName(gameName)
-            val score = calculateMatchScore(normalizedQuery, normalizedName)
+            var score = calculateMatchScore(normalizedQuery, normalizedName) * 100  // Scale to 100
+
+            // Bonus/penalty for release year matching
+            if (platformYearRange != null && releaseDate > 0) {
+                val releaseYear = try {
+                    java.util.Calendar.getInstance().apply {
+                        timeInMillis = releaseDate * 1000
+                    }.get(java.util.Calendar.YEAR)
+                } catch (e: Exception) {
+                    0
+                }
+
+                if (releaseYear > 0) {
+                    val (startYear, endYear) = platformYearRange
+                    if (releaseYear in startYear..endYear) {
+                        // Game released during platform's active years - big bonus
+                        score += 50
+                        Log.d(TAG, "Year bonus for '$gameName' ($releaseYear in $startYear-$endYear)")
+                    } else if (releaseYear < startYear) {
+                        // Game released before platform - penalty (can't be the right one)
+                        score -= 30
+                        Log.d(TAG, "Year penalty for '$gameName' ($releaseYear before $startYear)")
+                    } else if (releaseYear > endYear + 3) {
+                        // Game released well after platform - small penalty (could be a remake)
+                        score -= 10
+                        Log.d(TAG, "Late year penalty for '$gameName' ($releaseYear after $endYear)")
+                    }
+                }
+            }
 
             Log.d(TAG, "Match score for '$gameName': $score (normalized: '$normalizedName' vs '$normalizedQuery')")
 
@@ -468,12 +619,76 @@ class ArtworkScraper {
                 bestScore = score
                 bestMatchId = gameId
             }
-
-            // Perfect match - no need to continue
-            if (score >= 1.0) break
         }
 
         return bestMatchId
+    }
+
+    /**
+     * Get the typical year range for games on a platform.
+     * Returns (startYear, endYear) for when games were typically released.
+     */
+    private fun getPlatformYearRange(platform: Platform): Pair<Int, Int> {
+        return when (platform) {
+            // Nintendo
+            Platform.NES -> Pair(1983, 1995)
+            Platform.SNES -> Pair(1990, 1999)
+            Platform.N64, Platform.N64DD -> Pair(1996, 2002)
+            Platform.GAMECUBE -> Pair(2001, 2007)
+            Platform.WII -> Pair(2006, 2013)
+            Platform.WII_U -> Pair(2012, 2017)
+            Platform.SWITCH -> Pair(2017, 2030)
+            Platform.GAMEBOY -> Pair(1989, 1998)
+            Platform.GAMEBOY_COLOR -> Pair(1998, 2003)
+            Platform.GBA -> Pair(2001, 2008)
+            Platform.DS -> Pair(2004, 2013)
+            Platform.THREEDS -> Pair(2011, 2020)
+            Platform.VIRTUAL_BOY -> Pair(1995, 1996)
+
+            // Sony
+            Platform.PS1 -> Pair(1994, 2004)
+            Platform.PS2 -> Pair(2000, 2013)
+            Platform.PS3 -> Pair(2006, 2017)
+            Platform.PS4 -> Pair(2013, 2025)
+            Platform.PS5 -> Pair(2020, 2030)
+            Platform.PSP -> Pair(2004, 2014)
+            Platform.VITA -> Pair(2011, 2019)
+
+            // Microsoft
+            Platform.XBOX -> Pair(2001, 2009)
+            Platform.XBOX360 -> Pair(2005, 2016)
+            Platform.XBOXONE -> Pair(2013, 2025)
+            Platform.XBOXSERIES -> Pair(2020, 2030)
+
+            // Sega
+            Platform.MASTER_SYSTEM -> Pair(1985, 1996)
+            Platform.GENESIS -> Pair(1988, 1997)
+            Platform.SEGA_CD -> Pair(1991, 1996)
+            Platform.SEGA_32X -> Pair(1994, 1996)
+            Platform.SATURN -> Pair(1994, 2000)
+            Platform.DREAMCAST -> Pair(1998, 2002)
+            Platform.GAMEGEAR -> Pair(1990, 1997)
+
+            // Neo Geo
+            Platform.NEOGEO, Platform.NEOGEO_CD -> Pair(1990, 2004)
+            Platform.NEOGEO_POCKET, Platform.NEOGEO_POCKET_COLOR -> Pair(1998, 2001)
+
+            // Atari
+            Platform.ATARI2600 -> Pair(1977, 1992)
+            Platform.ATARI5200 -> Pair(1982, 1984)
+            Platform.ATARI7800 -> Pair(1986, 1992)
+            Platform.ATARI_JAGUAR -> Pair(1993, 1996)
+            Platform.ATARI_LYNX -> Pair(1989, 1995)
+
+            // Other
+            Platform.ARCADE, Platform.MAME, Platform.FBA -> Pair(1978, 2015)
+            Platform.TURBOGRAFX, Platform.TURBOGRAFX_CD -> Pair(1987, 1994)
+            Platform.WONDERSWAN, Platform.WONDERSWAN_COLOR -> Pair(1999, 2003)
+            Platform.COLECOVISION -> Pair(1982, 1985)
+            Platform.INTELLIVISION -> Pair(1979, 1990)
+            Platform.PC, Platform.DOS, Platform.SCUMMVM -> Pair(1980, 2030)
+            Platform.ANDROID -> Pair(2008, 2030)
+        }
     }
 
     /**

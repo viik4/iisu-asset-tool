@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Primary action button gradient (purple to magenta) matching desktop theme -->
+<!-- Primary action button gradient (purple to pink) matching website theme -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/button_hover_end">
     <item>
@@ -8,7 +8,7 @@
                 android:startColor="@color/button_gradient_start"
                 android:endColor="@color/button_gradient_end"
                 android:angle="0" />
-            <corners android:radius="10dp" />
+            <corners android:radius="@dimen/radius_md" />
         </shape>
     </item>
 </ripple>

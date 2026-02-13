@@ -784,18 +784,32 @@ def scan_platform_folder(platform_path: Path, platform_key: str) -> List[Tuple[s
     return games
 
 
-def scan_generic_folder(folder_path: Path, platform_key: Optional[str] = None) -> List[Tuple[str, Path]]:
+def scan_generic_folder(folder_path: Path, platform_key: Optional[str] = None,
+                       deep_search: bool = False) -> List[Tuple[str, Path, Optional[str]]]:
     """
     Scan a generic folder for ROM files/game folders.
 
     Args:
         folder_path: Path to scan
         platform_key: Optional platform key to filter by extension
+        deep_search: If True, recursively scan subdirectories for games
 
     Returns:
-        List of (game_title, game_path) tuples
+        List of (game_title, game_path, relative_path) tuples
+        relative_path is the subdirectory path from folder_path to game's parent (None if direct child)
     """
-    games: List[Tuple[str, Path]] = []
+    if deep_search:
+        return _scan_generic_folder_deep(folder_path, folder_path, platform_key, None)
+    else:
+        return _scan_generic_folder_shallow(folder_path, platform_key)
+
+
+def _scan_generic_folder_shallow(folder_path: Path, platform_key: Optional[str] = None
+                                ) -> List[Tuple[str, Path, Optional[str]]]:
+    """
+    Shallow scan - only looks at immediate contents of folder.
+    """
+    games: List[Tuple[str, Path, Optional[str]]] = []
     seen_titles: Set[str] = set()
 
     if platform_key:
@@ -826,7 +840,7 @@ def scan_generic_folder(folder_path: Path, platform_key: Optional[str] = None) -
                 game_title = clean_game_title(item.name)
                 if game_title and game_title.lower() not in seen_titles:
                     seen_titles.add(game_title.lower())
-                    games.append((game_title, item))
+                    games.append((game_title, item, None))
 
         elif item.is_file():
             # Skip non-ROM files (system files, metadata, etc.)
@@ -836,7 +850,59 @@ def scan_generic_folder(folder_path: Path, platform_key: Optional[str] = None) -
                 game_title = clean_game_title(item.stem)
                 if game_title and game_title.lower() not in seen_titles:
                     seen_titles.add(game_title.lower())
-                    games.append((game_title, item))
+                    games.append((game_title, item, None))
+
+    games.sort(key=lambda x: x[0].lower())
+    return games
+
+
+def _scan_generic_folder_deep(root_path: Path, current_dir: Path,
+                              platform_key: Optional[str] = None,
+                              relative_path: Optional[str] = None
+                              ) -> List[Tuple[str, Path, Optional[str]]]:
+    """
+    Deep scan - recursively searches subdirectories for game folders.
+    A directory is considered a game folder if it has ROMs or has no subdirectories (leaf folder).
+    """
+    games: List[Tuple[str, Path, Optional[str]]] = []
+
+    if platform_key:
+        valid_exts = ROM_EXTENSIONS.get(platform_key, get_all_rom_extensions())
+    else:
+        valid_exts = get_all_rom_extensions()
+
+    if not current_dir.exists() or not current_dir.is_dir():
+        return games
+
+    for item in current_dir.iterdir():
+        if not item.is_dir():
+            continue
+        # Skip system/hidden folders
+        if item.name.startswith('.') or item.name.lower() in NON_ROM_FILES:
+            continue
+        # Skip folders that only contain systeminfo.txt or similar metadata
+        if is_systeminfo_only_folder(item):
+            continue
+
+        # Check if this is a game folder (has ROMs) or a category folder (has subdirs)
+        has_roms = False
+        has_subdirs = False
+        for sub_item in item.iterdir():
+            if sub_item.is_dir() and not sub_item.name.startswith('.'):
+                has_subdirs = True
+            if sub_item.is_file() and not is_non_rom_file(sub_item):
+                if sub_item.suffix.lower() in valid_exts or is_archive_file(sub_item):
+                    has_roms = True
+
+        if has_roms:
+            # This is a game folder - relative_path is the path to its parent
+            game_title = clean_game_title(item.name)
+            if game_title:
+                games.append((game_title, item, relative_path))
+        elif has_subdirs:
+            # Has subdirs without ROMs - recurse into it (it's a category folder)
+            new_relative = item.name if relative_path is None else f"{relative_path}/{item.name}"
+            games.extend(_scan_generic_folder_deep(root_path, item, platform_key, new_relative))
 
     games.sort(key=lambda x: x[0].lower())
     return games

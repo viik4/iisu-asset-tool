@@ -73,6 +73,7 @@ class CustomImageFragment : Fragment() {
         setupBorderGrid()
         setupApplyButton()
         setupSaveButton()
+        updateStepIndicator(1)
     }
 
     private fun setupSelectImageButton() {
@@ -87,13 +88,22 @@ class CustomImageFragment : Fragment() {
         val borders = loadBordersFromAssets()
         val adapter = BorderAdapter(borders) { borderBitmap ->
             selectedBorderBitmap = borderBitmap
-            binding.buttonApply.isEnabled = selectedImageBitmap != null
-            Toast.makeText(context, "Border selected", Toast.LENGTH_SHORT).show()
+            updateStepIndicator(2)
+
+            // Auto-apply if image is already selected
+            val image = selectedImageBitmap
+            if (image != null) {
+                binding.buttonAction?.isEnabled = true
+                applyBorder(image, borderBitmap)
+            } else {
+                binding.buttonAction?.isEnabled = false
+            }
         }
 
         binding.recyclerViewBorders.apply {
             layoutManager = GridLayoutManager(context, 3)
             this.adapter = adapter
+            isNestedScrollingEnabled = false
         }
     }
 
@@ -103,7 +113,7 @@ class CustomImageFragment : Fragment() {
             val assetManager = requireContext().assets
             val borderFiles = assetManager.list("borders") ?: emptyArray()
 
-            for (filename in borderFiles) {
+            for (filename in borderFiles.sorted()) {
                 if (filename.endsWith(".png")) {
                     assetManager.open("borders/$filename").use { inputStream ->
                         BitmapFactory.decodeStream(inputStream)?.let { bitmap ->
@@ -113,7 +123,7 @@ class CustomImageFragment : Fragment() {
                 }
             }
         } catch (e: Exception) {
-            // Handle error loading borders
+            Toast.makeText(context, "Failed to load borders", Toast.LENGTH_SHORT).show()
         }
         return borders
     }
@@ -130,8 +140,17 @@ class CustomImageFragment : Fragment() {
                 bitmap?.let {
                     selectedImageBitmap = it
                     binding.imagePreview.setImageBitmap(it)
-                    binding.buttonApply.isEnabled = selectedBorderBitmap != null
-                    Toast.makeText(context, "Image loaded", Toast.LENGTH_SHORT).show()
+                    binding.layoutEmptyPreview?.visibility = View.GONE
+                    updateStepIndicator(if (selectedBorderBitmap != null) 2 else 1)
+
+                    // Auto-apply if border is already selected
+                    val border = selectedBorderBitmap
+                    if (border != null) {
+                        binding.buttonAction?.isEnabled = true
+                        applyBorder(it, border)
+                    } else {
+                        binding.buttonAction?.isEnabled = false
+                    }
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to load image", Toast.LENGTH_SHORT).show()
@@ -140,7 +159,7 @@ class CustomImageFragment : Fragment() {
     }
 
     private fun setupApplyButton() {
-        binding.buttonApply.setOnClickListener {
+        binding.buttonAction?.setOnClickListener {
             val image = selectedImageBitmap
             val border = selectedBorderBitmap
 
@@ -152,6 +171,7 @@ class CustomImageFragment : Fragment() {
 
     private fun applyBorder(image: Bitmap, border: Bitmap) {
         binding.progressBar.visibility = View.VISIBLE
+        binding.buttonAction?.isEnabled = false
 
         lifecycleScope.launch {
             try {
@@ -161,9 +181,14 @@ class CustomImageFragment : Fragment() {
 
                 processedBitmap = result
                 binding.imagePreview.setImageBitmap(result)
+                binding.layoutEmptyPreview?.visibility = View.GONE
+                binding.buttonSave.visibility = View.VISIBLE
                 binding.buttonSave.isEnabled = true
+                binding.buttonAction?.isEnabled = true
+                updateStepIndicator(3)
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to apply border", Toast.LENGTH_SHORT).show()
+                binding.buttonAction?.isEnabled = true
             } finally {
                 binding.progressBar.visibility = View.GONE
             }
@@ -205,6 +230,37 @@ class CustomImageFragment : Fragment() {
             } catch (e: Exception) {
                 Toast.makeText(context, "Failed to save image", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun updateStepIndicator(activeStep: Int) {
+        val step1Num = binding.textStep1Number ?: return
+        val step2Num = binding.textStep2Number ?: return
+        val step3Num = binding.textStep3Number ?: return
+
+        val inactiveColor = resources.getColor(R.color.theme_text_secondary, null)
+        val activeColor = resources.getColor(R.color.white, null)
+
+        // Reset all to inactive
+        step1Num.setBackgroundResource(R.drawable.bg_step_inactive)
+        step1Num.setTextColor(inactiveColor)
+        step2Num.setBackgroundResource(R.drawable.bg_step_inactive)
+        step2Num.setTextColor(inactiveColor)
+        step3Num.setBackgroundResource(R.drawable.bg_step_inactive)
+        step3Num.setTextColor(inactiveColor)
+
+        // Activate up to the current step
+        if (activeStep >= 1) {
+            step1Num.setBackgroundResource(R.drawable.bg_step_active)
+            step1Num.setTextColor(activeColor)
+        }
+        if (activeStep >= 2) {
+            step2Num.setBackgroundResource(R.drawable.bg_step_active)
+            step2Num.setTextColor(activeColor)
+        }
+        if (activeStep >= 3) {
+            step3Num.setBackgroundResource(R.drawable.bg_step_active)
+            step3Num.setTextColor(activeColor)
         }
     }
 

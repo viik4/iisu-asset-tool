@@ -56,97 +56,104 @@
     </LinearLayout>
 
     <!-- Browser Layout -->
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <LinearLayout
         android:id="@+id/layoutBrowser"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="@dimen/spacing_md">
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_md"
+        android:visibility="gone">
 
         <!-- Title Row with iiSU Page Title style -->
-        <TextView
-            android:id="@+id/textTitle"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/iisu_browser_title"
-            style="@style/IisuTextAppearance.PageTitle"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/btnRefresh" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/textTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/iisu_browser_title"
+                style="@style/IisuTextAppearance.PageTitle" />
+
+            <!-- Refresh Button -->
+            <ImageButton
+                android:id="@+id/btnRefresh"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_refresh"
+                android:contentDescription="Refresh"
+                android:padding="8dp"
+                app:tint="@color/theme_text_secondary" />
+        </LinearLayout>
 
         <!-- Accent line under title -->
         <View
             android:id="@+id/accentLine"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="2dp"
             android:layout_marginTop="8dp"
-            android:background="@drawable/bg_accent_line"
-            app:layout_constraintTop_toBottomOf="@id/textTitle"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            android:background="@drawable/bg_accent_line" />
 
-        <!-- Refresh Button -->
-        <ImageButton
-            android:id="@+id/btnRefresh"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_refresh"
-            android:contentDescription="Refresh"
-            android:padding="8dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:tint="@color/theme_text_secondary" />
-
-        <!-- Platforms Label with iiSU Section Header style -->
-        <TextView
-            android:id="@+id/textPlatformsLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/spacing_md"
-            android:text="@string/iisu_platforms"
-            style="@style/IisuTextAppearance.SectionHeader"
-            app:layout_constraintTop_toBottomOf="@id/accentLine"
-            app:layout_constraintStart_toStartOf="parent" />
-
-        <!-- Platform Grid -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerViewPlatforms"
-            android:layout_width="0dp"
+        <!-- Scrollable content for platforms and Android apps -->
+        <ScrollView
+            android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="@dimen/spacing_sm"
-            android:clipToPadding="false"
-            app:layout_constraintTop_toBottomOf="@id/textPlatformsLabel"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            tools:listitem="@layout/item_platform" />
+            android:layout_weight="1"
+            android:fillViewport="true">
 
-        <!-- Progress Bar -->
-        <com.google.android.material.progressindicator.CircularProgressIndicator
-            android:id="@+id/progressBar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:indeterminate="true"
-            android:visibility="gone"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
-        <!-- Empty State -->
-        <TextView
-            android:id="@+id/textEmptyState"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textSize="@dimen/text_body"
-            android:textColor="@color/theme_text_secondary"
-            android:visibility="gone"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+                <!-- Platforms Section -->
+                <TextView
+                    android:id="@+id/textPlatformsLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:text="@string/iisu_platforms"
+                    style="@style/IisuTextAppearance.SectionHeader" />
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+                <!-- Platform Grid -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerViewPlatforms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false"
+                    tools:listitem="@layout/item_platform" />
+
+                <!-- Empty State -->
+                <TextView
+                    android:id="@+id/textEmptyState"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="@dimen/spacing_xl"
+                    android:textSize="@dimen/text_body"
+                    android:textColor="@color/theme_text_secondary"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+        </ScrollView>
+
+    </LinearLayout>
+
+    <!-- Progress Bar Overlay (outside LinearLayout so it doesn't affect layout flow) -->
+    <com.google.android.material.progressindicator.CircularProgressIndicator
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:indeterminate="true"
+        android:visibility="gone" />
 
 </FrameLayout>

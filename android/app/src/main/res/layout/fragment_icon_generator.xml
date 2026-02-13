@@ -1,173 +1,294 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
+<androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:background="@color/theme_background"
+    android:padding="@dimen/spacing_lg">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <!-- Collapsible Search Section -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardSearch"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="@dimen/spacing_lg">
+        app:cardBackgroundColor="@color/theme_surface"
+        app:cardCornerRadius="@dimen/card_corner_radius"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/theme_border"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Title with iiSU Page Title style -->
-        <TextView
-            android:id="@+id/textTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/icon_generator_title"
-            style="@style/IisuTextAppearance.PageTitle" />
-
-        <!-- Accent line under title -->
-        <View
-            android:id="@+id/accentLine"
-            android:layout_width="match_parent"
-            android:layout_height="2dp"
-            android:layout_marginTop="@dimen/spacing_sm"
-            android:layout_marginBottom="@dimen/spacing_lg"
-            android:background="@drawable/bg_accent_line" />
-
-        <!-- Search Input Card -->
-        <com.google.android.material.card.MaterialCardView
+        <LinearLayout
+            android:id="@+id/layoutSearchContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/theme_surface"
-            app:cardCornerRadius="@dimen/card_corner_radius"
-            app:cardElevation="@dimen/card_elevation"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/theme_border_color">
+            android:orientation="vertical"
+            android:padding="@dimen/spacing_md">
 
+            <!-- Header row with title and collapse button -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_lg">
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/textTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/icon_generator_title"
+                    style="@style/IisuTextAppearance.PageTitle" />
+
+                <ImageButton
+                    android:id="@+id/btnCollapseSearch"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_expand_less"
+                    android:contentDescription="Collapse search"
+                    android:visibility="gone"
+                    app:tint="@color/theme_text_secondary" />
+
+            </LinearLayout>
+
+            <!-- Expandable content -->
+            <LinearLayout
+                android:id="@+id/layoutExpandableContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
                 <!-- Search Input -->
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/textInputLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                    android:hint="@string/icon_search_hint">
+                    android:hint="@string/icon_search_hint"
+                    app:endIconMode="custom"
+                    app:endIconDrawable="@drawable/ic_search"
+                    app:endIconTint="@color/theme_accent">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/editTextSearch"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:minHeight="@dimen/button_min_height"
                         android:inputType="text"
                         android:imeOptions="actionSearch"
-                        android:textSize="@dimen/text_body" />
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/theme_text_primary" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- Platform Selector -->
-                <TextView
-                    android:id="@+id/labelPlatform"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/spacing_lg"
-                    android:text="@string/icon_platform_label"
-                    style="@style/IisuTextAppearance.SectionHeader" />
-
-                <Spinner
-                    android:id="@+id/spinnerPlatform"
+                <!-- Filters Row -->
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/button_min_height"
-                    android:layout_marginTop="@dimen/spacing_sm"
-                    android:background="@drawable/spinner_background"
-                    android:padding="@dimen/spacing_md"
-                    android:popupBackground="@color/theme_surface" />
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:baselineAligned="false">
+
+                    <!-- Platform -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/layoutPlatform"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="@dimen/spacing_sm"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        android:hint="@string/icon_platform_label">
+
+                        <AutoCompleteTextView
+                            android:id="@+id/spinnerPlatform"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="none"
+                            android:textSize="14sp"
+                            android:textColor="@color/theme_text_primary" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- Artwork Type -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/layoutArtworkType"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/spacing_sm"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        android:hint="@string/icon_artwork_type_label">
+
+                        <AutoCompleteTextView
+                            android:id="@+id/spinnerArtworkType"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="none"
+                            android:textSize="14sp"
+                            android:textColor="@color/theme_text_primary" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                </LinearLayout>
 
                 <!-- Search Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/buttonSearch"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/button_min_height"
-                    android:layout_marginTop="@dimen/spacing_lg"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_md"
                     android:text="@string/icon_generate_button"
-                    android:textSize="@dimen/text_body"
+                    android:minHeight="48dp"
                     style="@style/IisuPrimaryButton"
                     app:backgroundTint="@null"
-                    app:cornerRadius="@dimen/card_corner_radius" />
+                    app:cornerRadius="@dimen/card_corner_radius"
+                    app:icon="@drawable/ic_search"
+                    app:iconGravity="textStart" />
 
             </LinearLayout>
 
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Progress and Status -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="@dimen/spacing_lg">
-
-            <com.google.android.material.progressindicator.CircularProgressIndicator
-                android:id="@+id/progressBar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:indeterminate="true"
-                android:visibility="gone"
-                app:indicatorSize="24dp"
-                app:trackThickness="3dp" />
-
-            <TextView
-                android:id="@+id/textResultCount"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/spacing_sm"
-                android:textSize="@dimen/text_caption"
-                android:fontFamily="@font/calsans"
-                android:textColor="@color/theme_text_secondary"
-                tools:text="5 results found" />
-
         </LinearLayout>
 
-        <!-- Preview Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardPreview"
-            android:layout_width="match_parent"
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Status Row -->
+    <LinearLayout
+        android:id="@+id/layoutStatus"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toBottomOf="@id/cardSearch"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/spacing_md"
-            app:cardBackgroundColor="@color/theme_surface"
-            app:cardCornerRadius="@dimen/card_corner_radius"
-            app:cardElevation="@dimen/card_elevation"
-            app:strokeWidth="2dp"
-            app:strokeColor="@color/theme_border_color">
+            android:indeterminate="true"
+            android:visibility="gone"
+            app:indicatorSize="20dp"
+            app:trackThickness="2dp"
+            app:indicatorColor="@color/theme_accent" />
+
+        <TextView
+            android:id="@+id/textResultCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:textSize="13sp"
+            android:textColor="@color/theme_text_secondary"
+            tools:text="5 results" />
+
+        <!-- Expand button when collapsed -->
+        <ImageButton
+            android:id="@+id/btnExpandSearch"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_expand_more"
+            android:contentDescription="Expand search"
+            android:visibility="gone"
+            app:tint="@color/theme_accent" />
+
+    </LinearLayout>
+
+    <!-- Results List - 2 column vertical grid for artwork options -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerSearchResults"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:clipToPadding="false"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/layoutStatus"
+        app:layout_constraintBottom_toTopOf="@id/cardPreview"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:listitem="@layout/item_artwork_option" />
+
+    <!-- Compact Preview Card -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardPreview"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_sm"
+        app:cardBackgroundColor="@color/theme_surface"
+        app:cardCornerRadius="@dimen/card_corner_radius"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="@color/theme_border"
+        app:layout_constraintBottom_toTopOf="@id/buttonSave"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="120dp">
 
             <ImageView
                 android:id="@+id/imagePreview"
                 android:layout_width="match_parent"
-                android:layout_height="280dp"
+                android:layout_height="match_parent"
                 android:scaleType="fitCenter"
-                android:padding="@dimen/spacing_md"
-                android:background="@color/theme_card_background"
-                android:contentDescription="@string/icon_generator_title"
+                android:padding="@dimen/spacing_sm"
+                android:contentDescription="@string/cd_preview"
                 tools:src="@android:drawable/ic_menu_gallery" />
 
-        </com.google.android.material.card.MaterialCardView>
+            <!-- Empty state -->
+            <LinearLayout
+                android:id="@+id/layoutEmptyPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical">
 
-        <!-- Save Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/buttonSave"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/button_min_height"
-            android:layout_marginTop="@dimen/spacing_lg"
-            android:layout_marginBottom="@dimen/spacing_lg"
-            android:text="@string/icon_save_button"
-            android:textSize="@dimen/text_body"
-            android:enabled="false"
-            style="@style/IisuSecondaryButton"
-            app:backgroundTint="@null"
-            app:icon="@drawable/ic_save"
-            app:iconGravity="textStart"
-            app:cornerRadius="@dimen/card_corner_radius" />
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_image_placeholder"
+                    android:alpha="0.4"
+                    app:tint="@color/theme_text_secondary" />
 
-    </LinearLayout>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Select artwork above"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_hint" />
 
-</ScrollView>
+            </LinearLayout>
+
+        </FrameLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Save Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonSave"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:layout_marginBottom="@dimen/spacing_sm"
+        android:text="@string/icon_save_button"
+        android:minHeight="48dp"
+        android:enabled="false"
+        style="@style/IisuSecondaryButton"
+        app:backgroundTint="@null"
+        app:icon="@drawable/ic_save"
+        app:iconGravity="textStart"
+        app:cornerRadius="@dimen/card_corner_radius"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

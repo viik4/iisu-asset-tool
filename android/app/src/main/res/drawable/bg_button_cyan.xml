@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Secondary action button gradient (cyan to green) matching desktop preview button -->
+<!-- Cyan action button gradient matching website primary button -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="@color/button_preview_end">
+    android:color="@color/iisu_cyan_light">
     <item>
         <shape android:shape="rectangle">
             <gradient
-                android:startColor="@color/button_preview_start"
-                android:endColor="@color/button_preview_end"
+                android:startColor="@color/button_secondary_start"
+                android:endColor="@color/button_secondary_end"
                 android:angle="0" />
-            <corners android:radius="10dp" />
+            <corners android:radius="@dimen/radius_md" />
         </shape>
     </item>
 </ripple>

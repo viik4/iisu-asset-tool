@@ -94,6 +94,125 @@ object IisuDirectoryManager {
      */
     fun getCustomRomPath(): File? = customRomPath
 
+    // User-configured ROM source path (separate from iiSU root — where ROMs actually live)
+    private var customRomSourcePath: File? = null
+
+    /**
+     * Set a ROM source directory path.
+     * This is the directory where the user's ROMs are stored, which may be
+     * different from the iiSU assets directory. Used to create matching
+     * asset folders when iiSU doesn't create them automatically.
+     */
+    fun setRomSourcePath(path: File?) {
+        customRomSourcePath = path
+        Log.d(TAG, "ROM source path set to: ${path?.absolutePath ?: "null"}")
+    }
+
+    /**
+     * Get the current ROM source path, if set.
+     */
+    fun getRomSourcePath(): File? = customRomSourcePath
+
+    // Common ROM file extensions
+    private val ROM_EXTENSIONS = setOf(
+        "nes", "sfc", "smc", "z64", "n64", "v64", "nds", "3ds",
+        "gba", "gbc", "gb", "iso", "bin", "cue", "chd", "pbp",
+        "nsp", "xci", "gcm", "wbfs", "wad", "rvz", "ciso",
+        "zip", "7z", "rar", "nca", "cia", "dsi", "xiso",
+        "gcz", "tgc", "dol", "elf", "rpx", "wux",
+        "pce", "sgx", "cdi", "gdi", "ecm", "mds", "mdf",
+        "gen", "md", "smd", "32x", "sms", "gg",
+        "a26", "a52", "a78", "lnx", "jag", "j64",
+        "vec", "col", "int", "sg", "sc", "ws", "wsc",
+        "ngp", "ngc", "psx"
+    )
+
+    /**
+     * Check if a file looks like a ROM file based on its extension.
+     */
+    private fun isRomFile(file: File): Boolean {
+        return file.extension.lowercase() in ROM_EXTENSIONS
+    }
+
+    /**
+     * Clean a ROM filename into a display-friendly game title.
+     * Strips region tags, revision info, and common dump markers.
+     */
+    private fun cleanGameTitle(name: String): String {
+        return name
+            .replace(Regex("\\s*\\([^)]*\\)\\s*"), " ")  // Remove (USA), (Rev 1), etc.
+            .replace(Regex("\\s*\\[[^\\]]*\\]\\s*"), " ")  // Remove [!], [b1], etc.
+            .replace("_", " ")
+            .trim()
+            .replace(Regex("\\s+"), " ")  // Collapse multiple spaces
+    }
+
+    /**
+     * Scan ROM source directory and create matching game folders in the iiSU assets path.
+     * This is used when iiSU doesn't create game folders automatically (e.g., iiSU 0.0.5.0+).
+     *
+     * Only runs when explicitly triggered by the user. Does NOT modify existing folders.
+     *
+     * @param platform Optional platform to sync. If null, syncs all platforms found.
+     * @return Pair of (foldersCreated, foldersAlreadyExisted)
+     */
+    fun syncGameFoldersFromRomSource(platform: String? = null): Pair<Int, Int> {
+        val romSource = customRomSourcePath
+        if (romSource == null || !romSource.exists()) {
+            Log.d(TAG, "ROM source path not set or doesn't exist")
+            return Pair(0, 0)
+        }
+
+        val iisuRoot = getIisuRoot()
+        var created = 0
+        var alreadyExisted = 0
+
+        // Determine which platforms to scan
+        val platformsToScan = if (platform != null) {
+            listOf(platform)
+        } else {
+            romSource.listFiles()
+                ?.filter { it.isDirectory && !it.name.startsWith(".") && looksLikePlatformFolder(it.name) }
+                ?.map { it.name }
+                ?: emptyList()
+        }
+
+        for (platformName in platformsToScan) {
+            val romPlatformDir = File(romSource, platformName)
+            if (!romPlatformDir.exists() || !romPlatformDir.isDirectory) continue
+
+            val assetPlatformDir = File(iisuRoot, platformName)
+
+            // Scan ROM platform folder for games
+            romPlatformDir.listFiles()?.forEach { item ->
+                if (item.name.startsWith(".")) return@forEach
+
+                val gameName = when {
+                    item.isDirectory -> item.name
+                    item.isFile && isRomFile(item) -> cleanGameTitle(item.nameWithoutExtension)
+                    else -> return@forEach
+                }
+
+                if (gameName.isBlank()) return@forEach
+
+                val assetFolder = File(assetPlatformDir, gameName)
+                if (assetFolder.exists()) {
+                    alreadyExisted++
+                } else {
+                    if (assetFolder.mkdirs()) {
+                        created++
+                        Log.d(TAG, "Created asset folder: ${assetFolder.absolutePath}")
+                    } else {
+                        Log.w(TAG, "Failed to create asset folder: ${assetFolder.absolutePath}")
+                    }
+                }
+            }
+        }
+
+        Log.d(TAG, "ROM folder sync complete: $created created, $alreadyExisted already existed")
+        return Pair(created, alreadyExisted)
+    }
+
     /**
      * Get the root iiSU directory by searching known locations.
      *
@@ -302,10 +421,130 @@ object IisuDirectoryManager {
     }
 
     /**
-     * Get the platforms directory containing platform assets.
+     * Get the platforms directory containing platform assets (under ROMs root).
      */
     fun getPlatformsDir(): File {
         return File(getIisuRoot(), PLATFORMS_DIR)
+    }
+
+    /**
+     * Get the iiSU Launcher platform images directory.
+     * This is at: /storage/emulated/0/Android/media/com.iisulauncher/iiSULauncher/assets/platforms
+     *
+     * Contains console images like:
+     * - {platform}.png         — Main platform icon
+     * - {platform}_list.png    — List view icon
+     * - {platform}_list_selected.png — Selected state
+     * - {platform}_title.png   — Title/banner image
+     */
+    fun getLauncherPlatformImagesDir(): File {
+        return File(
+            Environment.getExternalStorageDirectory(),
+            "Android/media/com.iisulauncher/iiSULauncher/assets/platforms"
+        )
+    }
+
+    /**
+     * Data class representing a platform's image set in the launcher.
+     */
+    data class PlatformImageSet(
+        val platformId: String,
+        val displayName: String,
+        val icon: File?,           // {platform}.png
+        val listIcon: File?,       // {platform}_list.png
+        val listSelected: File?,   // {platform}_list_selected.png
+        val title: File?           // {platform}_title.png
+    ) {
+        val hasAnyImage: Boolean get() = icon != null || listIcon != null || listSelected != null || title != null
+        val imageCount: Int get() = listOfNotNull(icon, listIcon, listSelected, title).size
+    }
+
+    /**
+     * Scan the launcher platform images directory and return all platform image sets.
+     */
+    fun getLauncherPlatformImages(): List<PlatformImageSet> {
+        val dir = getLauncherPlatformImagesDir()
+        if (!dir.exists() || !dir.isDirectory) return emptyList()
+
+        val files = dir.listFiles()?.filter { it.isFile && it.extension.lowercase() in listOf("png", "jpg", "jpeg", "webp") }
+            ?: return emptyList()
+
+        // Group files by platform ID (everything before the first underscore suffix)
+        val platformIds = mutableSetOf<String>()
+        for (file in files) {
+            val name = file.nameWithoutExtension
+            // Extract platform ID: strip _list, _list_selected, _title suffixes
+            val id = when {
+                name.endsWith("_list_selected") -> name.removeSuffix("_list_selected")
+                name.endsWith("_list") -> name.removeSuffix("_list")
+                name.endsWith("_title") -> name.removeSuffix("_title")
+                else -> name
+            }
+            platformIds.add(id)
+        }
+
+        return platformIds.sorted().map { id ->
+            fun findFile(suffix: String): File? {
+                return files.find { it.nameWithoutExtension == "$id$suffix" }
+                    ?: files.find { it.nameWithoutExtension.equals("$id$suffix", ignoreCase = true) }
+            }
+
+            PlatformImageSet(
+                platformId = id,
+                displayName = formatPlatformDisplayName(id),
+                icon = findFile(""),
+                listIcon = findFile("_list"),
+                listSelected = findFile("_list_selected"),
+                title = findFile("_title")
+            )
+        }
+    }
+
+    /**
+     * Format a platform folder/file name into a nice display name.
+     */
+    private fun formatPlatformDisplayName(id: String): String {
+        val normalized = id.lowercase().replace("_", "").replace("-", "").replace(" ", "")
+        return when (normalized) {
+            "nes" -> "NES"
+            "snes", "sfc" -> "SNES"
+            "n64" -> "N64"
+            "gc", "gamecube" -> "GameCube"
+            "wii" -> "Wii"
+            "wiiu" -> "Wii U"
+            "switch" -> "Switch"
+            "gb", "gameboy" -> "Game Boy"
+            "gbc", "gameboycolor" -> "Game Boy Color"
+            "gba", "gameboyadvance" -> "GBA"
+            "nds", "nintendods" -> "Nintendo DS"
+            "n3ds", "3ds", "nintendo3ds" -> "3DS"
+            "psx", "ps1", "playstation" -> "PlayStation"
+            "ps2" -> "PS2"
+            "ps3" -> "PS3"
+            "ps4" -> "PS4"
+            "psp" -> "PSP"
+            "psvita", "vita" -> "PS Vita"
+            "megadrive", "genesis" -> "Genesis"
+            "saturn" -> "Saturn"
+            "dreamcast" -> "Dreamcast"
+            "gamegear", "gg" -> "Game Gear"
+            "mastersystem", "sms" -> "Master System"
+            "xbox" -> "Xbox"
+            "xbox360" -> "Xbox 360"
+            "android" -> "Android"
+            "arcade", "mame" -> "Arcade"
+            "neogeo" -> "Neo Geo"
+            "ngp", "neogeopocket" -> "Neo Geo Pocket"
+            "ngpc", "neogeopocketcolor" -> "Neo Geo Pocket Color"
+            "pcengine", "tg16", "turbografx" -> "TurboGrafx-16"
+            "pc" -> "PC"
+            "dos" -> "DOS"
+            "steam" -> "Steam"
+            "eshop" -> "eShop"
+            else -> id.replace("_", " ").split(" ").joinToString(" ") { word ->
+                word.replaceFirstChar { it.uppercase() }
+            }
+        }
     }
 
     /**
@@ -458,10 +697,21 @@ object IisuDirectoryManager {
      * - hero: hero_1.png
      * - logo: title.png
      */
-    fun getGamesForPlatform(platform: String): List<GameInfo> {
+    fun getGamesForPlatform(platform: String, deepSearch: Boolean = false): List<GameInfo> {
         val platformDir = getPlatformDir(platform)
         if (!platformDir.exists()) return emptyList()
 
+        return if (deepSearch) {
+            scanGamesDeep(platformDir, platformDir, null)
+        } else {
+            scanGamesShallow(platformDir)
+        }
+    }
+
+    /**
+     * Shallow scan - only looks at immediate subdirectories of platform folder.
+     */
+    private fun scanGamesShallow(platformDir: File): List<GameInfo> {
         return platformDir.listFiles()
             ?.filter { file ->
                 file.isDirectory &&
@@ -469,37 +719,92 @@ object IisuDirectoryManager {
                 file.name != MEDIA_DIR &&
                 file.name != "cache"
             }
-            ?.map { gameFolder ->
-                // Check for icon: icon.png (app) or icon.jpg (external)
-                val iconFile = findAssetFile(gameFolder, "icon")
-
-                // Check for screenshot/slides: slide_1.png, etc. (external) or screenshot.png (app)
-                val screenshotFile = findAssetFile(gameFolder, "screenshot")
-                    ?: findSlideFile(gameFolder)
-
-                // Check for hero: hero_1.png (app) or hero_1.jpg, hero_2.jpg, etc. (external)
-                val heroFile = findAssetFile(gameFolder, "hero")
-                    ?: findHeroFile(gameFolder)
-
-                // Check for logo: title.png (app) or title.jpg (external)
-                val logoFile = findAssetFile(gameFolder, "logo")
-                    ?: findAssetFile(gameFolder, "title")
-
-                GameInfo(
-                    name = gameFolder.name,
-                    folder = gameFolder,
-                    hasIcon = iconFile != null,
-                    hasScreenshot = screenshotFile != null,
-                    hasHero = heroFile != null,
-                    hasLogo = logoFile != null,
-                    iconFile = iconFile,
-                    screenshotFile = screenshotFile,
-                    heroFile = heroFile,
-                    logoFile = logoFile
-                )
-            }
+            ?.map { gameFolder -> createGameInfo(gameFolder, null) }
             ?.sortedBy { it.name.lowercase() }
             ?: emptyList()
+    }
+
+    /**
+     * Deep scan - recursively searches subdirectories for game folders.
+     * A directory is considered a game folder if it has assets OR has no subdirectories (leaf folder).
+     */
+    private fun scanGamesDeep(platformDir: File, currentDir: File, relativePath: String?): List<GameInfo> {
+        val games = mutableListOf<GameInfo>()
+
+        currentDir.listFiles()?.forEach { file ->
+            if (!file.isDirectory || file.name.startsWith(".") ||
+                file.name == MEDIA_DIR || file.name == "cache") {
+                return@forEach
+            }
+
+            // Check if this directory is a game (has assets or is a leaf directory)
+            val hasAssets = hasGameAssets(file)
+            val hasSubDirs = file.listFiles()?.any {
+                it.isDirectory && !it.name.startsWith(".")
+            } ?: false
+
+            if (hasAssets || !hasSubDirs) {
+                // This is a game folder - relativePath is the path to its parent
+                games.add(createGameInfo(file, relativePath))
+            } else {
+                // Has subdirs without assets - recurse into it
+                val newRelativePath = if (relativePath != null) {
+                    "$relativePath/${file.name}"
+                } else {
+                    file.name
+                }
+                games.addAll(scanGamesDeep(platformDir, file, newRelativePath))
+            }
+        }
+
+        return games.sortedBy { it.name.lowercase() }
+    }
+
+    /**
+     * Check if a folder has any game assets (icon, hero, logo, etc.)
+     */
+    private fun hasGameAssets(folder: File): Boolean {
+        return findAssetFile(folder, "icon") != null ||
+               findAssetFile(folder, "hero") != null ||
+               findHeroFile(folder) != null ||
+               findAssetFile(folder, "title") != null ||
+               findAssetFile(folder, "logo") != null ||
+               findAssetFile(folder, "screenshot") != null ||
+               findSlideFile(folder) != null
+    }
+
+    /**
+     * Create a GameInfo object from a game folder.
+     */
+    private fun createGameInfo(gameFolder: File, relativePath: String?): GameInfo {
+        // Check for icon: icon.png (app) or icon.jpg (external)
+        val iconFile = findAssetFile(gameFolder, "icon")
+
+        // Check for screenshot/slides: slide_1.png, etc. (external) or screenshot.png (app)
+        val screenshotFile = findAssetFile(gameFolder, "screenshot")
+            ?: findSlideFile(gameFolder)
+
+        // Check for hero: hero_1.png (app) or hero_1.jpg, hero_2.jpg, etc. (external)
+        val heroFile = findAssetFile(gameFolder, "hero")
+            ?: findHeroFile(gameFolder)
+
+        // Check for logo: title.png (app) or title.jpg (external)
+        val logoFile = findAssetFile(gameFolder, "logo")
+            ?: findAssetFile(gameFolder, "title")
+
+        return GameInfo(
+            name = gameFolder.name,
+            folder = gameFolder,
+            hasIcon = iconFile != null,
+            hasScreenshot = screenshotFile != null,
+            hasHero = heroFile != null,
+            hasLogo = logoFile != null,
+            iconFile = iconFile,
+            screenshotFile = screenshotFile,
+            heroFile = heroFile,
+            logoFile = logoFile,
+            relativePath = relativePath
+        )
     }
 
     /**
@@ -575,6 +880,84 @@ object IisuDirectoryManager {
     fun getRomsMissingIcons(platform: String): List<File> {
         return getGamesMissingIcons(platform).map { it.folder }
     }
+
+    // ==================== Android Apps Functions ====================
+
+    // User-configured Android apps path
+    private var customAndroidAppsPath: File? = null
+
+    /**
+     * Set a custom Android apps folder path.
+     */
+    fun setAndroidAppsPath(path: File?) {
+        customAndroidAppsPath = path
+        Log.d(TAG, "Android apps path set to: ${path?.absolutePath ?: "null"}")
+    }
+
+    /**
+     * Get the Android apps directory.
+     * Returns custom path if set, otherwise uses default iiSU Launcher path.
+     */
+    fun getAndroidAppsDir(): File {
+        customAndroidAppsPath?.let { return it }
+
+        // Default iiSU Launcher path
+        val externalStorage = Environment.getExternalStorageDirectory()
+        return File(externalStorage, "Android/media/com.iisulauncher/iiSULauncher/assets/media/android/apps")
+    }
+
+    /**
+     * Get list of Android apps that have assets.
+     * Each app is in its own folder named by package name.
+     *
+     * Example structure:
+     * android/apps/
+     * ├── com.example.app1/
+     * │   └── icon.png
+     * ├── com.example.app2/
+     * │   └── icon.jpg
+     */
+    fun getAndroidApps(): List<AndroidAppInfo> {
+        val appsDir = getAndroidAppsDir()
+        if (!appsDir.exists() || !appsDir.isDirectory) {
+            Log.w(TAG, "Android apps directory does not exist: ${appsDir.absolutePath}")
+            return emptyList()
+        }
+
+        return appsDir.listFiles()
+            ?.filter { it.isDirectory && !it.name.startsWith(".") }
+            ?.map { appFolder ->
+                val iconFile = findAssetFile(appFolder, "icon")
+                val heroFile = findAssetFile(appFolder, "hero_1")
+                val logoFile = findAssetFile(appFolder, "title")
+                AndroidAppInfo(
+                    packageName = appFolder.name,
+                    folder = appFolder,
+                    hasIcon = iconFile != null,
+                    hasHero = heroFile != null,
+                    hasLogo = logoFile != null,
+                    iconFile = iconFile,
+                    heroFile = heroFile,
+                    logoFile = logoFile
+                )
+            }
+            ?.sortedBy { it.packageName.lowercase() }
+            ?: emptyList()
+    }
+
+    /**
+     * Get Android apps that are missing icons.
+     */
+    fun getAndroidAppsMissingIcons(): List<AndroidAppInfo> {
+        return getAndroidApps().filter { !it.hasIcon }
+    }
+
+    /**
+     * Get Android apps that have icons.
+     */
+    fun getAndroidAppsWithIcons(): List<AndroidAppInfo> {
+        return getAndroidApps().filter { it.hasIcon }
+    }
 }
 
 /**
@@ -602,7 +985,8 @@ data class GameInfo(
     val iconFile: File? = null,       // The actual icon file (png or jpg)
     val screenshotFile: File? = null, // The actual screenshot file (png or jpg)
     val heroFile: File? = null,       // The actual hero file (png or jpg)
-    val logoFile: File? = null        // The actual logo file (png or jpg)
+    val logoFile: File? = null,       // The actual logo file (png or jpg)
+    val relativePath: String? = null  // Path from platform dir to game's parent folder (for deep search)
 ) {
     /**
      * Whether the icon was generated by this app.
@@ -654,4 +1038,52 @@ data class GameInfo(
     fun getSearchVariants(): List<String> {
         return TitleCleaner.getSearchVariants(name)
     }
+}
+
+/**
+ * Information about an Android app in iiSU.
+ * Each app has its own folder named by package name with assets inside.
+ *
+ * Asset naming:
+ * - icon: icon.png or icon.jpg
+ * - hero: hero_1.png or hero_1.jpg
+ * - logo: title.png or title.jpg
+ */
+data class AndroidAppInfo(
+    val packageName: String,    // Package name (folder name)
+    val folder: File,           // The app's folder
+    val hasIcon: Boolean,       // Whether icon file exists
+    val hasHero: Boolean = false,     // Whether hero file exists
+    val hasLogo: Boolean = false,     // Whether logo file exists
+    val iconFile: File? = null,  // The actual icon file (png or jpg)
+    val heroFile: File? = null,  // The actual hero file (png or jpg)
+    val logoFile: File? = null   // The actual logo file (png or jpg)
+) {
+    /**
+     * Display name - derived from package name.
+     * Converts com.example.appname to "App Name"
+     */
+    val displayName: String by lazy {
+        // Get last part of package name and convert to title case
+        val appName = packageName.substringAfterLast(".")
+        appName.replace(Regex("([a-z])([A-Z])"), "$1 $2")
+            .replace("_", " ")
+            .split(" ")
+            .joinToString(" ") { word ->
+                word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            }
+    }
+
+    /**
+     * Normalized name for searching APIs.
+     */
+    val searchName: String by lazy {
+        displayName.lowercase()
+    }
+
+    /**
+     * Total count of missing assets
+     */
+    val missingCount: Int
+        get() = listOf(!hasIcon, !hasHero, !hasLogo).count { it }
 }

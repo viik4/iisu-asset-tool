@@ -5,9 +5,14 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.iisu.assettool.R
 import com.iisu.assettool.databinding.FragmentGameListBinding
@@ -26,8 +31,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import android.app.Activity
+import android.graphics.Bitmap
+import android.net.Uri
+import android.util.Log
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.FileOutputStream
 
 /**
  * Fragment for displaying and managing games within a platform.
@@ -45,10 +57,56 @@ class GameListFragment : Fragment() {
     private var platformDisplayName: String = ""
     private var games: List<GameInfo> = emptyList()
     private var isScraping: Boolean = false
+    private var isGridView: Boolean = false  // Track current view mode
 
     // Track active scraping job for cancellation
     private var scrapingJob: Job? = null
     private var scrapingCancelled = AtomicBoolean(false)
+
+    // Track pending crop operation
+    private var pendingCropGame: GameInfo? = null
+    private var currentPickerDialog: ArtworkPickerDialog? = null
+
+    // Track pending upload operation
+    private var pendingUploadGame: GameInfo? = null
+    private var pendingUploadAssetType: AssetType? = null
+
+    // Track pending soundbyte operation
+    private var pendingSoundbtyeGame: GameInfo? = null
+
+    private enum class AssetType { ICON, HERO, LOGO }
+
+    // Activity result launchers for image upload
+    private val pickIconLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { handlePickedImage(it, AssetType.ICON) } }
+
+    private val pickHeroLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { handlePickedImage(it, AssetType.HERO) } }
+
+    private val pickLogoLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { handlePickedImage(it, AssetType.LOGO) } }
+
+    // Activity result launcher for soundbyte file picker
+    private val pickSoundbyteLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri -> uri?.let { handlePickedSoundbyte(it) } }
+
+    // Activity result launcher for crop activity
+    private val cropLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val croppedPath = result.data?.getStringExtra(ImageCropActivity.RESULT_CROPPED_PATH)
+            if (croppedPath != null && pendingCropGame != null) {
+                // Save the cropped image as the icon with border
+                viewLifecycleOwner.lifecycleScope.launch {
+                    saveCroppedIconWithBorder(pendingCropGame!!, croppedPath)
+                }
+            }
+        }
+        pendingCropGame = null
+    }
 
     companion object {
         private const val ARG_PLATFORM_NAME = "platform_name"
@@ -148,6 +206,706 @@ class GameListFragment : Fragment() {
         binding.btnCancelScraping.setOnClickListener {
             cancelScraping()
         }
+
+        // View mode toggle button
+        binding.btnToggleViewMode.setOnClickListener {
+            toggleViewMode()
+        }
+    }
+
+    /**
+     * Toggle between list and grid view modes
+     */
+    private fun toggleViewMode() {
+        isGridView = !isGridView
+
+        // Update button icon
+        binding.btnToggleViewMode.setImageResource(
+            if (isGridView) R.drawable.ic_view_list else R.drawable.ic_view_grid
+        )
+
+        // Update adapter view mode
+        gameAdapter.viewMode = if (isGridView) GameAdapter.VIEW_TYPE_GRID else GameAdapter.VIEW_TYPE_LIST
+
+        // Update layout manager
+        binding.recyclerViewGames.layoutManager = if (isGridView) {
+            // Calculate optimal span count based on screen width
+            val spanCount = calculateGridSpanCount()
+            GridLayoutManager(requireContext(), spanCount)
+        } else {
+            LinearLayoutManager(requireContext())
+        }
+    }
+
+    /**
+     * Calculate optimal number of columns for grid based on screen width
+     * Aims for items around 140-180dp wide
+     */
+    private fun calculateGridSpanCount(): Int {
+        val displayMetrics = resources.displayMetrics
+        val screenWidthDp = displayMetrics.widthPixels / displayMetrics.density
+        // Target item width of 150dp, minimum 2 columns, maximum 6 columns
+        val idealItemWidth = 150f
+        val spanCount = (screenWidthDp / idealItemWidth).toInt()
+        return spanCount.coerceIn(2, 6)
+    }
+
+    /**
+     * Show context menu for a game on long-press
+     */
+    private fun showGameContextMenu(game: GameInfo, anchorView: View) {
+        val popup = PopupMenu(requireContext(), anchorView)
+        popup.menuInflater.inflate(R.menu.context_game, popup.menu)
+
+        popup.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_preview_assets -> {
+                    showAssetPreview(game)
+                    true
+                }
+                R.id.action_edit_search_query -> {
+                    showEditSearchQueryDialog(game)
+                    true
+                }
+                R.id.action_generate_icon -> {
+                    generateIconForGame(game)
+                    true
+                }
+                R.id.action_generate_hero -> {
+                    generateHeroForGame(game)
+                    true
+                }
+                R.id.action_generate_logo -> {
+                    generateLogoForGame(game)
+                    true
+                }
+                R.id.action_manual_search -> {
+                    manualSearch(game)
+                    true
+                }
+                R.id.action_add_soundbyte -> {
+                    addSoundbyte(game)
+                    true
+                }
+                R.id.action_hide_title -> {
+                    hideGame(game)
+                    true
+                }
+                else -> false
+            }
+        }
+
+        popup.show()
+    }
+
+    /**
+     * Hide a game title from the list
+     */
+    private fun hideGame(game: GameInfo) {
+        SettingsFragment.hideTitle(requireContext(), platformName, game.displayName)
+        Toast.makeText(requireContext(), "\"${game.displayName}\" hidden", Toast.LENGTH_SHORT).show()
+        // Refresh the games list
+        refreshGamesAfterHide()
+    }
+
+    /**
+     * Refresh games list after hiding a title
+     */
+    private fun refreshGamesAfterHide() {
+        val hiddenTitles = SettingsFragment.getHiddenTitles(requireContext())[platformName] ?: emptySet()
+        val filteredGames = games.filter { game ->
+            !hiddenTitles.contains(game.displayName)
+        }
+        gameAdapter.submitList(filteredGames)
+        binding.textGameCount.text = "${filteredGames.size} games"
+    }
+
+    /**
+     * Add a local sound file as a soundbyte for a game
+     */
+    private fun addSoundbyte(game: GameInfo) {
+        pendingSoundbtyeGame = game
+        pickSoundbyteLauncher.launch("audio/*")
+    }
+
+    /**
+     * Handle a picked audio file from the device and save it as a soundbyte
+     */
+    private fun handlePickedSoundbyte(uri: Uri) {
+        val game = pendingSoundbtyeGame ?: return
+        pendingSoundbtyeGame = null
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                // Determine extension from the content URI
+                val mimeType = requireContext().contentResolver.getType(uri)
+                val extension = when {
+                    mimeType?.contains("flac") == true -> "flac"
+                    mimeType?.contains("ogg") == true -> "ogg"
+                    mimeType?.contains("wav") == true -> "wav"
+                    mimeType?.contains("mp4") == true -> "mp3"
+                    mimeType?.contains("m4a") == true -> "mp3"
+                    else -> "mp3"
+                }
+
+                val targetFile = File(game.folder, "music.$extension")
+
+                // Check if music file already exists
+                val existingMusic = listOf("mp3", "ogg", "flac", "wav").firstOrNull { ext ->
+                    File(game.folder, "music.$ext").exists()
+                }
+
+                if (existingMusic != null) {
+                    // Ask to overwrite
+                    withContext(Dispatchers.Main) {
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                            .setTitle("Soundbyte Exists")
+                            .setMessage("\"${game.displayName}\" already has a soundbyte (music.$existingMusic).\n\nOverwrite it?")
+                            .setPositiveButton("Overwrite") { _, _ ->
+                                performSoundbyteCopy(uri, targetFile, game, extension)
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                } else {
+                    performSoundbyteCopy(uri, targetFile, game, extension)
+                }
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Copy the selected audio file to the game's folder as music.{ext}
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun performSoundbyteCopy(uri: Uri, targetFile: File, game: GameInfo, extension: String) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    // Delete any existing music files
+                    listOf("mp3", "ogg", "flac", "wav").forEach { ext ->
+                        val existing = File(game.folder, "music.$ext")
+                        if (existing.exists()) existing.delete()
+                    }
+
+                    // Copy the selected file
+                    requireContext().contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (targetFile.exists() && targetFile.length() > 0) {
+                        Toast.makeText(
+                            requireContext(),
+                            "Soundbyte added to \"${game.displayName}\"",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            requireContext(),
+                            "Failed to save soundbyte",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Show asset preview dialog for a game
+     */
+    private fun showAssetPreview(game: GameInfo) {
+        AssetPreviewDialog.show(
+            context = requireContext(),
+            game = game,
+            onGenerateIcon = { generateIconForGame(game) },
+            onGenerateHero = { generateHeroForGame(game) },
+            onGenerateLogo = { generateLogoForGame(game) },
+            onUploadIcon = {
+                pendingUploadGame = game
+                pickIconLauncher.launch("image/*")
+            },
+            onUploadHero = {
+                pendingUploadGame = game
+                pickHeroLauncher.launch("image/*")
+            },
+            onUploadLogo = {
+                pendingUploadGame = game
+                pickLogoLauncher.launch("image/*")
+            }
+        )
+    }
+
+    /**
+     * Handle a picked image from the gallery
+     */
+    private fun handlePickedImage(uri: Uri, assetType: AssetType) {
+        val game = pendingUploadGame ?: return
+        pendingUploadGame = null
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            setScrapingState(true)
+
+            val success = withContext(Dispatchers.IO) {
+                try {
+                    val inputStream = requireContext().contentResolver.openInputStream(uri)
+                    if (inputStream == null) {
+                        Log.e("GameListFragment", "Failed to open input stream for URI: $uri")
+                        return@withContext false
+                    }
+
+                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    inputStream.close()
+
+                    if (bitmap == null) {
+                        Log.e("GameListFragment", "Failed to decode bitmap from URI: $uri")
+                        return@withContext false
+                    }
+
+                    // Determine the target file based on asset type
+                    val targetFile = when (assetType) {
+                        AssetType.ICON -> File(game.folder, "icon.png")
+                        AssetType.HERO -> File(game.folder, "hero.png")
+                        AssetType.LOGO -> File(game.folder, "logo.png")
+                    }
+
+                    // Ensure parent directory exists
+                    targetFile.parentFile?.mkdirs()
+
+                    // Save the bitmap as PNG
+                    FileOutputStream(targetFile).use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+
+                    Log.d("GameListFragment", "Saved ${assetType.name.lowercase()} to ${targetFile.absolutePath}")
+                    true
+                } catch (e: Exception) {
+                    Log.e("GameListFragment", "Error saving ${assetType.name.lowercase()}", e)
+                    false
+                }
+            }
+
+            if (_binding == null) return@launch
+            setScrapingState(false)
+
+            val assetName = assetType.name.lowercase().replaceFirstChar { it.uppercase() }
+            if (success) {
+                Toast.makeText(requireContext(), "$assetName saved for ${game.displayName}!", Toast.LENGTH_SHORT).show()
+                refreshGameList()
+            } else {
+                Toast.makeText(requireContext(), "Failed to save $assetName", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * Show dialog to edit the search query for a game
+     * This allows users to manually specify what to search for
+     */
+    private fun showEditSearchQueryDialog(game: GameInfo) {
+        val editText = EditText(requireContext()).apply {
+            setText(game.searchName)
+            setTextColor(resources.getColor(R.color.theme_text_primary, null))
+            setHintTextColor(resources.getColor(R.color.theme_text_secondary, null))
+            hint = "Enter search query..."
+            setSingleLine(false)
+            maxLines = 3
+            setSelection(text.length)  // Move cursor to end
+        }
+
+        // Add padding around the EditText
+        val container = FrameLayout(requireContext()).apply {
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding / 2, padding, 0)
+            addView(editText)
+        }
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("Edit Search Query")
+            .setMessage("Enter the game title to search for artwork.\nOriginal: ${game.displayName}")
+            .setView(container)
+            .setPositiveButton("Search") { _, _ ->
+                val query = editText.text.toString().trim()
+                if (query.isNotEmpty()) {
+                    // Create a modified game with the custom search name
+                    val modifiedGame = game.copy(name = query)
+
+                    Toast.makeText(
+                        requireContext(),
+                        "Searching for: $query",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    // Generate icon with the new search query
+                    generateIconForGame(modifiedGame)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Manual search - let user search for a different game and generate all assets (icons, heroes, logos)
+     */
+    private fun manualSearch(game: GameInfo) {
+        // Show game search dialog
+        GameSearchDialog.show(
+            context = requireContext(),
+            gameInfo = game,
+            artworkScraper = artworkScraper
+        ) { selectedResult ->
+            // User selected a different game, now search for ALL artwork using the SGDB ID
+            viewLifecycleOwner.lifecycleScope.launch {
+                Toast.makeText(
+                    requireContext(),
+                    "Searching all artwork for: ${selectedResult.name}",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                // Create a modified game info with the selected game's name
+                val modifiedGame = game.copy(name = selectedResult.name)
+
+                // Use the SteamGridDB game ID to fetch all assets (icons, heroes, logos)
+                generateAllAssetsForGameById(modifiedGame, selectedResult.id)
+            }
+        }
+    }
+
+    /**
+     * Generate all assets (icon, hero, logo) for a game using a known SteamGridDB game ID.
+     * Shows pickers for each asset type in sequence.
+     */
+    private fun generateAllAssetsForGameById(game: GameInfo, sgdbGameId: Int) {
+        if (isScraping) {
+            Toast.makeText(requireContext(), "Scraping in progress...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Start with icon picker, then chain to hero and logo
+        showIconPickerForGameById(game, sgdbGameId) {
+            showHeroPickerForGameById(game, sgdbGameId) {
+                showLogoPickerForGameById(game, sgdbGameId) {
+                    Toast.makeText(
+                        requireContext(),
+                        "All assets complete for ${game.displayName}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    refreshGameList()
+                }
+            }
+        }
+    }
+
+    /**
+     * Show icon picker for a game using SteamGridDB game ID
+     */
+    private fun showIconPickerForGameById(game: GameInfo, sgdbGameId: Int, onComplete: () -> Unit) {
+        var dialogCompleted = false  // Track if we've called onComplete
+        var currentPickerDialog: ArtworkPickerDialog? = null
+
+        // Use global setting for square icons only
+        var currentSquareOnly = SettingsFragment.isSquareIconsOnly(requireContext())
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, platformName, currentSquareOnly)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                // If square-only returned nothing, suggest trying all results
+                if (currentSquareOnly) {
+                    withContext(Dispatchers.Main) {
+                        AlertDialog.Builder(requireContext())
+                            .setTitle("No Square Icons Found")
+                            .setMessage("No square icons found for ${game.displayName}.\n\nWould you like to try searching all icons? You can crop non-square images.")
+                            .setPositiveButton("Try All Icons") { _, _ ->
+                                // Retry with squareOnly = false
+                                showIconPickerForGameByIdWithFilter(game, sgdbGameId, false, onComplete)
+                            }
+                            .setNegativeButton("Skip") { _, _ ->
+                                onComplete()
+                            }
+                            .show()
+                    }
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        "No icons found for ${game.displayName}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    onComplete()
+                }
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                currentPickerDialog = ArtworkPickerDialog.showForIconWithFilter(
+                    context = requireContext(),
+                    searchResult = searchResult,
+                    initialSquareOnly = currentSquareOnly,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            handleIconSelection(game, selectedOption)
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    },
+                    onFilterChanged = { newSquareOnly ->
+                        // Fetch new results with the updated filter
+                        currentSquareOnly = newSquareOnly
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val newResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, platformName, newSquareOnly)
+                            withContext(Dispatchers.Main) {
+                                currentPickerDialog?.updateSearchResult(newResult)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Helper to show icon picker with a specific filter setting (used for retry)
+     */
+    private fun showIconPickerForGameByIdWithFilter(game: GameInfo, sgdbGameId: Int, squareOnly: Boolean, onComplete: () -> Unit) {
+        var dialogCompleted = false
+        var currentPickerDialog: ArtworkPickerDialog? = null
+        var currentSquareOnly = squareOnly
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, platformName, currentSquareOnly)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                Toast.makeText(
+                    requireContext(),
+                    "No icons found for ${game.displayName}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                onComplete()
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                currentPickerDialog = ArtworkPickerDialog.showForIconWithFilter(
+                    context = requireContext(),
+                    searchResult = searchResult,
+                    initialSquareOnly = currentSquareOnly,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            handleIconSelection(game, selectedOption)
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    },
+                    onFilterChanged = { newSquareOnly ->
+                        currentSquareOnly = newSquareOnly
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val newResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, platformName, newSquareOnly)
+                            withContext(Dispatchers.Main) {
+                                currentPickerDialog?.updateSearchResult(newResult)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Show hero picker for a game using SteamGridDB game ID
+     */
+    private fun showHeroPickerForGameById(game: GameInfo, sgdbGameId: Int, onComplete: () -> Unit) {
+        var dialogCompleted = false
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchHeroOptionsByGameId(sgdbGameId, game)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                Toast.makeText(
+                    requireContext(),
+                    "No heroes found for ${game.displayName}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                onComplete()
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                ArtworkPickerDialog.showWithSkip(
+                    context = requireContext(),
+                    artworkType = ArtworkPickerDialog.ArtworkType.HERO,
+                    searchResult = searchResult,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val success = artworkScraper.saveHeroFromOption(selectedOption, game)
+                            if (success) {
+                                Toast.makeText(
+                                    requireContext(),
+                                    "Hero saved for ${game.displayName}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Show logo picker for a game using SteamGridDB game ID
+     */
+    private fun showLogoPickerForGameById(game: GameInfo, sgdbGameId: Int, onComplete: () -> Unit) {
+        var dialogCompleted = false
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchLogoOptionsByGameId(sgdbGameId, game)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                Toast.makeText(
+                    requireContext(),
+                    "No logos found for ${game.displayName}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                onComplete()
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                ArtworkPickerDialog.showWithSkip(
+                    context = requireContext(),
+                    artworkType = ArtworkPickerDialog.ArtworkType.LOGO,
+                    searchResult = searchResult,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val success = artworkScraper.saveLogoFromOption(selectedOption, game)
+                            if (success) {
+                                Toast.makeText(
+                                    requireContext(),
+                                    "Logo saved for ${game.displayName}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Generate icon for a game using a known SteamGridDB game ID.
+     * This is more accurate than name-based search since we already know the exact game.
+     */
+    private fun generateIconForGameById(game: GameInfo, sgdbGameId: Int) {
+        if (isScraping) {
+            Toast.makeText(requireContext(), "Scraping in progress...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Use global setting for square icons only
+        val squareOnly = SettingsFragment.isSquareIconsOnly(requireContext())
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, platformName, squareOnly)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                Toast.makeText(
+                    requireContext(),
+                    "No icons found for ${game.displayName}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+
+            // Show picker dialog with options (no filter toggle - uses global setting)
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                ArtworkPickerDialog.show(
+                    context = requireContext(),
+                    artworkType = ArtworkPickerDialog.ArtworkType.ICON,
+                    searchResult = searchResult
+                ) { selectedOption ->
+                    handleIconSelection(game, selectedOption)
+                }
+            }
+        }
     }
 
     /**
@@ -215,7 +973,8 @@ class GameListFragment : Fragment() {
         gameAdapter = GameAdapter(
             onGenerateIcon = { game -> generateIconForGame(game) },
             onGenerateHero = { game -> generateHeroForGame(game) },
-            onGenerateLogo = { game -> generateLogoForGame(game) }
+            onGenerateLogo = { game -> generateLogoForGame(game) },
+            onLongPress = { game, view -> showGameContextMenu(game, view) }
         )
 
         binding.recyclerViewGames.apply {
@@ -231,11 +990,20 @@ class GameListFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val startTime = System.currentTimeMillis()
 
+            // Check if deep search is enabled
+            val deepSearch = SettingsFragment.isDeepSearchEnabled(requireContext())
+
             // Use cached games for fast loading
-            games = GameCache.getGamesForPlatform(platformName, forceRefresh)
+            var allGames = GameCache.getGamesForPlatform(platformName, forceRefresh, deepSearch)
+
+            // Filter out hidden titles
+            val hiddenTitles = SettingsFragment.getHiddenTitles(requireContext())[platformName] ?: emptySet()
+            games = allGames.filter { game ->
+                !hiddenTitles.contains(game.displayName)
+            }
 
             val loadTime = System.currentTimeMillis() - startTime
-            android.util.Log.d("GameListFragment", "Loaded ${games.size} games in ${loadTime}ms")
+            android.util.Log.d("GameListFragment", "Loaded ${games.size} games (${allGames.size - games.size} hidden) in ${loadTime}ms")
 
             if (_binding == null) return@launch
 
@@ -290,9 +1058,73 @@ class GameListFragment : Fragment() {
             Toast.LENGTH_SHORT
         ).show()
 
+        // Use global setting for square icons only
+        var currentSquareOnly = SettingsFragment.isSquareIconsOnly(requireContext())
+        var currentPickerDialog: ArtworkPickerDialog? = null
+
         viewLifecycleOwner.lifecycleScope.launch {
-            // Search for artwork options
-            val searchResult = artworkScraper.searchIconOptions(game, platformName)
+            val searchResult = artworkScraper.searchIconOptions(game, platformName, currentSquareOnly)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                // If square-only returned nothing, suggest trying all results
+                if (currentSquareOnly) {
+                    withContext(Dispatchers.Main) {
+                        AlertDialog.Builder(requireContext())
+                            .setTitle("No Square Icons Found")
+                            .setMessage("No square icons found for ${game.displayName}.\n\nWould you like to try searching all icons? You can crop non-square images.")
+                            .setPositiveButton("Try All Icons") { _, _ ->
+                                generateIconForGameWithFilter(game, false)
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        "No icons found for ${game.name}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                return@launch
+            }
+
+            // Show picker dialog with filter toggle support
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                currentPickerDialog = ArtworkPickerDialog.showForIconWithFilter(
+                    context = requireContext(),
+                    searchResult = searchResult,
+                    initialSquareOnly = currentSquareOnly,
+                    onOptionSelected = { selectedOption ->
+                        handleIconSelection(game, selectedOption)
+                    },
+                    onFilterChanged = { newSquareOnly ->
+                        // Fetch new results with the updated filter
+                        currentSquareOnly = newSquareOnly
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val newResult = artworkScraper.searchIconOptions(game, platformName, newSquareOnly)
+                            withContext(Dispatchers.Main) {
+                                currentPickerDialog?.updateSearchResult(newResult)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Helper to generate icon with a specific filter setting (used for retry)
+     */
+    private fun generateIconForGameWithFilter(game: GameInfo, squareOnly: Boolean) {
+        var currentSquareOnly = squareOnly
+        var currentPickerDialog: ArtworkPickerDialog? = null
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchIconOptions(game, platformName, currentSquareOnly)
 
             if (_binding == null) return@launch
 
@@ -305,35 +1137,164 @@ class GameListFragment : Fragment() {
                 return@launch
             }
 
-            // Show picker dialog with options
             withContext(Dispatchers.Main) {
                 if (_binding == null) return@withContext
 
-                ArtworkPickerDialog.show(
+                currentPickerDialog = ArtworkPickerDialog.showForIconWithFilter(
                     context = requireContext(),
-                    artworkType = ArtworkPickerDialog.ArtworkType.ICON,
-                    searchResult = searchResult
-                ) { selectedOption ->
-                    // Save selected option with iiSU border
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        val success = artworkScraper.saveIconFromOption(selectedOption, game, platformName)
-                        if (_binding == null) return@launch
-
-                        if (success) {
-                            Toast.makeText(
-                                requireContext(),
-                                "Icon saved with border for ${game.name}",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            refreshGameList()
-                        } else {
-                            Toast.makeText(
-                                requireContext(),
-                                "Failed to save icon",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                    searchResult = searchResult,
+                    initialSquareOnly = currentSquareOnly,
+                    onOptionSelected = { selectedOption ->
+                        handleIconSelection(game, selectedOption)
+                    },
+                    onFilterChanged = { newSquareOnly ->
+                        currentSquareOnly = newSquareOnly
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val newResult = artworkScraper.searchIconOptions(game, platformName, newSquareOnly)
+                            withContext(Dispatchers.Main) {
+                                currentPickerDialog?.updateSearchResult(newResult)
+                            }
                         }
                     }
+                )
+            }
+        }
+    }
+
+    /**
+     * Handle icon selection - either save directly (if square) or launch crop activity (if non-square)
+     */
+    private fun handleIconSelection(game: GameInfo, selectedOption: com.iisu.assettool.util.ArtworkOption) {
+        val isSquare = ArtworkPickerDialog.isSquare(selectedOption)
+
+        if (isSquare) {
+            // Square image - save directly with iiSU border
+            viewLifecycleOwner.lifecycleScope.launch {
+                val success = artworkScraper.saveIconFromOption(selectedOption, game, platformName)
+                if (_binding == null) return@launch
+
+                if (success) {
+                    Toast.makeText(
+                        requireContext(),
+                        "Icon saved with border for ${game.name}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    refreshGameList()
+                } else {
+                    Toast.makeText(
+                        requireContext(),
+                        "Failed to save icon",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        } else {
+            // Non-square image - launch crop activity
+            launchCropActivity(game, selectedOption)
+        }
+    }
+
+    /**
+     * Launch the crop activity for a non-square image
+     */
+    private fun launchCropActivity(game: GameInfo, option: com.iisu.assettool.util.ArtworkOption) {
+        pendingCropGame = game
+
+        // Create output path for the cropped image
+        val outputPath = File(game.folder, "icon_cropped_temp.png").absolutePath
+
+        val intent = ImageCropActivity.createIntent(
+            context = requireContext(),
+            imageUrl = option.url,
+            imagePath = null,
+            outputPath = outputPath,
+            gameName = game.displayName
+        )
+
+        cropLauncher.launch(intent)
+    }
+
+    /**
+     * Save a cropped image as an icon with iiSU border
+     */
+    private suspend fun saveCroppedIconWithBorder(game: GameInfo, croppedPath: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val croppedFile = File(croppedPath)
+                if (!croppedFile.exists()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "Cropped file not found", Toast.LENGTH_SHORT).show()
+                    }
+                    return@withContext
+                }
+
+                // Load the cropped bitmap
+                val bitmap = android.graphics.BitmapFactory.decodeFile(croppedPath)
+                if (bitmap == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "Failed to load cropped image", Toast.LENGTH_SHORT).show()
+                    }
+                    return@withContext
+                }
+
+                // Get custom border path if set
+                val customBorderPath = SettingsFragment.getCustomBorderPath(requireContext())
+
+                // Apply iiSU border
+                val iconGenerator = com.iisu.assettool.util.IconGenerator(requireContext())
+                val finalBitmap = iconGenerator.generateIconWithBorder(
+                    bitmap, platformName,
+                    com.iisu.assettool.util.ArtworkScraper.ICON_SIZE,
+                    Pair(0.5f, 0.5f),
+                    customBorderPath
+                )
+
+                if (finalBitmap == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(requireContext(), "Failed to apply border", Toast.LENGTH_SHORT).show()
+                    }
+                    return@withContext
+                }
+
+                // Delete existing icon files
+                val extensions = listOf("png", "jpg", "jpeg")
+                extensions.forEach { ext ->
+                    val file = File(game.folder, "icon.$ext")
+                    if (file.exists()) file.delete()
+                }
+
+                // Get export format settings
+                val exportFormat = SettingsFragment.getExportFormat(requireContext())
+                val jpegQuality = SettingsFragment.getJpegQuality(requireContext())
+
+                val (format, extension, quality) = if (exportFormat == "JPEG") {
+                    Triple(android.graphics.Bitmap.CompressFormat.JPEG, "jpg", jpegQuality)
+                } else {
+                    Triple(android.graphics.Bitmap.CompressFormat.PNG, "png", 100)
+                }
+
+                // Save the final icon
+                val iconFile = File(game.folder, "icon.$extension")
+                java.io.FileOutputStream(iconFile).use { out ->
+                    finalBitmap.compress(format, quality, out)
+                }
+
+                // Clean up temp file
+                croppedFile.delete()
+
+                withContext(Dispatchers.Main) {
+                    if (_binding != null) {
+                        Toast.makeText(
+                            requireContext(),
+                            "Icon saved with border for ${game.displayName}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        refreshGameList()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -376,9 +1337,9 @@ class GameListFragment : Fragment() {
                     searchResult = searchResult
                 ) { selectedOption ->
                     // Save selected option
-                    viewLifecycleOwner.lifecycleScope.launch {
+                    viewLifecycleOwner.lifecycleScope.launch heroLaunch@{
                         val success = artworkScraper.saveHeroFromOption(selectedOption, game)
-                        if (_binding == null) return@launch
+                        if (_binding == null) return@heroLaunch
 
                         if (success) {
                             Toast.makeText(
@@ -437,9 +1398,9 @@ class GameListFragment : Fragment() {
                     searchResult = searchResult
                 ) { selectedOption ->
                     // Save selected option
-                    viewLifecycleOwner.lifecycleScope.launch {
+                    viewLifecycleOwner.lifecycleScope.launch logoLaunch@{
                         val success = artworkScraper.saveLogoFromOption(selectedOption, game)
-                        if (_binding == null) return@launch
+                        if (_binding == null) return@logoLaunch
 
                         if (success) {
                             Toast.makeText(
@@ -474,6 +1435,18 @@ class GameListFragment : Fragment() {
 
         val parallelCount = SettingsFragment.getParallelDownloads(requireContext())
 
+        // Show confirmation dialog
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Generate All Icons")
+            .setMessage("Are you sure you want to generate icons for ${games.size} games?\n\nThis will download and process artwork for all games in this platform.")
+            .setPositiveButton("Generate") { _, _ ->
+                startIconScraping(parallelCount)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun startIconScraping(parallelCount: Int) {
         scrapingCancelled.set(false)
         setScrapingState(true)
 
@@ -546,6 +1519,18 @@ class GameListFragment : Fragment() {
 
         val parallelCount = SettingsFragment.getParallelDownloads(requireContext())
 
+        // Show confirmation dialog
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Generate All Heroes")
+            .setMessage("Are you sure you want to generate heroes for ${games.size} games?\n\nThis will download and process hero images for all games in this platform.")
+            .setPositiveButton("Generate") { _, _ ->
+                startHeroScraping(parallelCount)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun startHeroScraping(parallelCount: Int) {
         scrapingCancelled.set(false)
         setScrapingState(true)
 
@@ -617,6 +1602,18 @@ class GameListFragment : Fragment() {
 
         val parallelCount = SettingsFragment.getParallelDownloads(requireContext())
 
+        // Show confirmation dialog
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Generate All Logos")
+            .setMessage("Are you sure you want to generate logos for ${games.size} games?\n\nThis will download and process logo images for all games in this platform.")
+            .setPositiveButton("Generate") { _, _ ->
+                startLogoScraping(parallelCount)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun startLogoScraping(parallelCount: Int) {
         scrapingCancelled.set(false)
         setScrapingState(true)
 
@@ -695,6 +1692,18 @@ class GameListFragment : Fragment() {
         val parallelCount = SettingsFragment.getParallelDownloads(requireContext())
         val screenshotCount = SettingsFragment.getScreenshotCount(requireContext())
 
+        // Show confirmation dialog
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Download All Screenshots")
+            .setMessage("Are you sure you want to download $screenshotCount screenshots for ${games.size} games?\n\nThis will download ${screenshotCount * games.size} screenshot images total.")
+            .setPositiveButton("Download") { _, _ ->
+                startScreenshotScraping(parallelCount, screenshotCount)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun startScreenshotScraping(parallelCount: Int, screenshotCount: Int) {
         scrapingCancelled.set(false)
         setScrapingState(true)
 
@@ -947,6 +1956,9 @@ class GameListFragment : Fragment() {
             binding.textAssetStats.text = "Game ${currentGameIndex + 1}/${games.size}: ${game.displayName}"
 
             // Show icon picker for this game
+            // Use global setting for square icons only
+            val squareOnly = SettingsFragment.isSquareIconsOnly(requireContext())
+
             scrapingJob = viewLifecycleOwner.lifecycleScope.launch {
                 if (scrapingCancelled.get() || _binding == null) {
                     finishScraping("Processed $currentGameIndex/${games.size} games", wasCancelled = true)
@@ -954,23 +1966,22 @@ class GameListFragment : Fragment() {
                 }
 
                 val iconResult = withContext(Dispatchers.IO) {
-                    artworkScraper.searchIconOptions(game, platformName)
+                    artworkScraper.searchIconOptions(game, platformName, squareOnly)
                 }
 
                 if (_binding == null || scrapingCancelled.get()) return@launch
 
                 if (iconResult.options.isNotEmpty()) {
+                    // Show icon picker (no filter toggle - uses global setting)
                     ArtworkPickerDialog.showWithSkip(
                         context = requireContext(),
                         artworkType = ArtworkPickerDialog.ArtworkType.ICON,
                         searchResult = iconResult,
                         onOptionSelected = { selectedOption ->
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                if (scrapingCancelled.get() || _binding == null) return@launch
+                            viewLifecycleOwner.lifecycleScope.launch iconPickLaunch@{
+                                if (scrapingCancelled.get() || _binding == null) return@iconPickLaunch
 
-                                withContext(Dispatchers.IO) {
-                                    artworkScraper.saveIconFromOption(selectedOption, game, platformName)
-                                }
+                                handleIconSelection(game, selectedOption)
                                 // Continue to hero picker with skip support
                                 val cancelBulk = {
                                     scrapingCancelled.set(true)
@@ -1070,10 +2081,10 @@ class GameListFragment : Fragment() {
                         artworkType = ArtworkPickerDialog.ArtworkType.HERO,
                         searchResult = heroResult,
                         onOptionSelected = { selectedOption ->
-                            viewLifecycleOwner.lifecycleScope.launch {
+                            viewLifecycleOwner.lifecycleScope.launch heroPickLaunch@{
                                 if (scrapingCancelled.get() || _binding == null) {
                                     onComplete()
-                                    return@launch
+                                    return@heroPickLaunch
                                 }
 
                                 withContext(Dispatchers.IO) {
@@ -1092,10 +2103,10 @@ class GameListFragment : Fragment() {
                         ArtworkPickerDialog.ArtworkType.HERO,
                         heroResult
                     ) { selectedOption ->
-                        viewLifecycleOwner.lifecycleScope.launch {
+                        viewLifecycleOwner.lifecycleScope.launch heroSimpleLaunch@{
                             if (scrapingCancelled.get() || _binding == null) {
                                 onComplete()
-                                return@launch
+                                return@heroSimpleLaunch
                             }
 
                             withContext(Dispatchers.IO) {
@@ -1145,10 +2156,10 @@ class GameListFragment : Fragment() {
                         artworkType = ArtworkPickerDialog.ArtworkType.LOGO,
                         searchResult = logoResult,
                         onOptionSelected = { selectedOption ->
-                            viewLifecycleOwner.lifecycleScope.launch {
+                            viewLifecycleOwner.lifecycleScope.launch logoPickLaunch@{
                                 if (scrapingCancelled.get() || _binding == null) {
                                     onComplete()
-                                    return@launch
+                                    return@logoPickLaunch
                                 }
 
                                 withContext(Dispatchers.IO) {
@@ -1167,10 +2178,10 @@ class GameListFragment : Fragment() {
                         ArtworkPickerDialog.ArtworkType.LOGO,
                         logoResult
                     ) { selectedOption ->
-                        viewLifecycleOwner.lifecycleScope.launch {
+                        viewLifecycleOwner.lifecycleScope.launch logoSimpleLaunch@{
                             if (scrapingCancelled.get() || _binding == null) {
                                 onComplete()
-                                return@launch
+                                return@logoSimpleLaunch
                             }
 
                             withContext(Dispatchers.IO) {
@@ -1193,8 +2204,17 @@ class GameListFragment : Fragment() {
             // Invalidate cache for this platform since games were modified
             GameCache.invalidatePlatform(platformName)
 
+            // Check if deep search is enabled
+            val deepSearch = SettingsFragment.isDeepSearchEnabled(requireContext())
+
             // Force refresh from filesystem
-            games = GameCache.getGamesForPlatform(platformName, forceRefresh = true)
+            var allGames = GameCache.getGamesForPlatform(platformName, forceRefresh = true, deepSearch = deepSearch)
+
+            // Filter out hidden titles
+            val hiddenTitles = SettingsFragment.getHiddenTitles(requireContext())[platformName] ?: emptySet()
+            games = allGames.filter { game ->
+                !hiddenTitles.contains(game.displayName)
+            }
 
             if (_binding == null) return@launch
 

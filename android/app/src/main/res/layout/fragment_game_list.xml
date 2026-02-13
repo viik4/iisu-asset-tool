@@ -1,195 +1,222 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/theme_background"
-    android:padding="@dimen/spacing_md">
+    android:background="@color/theme_background">
 
-    <!-- Header with back button and platform name -->
-    <LinearLayout
-        android:id="@+id/layoutHeader"
-        android:layout_width="0dp"
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        android:background="@color/theme_background"
+        app:elevation="0dp">
 
-        <ImageButton
-            android:id="@+id/btnBack"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_arrow_back"
-            android:contentDescription="Back"
-            app:tint="@color/theme_text_primary" />
-
-        <ImageView
-            android:id="@+id/imagePlatformIcon"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="@dimen/spacing_sm"
-            android:scaleType="fitCenter"
-            tools:src="@drawable/ic_iisu_home" />
-
-        <TextView
-            android:id="@+id/textPlatformName"
-            android:layout_width="0dp"
+        <!-- Collapsible content -->
+        <com.google.android.material.appbar.CollapsingToolbarLayout
+            android:id="@+id/collapsingToolbar"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="@dimen/spacing_md"
-            android:textSize="@dimen/text_title"
-            android:textStyle="bold"
-            android:textColor="@color/theme_text_primary"
-            tools:text="Nintendo Entertainment System" />
+            app:layout_scrollFlags="scroll|exitUntilCollapsed|snap"
+            app:contentScrim="@color/theme_background">
 
-    </LinearLayout>
-
-    <!-- Stats bar -->
-    <LinearLayout
-        android:id="@+id/layoutStats"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/spacing_sm"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        app:layout_constraintTop_toBottomOf="@id/layoutHeader"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <TextView
-            android:id="@+id/textGameCount"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="@dimen/text_body"
-            android:textColor="@color/theme_text_secondary"
-            tools:text="42 games" />
-
-        <View
-            android:layout_width="1dp"
-            android:layout_height="16dp"
-            android:layout_marginHorizontal="@dimen/spacing_md"
-            android:background="@color/theme_text_secondary" />
-
-        <TextView
-            android:id="@+id/textAssetStats"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textSize="@dimen/text_body"
-            android:textColor="@color/accent_cyan"
-            tools:text="12 missing assets" />
-
-        <!-- Cancel button - visible only during scraping -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCancelScraping"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="Cancel"
-            android:textSize="12sp"
-            android:visibility="gone"
-            app:icon="@drawable/ic_close"
-            app:iconSize="16dp"
-            app:iconTint="@color/white"
-            app:backgroundTint="@color/error_red"
-            app:cornerRadius="8dp"
-            style="@style/Widget.Material3.Button" />
-
-    </LinearLayout>
-
-    <!-- Action buttons -->
-    <HorizontalScrollView
-        android:id="@+id/layoutActions"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/spacing_md"
-        android:scrollbars="none"
-        app:layout_constraintTop_toBottomOf="@id/layoutStats"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnBulkGenerate"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Bulk Generate All"
-                android:textColor="@color/theme_text_primary"
-                app:icon="@drawable/ic_save"
-                app:iconTint="@color/accent_cyan"
-                app:cornerRadius="8dp"
-                app:strokeColor="@color/accent_cyan"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                android:orientation="vertical"
+                android:paddingHorizontal="@dimen/spacing_md"
+                android:paddingTop="@dimen/spacing_md"
+                app:layout_collapseMode="parallax">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnScrapeAllIcons"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/spacing_sm"
-                android:text="Icons"
-                android:textColor="@color/theme_text_primary"
-                app:icon="@drawable/ic_icons"
-                app:iconTint="@color/text_primary"
-                app:cornerRadius="8dp"
-                style="@style/Widget.Material3.Button.TextButton" />
+                <!-- Header with back button and platform name -->
+                <LinearLayout
+                    android:id="@+id/layoutHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnScrapeAllHeroes"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Heroes"
-                android:textColor="@color/theme_text_primary"
-                app:icon="@drawable/ic_hero"
-                app:iconTint="@color/text_primary"
-                app:cornerRadius="8dp"
-                style="@style/Widget.Material3.Button.TextButton" />
+                    <ImageButton
+                        android:id="@+id/btnBack"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_arrow_back"
+                        android:contentDescription="Back"
+                        app:tint="@color/theme_text_primary" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnScrapeAllLogos"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Logos"
-                android:textColor="@color/theme_text_primary"
-                app:icon="@drawable/ic_logo"
-                app:iconTint="@color/text_primary"
-                app:cornerRadius="8dp"
-                style="@style/Widget.Material3.Button.TextButton" />
+                    <ImageView
+                        android:id="@+id/imagePlatformIcon"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="@dimen/spacing_sm"
+                        android:scaleType="fitCenter"
+                        tools:src="@drawable/ic_iisu_home" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnScrapeAllScreenshots"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Screenshots"
-                android:textColor="@color/theme_text_primary"
-                app:icon="@drawable/ic_screenshot"
-                app:iconTint="@color/text_primary"
-                app:cornerRadius="8dp"
-                style="@style/Widget.Material3.Button.TextButton" />
+                    <TextView
+                        android:id="@+id/textPlatformName"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/spacing_md"
+                        android:textSize="@dimen/text_title"
+                        android:textStyle="bold"
+                        android:textColor="@color/theme_text_primary"
+                        tools:text="Nintendo Entertainment System" />
 
-        </LinearLayout>
+                    <!-- View mode toggle button -->
+                    <ImageButton
+                        android:id="@+id/btnToggleViewMode"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_view_grid"
+                        android:contentDescription="Toggle view mode"
+                        app:tint="@color/accent_cyan" />
 
-    </HorizontalScrollView>
+                </LinearLayout>
 
-    <!-- Game list -->
+                <!-- Stats bar -->
+                <LinearLayout
+                    android:id="@+id/layoutStats"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/textGameCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/theme_text_secondary"
+                        tools:text="42 games" />
+
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="16dp"
+                        android:layout_marginHorizontal="@dimen/spacing_md"
+                        android:background="@color/theme_text_secondary" />
+
+                    <TextView
+                        android:id="@+id/textAssetStats"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/accent_cyan"
+                        tools:text="12 missing assets" />
+
+                    <!-- Cancel button - visible only during scraping -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnCancelScraping"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Cancel"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        app:icon="@drawable/ic_close"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/white"
+                        app:backgroundTint="@color/error_red"
+                        app:cornerRadius="8dp"
+                        style="@style/Widget.Material3.Button" />
+
+                </LinearLayout>
+
+                <!-- Action buttons -->
+                <HorizontalScrollView
+                    android:id="@+id/layoutActions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnBulkGenerate"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Bulk Generate All"
+                            android:textColor="@color/theme_text_primary"
+                            app:icon="@drawable/ic_save"
+                            app:iconTint="@color/accent_cyan"
+                            app:cornerRadius="8dp"
+                            app:strokeColor="@color/accent_cyan"
+                            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnScrapeAllIcons"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/spacing_sm"
+                            android:text="Icons"
+                            android:textColor="@color/theme_text_primary"
+                            app:icon="@drawable/ic_icons"
+                            app:iconTint="@color/text_primary"
+                            app:cornerRadius="8dp"
+                            style="@style/Widget.Material3.Button.TextButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnScrapeAllHeroes"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Heroes"
+                            android:textColor="@color/theme_text_primary"
+                            app:icon="@drawable/ic_hero"
+                            app:iconTint="@color/text_primary"
+                            app:cornerRadius="8dp"
+                            style="@style/Widget.Material3.Button.TextButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnScrapeAllLogos"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Logos"
+                            android:textColor="@color/theme_text_primary"
+                            app:icon="@drawable/ic_logo"
+                            app:iconTint="@color/text_primary"
+                            app:cornerRadius="8dp"
+                            style="@style/Widget.Material3.Button.TextButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnScrapeAllScreenshots"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Screenshots"
+                            android:textColor="@color/theme_text_primary"
+                            app:icon="@drawable/ic_screenshot"
+                            app:iconTint="@color/text_primary"
+                            app:cornerRadius="8dp"
+                            style="@style/Widget.Material3.Button.TextButton" />
+
+                    </LinearLayout>
+
+                </HorizontalScrollView>
+
+            </LinearLayout>
+
+        </com.google.android.material.appbar.CollapsingToolbarLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Game list - nested scroll for coordinator layout -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerViewGames"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginTop="@dimen/spacing_md"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingHorizontal="@dimen/spacing_md"
         android:clipToPadding="false"
-        app:layout_constraintTop_toBottomOf="@id/layoutActions"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
         tools:listitem="@layout/item_game" />
 
     <!-- Progress bar -->
@@ -199,24 +226,18 @@
         android:layout_height="wrap_content"
         android:indeterminate="true"
         android:visibility="gone"
-        app:layout_constraintTop_toTopOf="@id/recyclerViewGames"
-        app:layout_constraintBottom_toBottomOf="@id/recyclerViewGames"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        android:layout_gravity="center" />
 
     <!-- Empty state -->
     <TextView
         android:id="@+id/textEmptyState"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center"
         android:gravity="center"
         android:text="No games found in this platform."
         android:textSize="@dimen/text_body"
         android:textColor="@color/theme_text_secondary"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="@id/recyclerViewGames"
-        app:layout_constraintBottom_toBottomOf="@id/recyclerViewGames"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        android:visibility="gone" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

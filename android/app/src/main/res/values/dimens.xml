@@ -12,9 +12,17 @@
     <dimen name="spacing_lg">24dp</dimen>
     <dimen name="spacing_xl">32dp</dimen>
 
+    <!-- Border radius scale (matching website design system) -->
+    <dimen name="radius_sm">8dp</dimen>
+    <dimen name="radius_md">12dp</dimen>
+    <dimen name="radius_lg">16dp</dimen>
+    <dimen name="radius_xl">24dp</dimen>
+
     <!-- Card/container dimensions -->
-    <dimen name="card_corner_radius">12dp</dimen>
+    <dimen name="card_corner_radius">16dp</dimen>
     <dimen name="card_elevation">4dp</dimen>
+    <dimen name="card_stroke_normal">1dp</dimen>
+    <dimen name="card_stroke_selected">3dp</dimen>
 
     <!-- Text sizes (larger for touch screens) -->
     <dimen name="text_title">24sp</dimen>

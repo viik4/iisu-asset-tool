@@ -103,7 +103,7 @@ class SourcePriorityWidget(QWidget):
             "Drag items to reorder. Click 'Save Config' to persist changes."
         )
         help_text.setWordWrap(True)
-        help_text.setStyleSheet("color: #888; font-size: 9pt;")
+        help_text.setObjectName("label_muted")
         layout.addWidget(help_text)
 
     def _on_item_changed(self, item):

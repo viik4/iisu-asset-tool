@@ -19,6 +19,7 @@ from urllib.parse import unquote
 import requests
 import yaml
 from PIL import Image, ImageOps, ImageChops, ImageFilter
+from iisu_image_utils import safe_load_image
 
 
 def _get_subprocess_flags():
@@ -375,6 +376,37 @@ def _emit_preview(callbacks, img_path: Path):
         except Exception:
             pass
 
+def _request_game_selection(callbacks, title: str, platform: str) -> Optional[int]:
+    """
+    Request user to search and select a game from SteamGridDB.
+    Returns selected game ID, None if skipped/cancelled.
+    """
+    _emit_log(callbacks, f"[DEBUG] _request_game_selection called for {title}")
+
+    if callbacks is None:
+        return None
+
+    # Handle dict-style callbacks (from GUI)
+    if isinstance(callbacks, dict):
+        if "request_game_selection" in callbacks and callable(callbacks["request_game_selection"]):
+            try:
+                result = callbacks["request_game_selection"](title, platform)
+                _emit_log(callbacks, f"[DEBUG] Game selection callback returned: {result}")
+                return result
+            except Exception as e:
+                _emit_log(callbacks, f"[ERROR] Game selection callback exception: {e}")
+                return None
+    # Handle object-style callbacks
+    elif hasattr(callbacks, "request_game_selection"):
+        try:
+            return callbacks.request_game_selection(title, platform)
+        except Exception as e:
+            _emit_log(callbacks, f"[ERROR] Game selection object callback exception: {e}")
+            return None
+
+    return None
+
+
 def _request_user_selection(callbacks, title: str, platform: str, artwork_options: List[Dict[str, Any]]) -> Optional[int]:
     """
     Request user to select artwork from options.
@@ -409,6 +441,72 @@ def _request_user_selection(callbacks, title: str, platform: str, artwork_option
             return None
 
     _emit_log(callbacks, f"[DEBUG] No valid callback found")
+    return None
+
+
+def _request_asset_selection(callbacks, title: str, platform: str, asset_type: str, asset_options: List[Dict[str, Any]]) -> Optional[int]:
+    """
+    Request user to select an asset (hero, logo, screenshot) from options.
+    Returns selected index, None if skipped, -1 if cancelled all.
+
+    asset_type: 'hero', 'logo', or 'screenshot'
+    """
+    _emit_log(callbacks, f"[DEBUG] _request_asset_selection called for {title} ({asset_type}) with {len(asset_options)} options")
+
+    if callbacks is None:
+        return None
+
+    # Handle dict-style callbacks (from GUI)
+    if isinstance(callbacks, dict):
+        callback_key = f"request_{asset_type}_selection"
+        if callback_key in callbacks and callable(callbacks[callback_key]):
+            try:
+                _emit_log(callbacks, f"[DEBUG] Calling {callback_key} callback...")
+                result = callbacks[callback_key](title, platform, asset_options)
+                _emit_log(callbacks, f"[DEBUG] Callback returned: {result}")
+                return result
+            except Exception as e:
+                _emit_log(callbacks, f"[ERROR] {callback_key} callback exception: {e}")
+                import traceback
+                _emit_log(callbacks, f"[ERROR] {traceback.format_exc()}")
+                return None
+        # Fallback to generic request_selection if specific callback not found
+        elif "request_selection" in callbacks and callable(callbacks["request_selection"]):
+            try:
+                _emit_log(callbacks, f"[DEBUG] Using generic request_selection for {asset_type}...")
+                result = callbacks["request_selection"](title, platform, asset_options, asset_type)
+                return result
+            except TypeError:
+                # If the callback doesn't accept asset_type, try without it
+                try:
+                    result = callbacks["request_selection"](title, platform, asset_options)
+                    return result
+                except Exception as e:
+                    _emit_log(callbacks, f"[ERROR] Generic callback exception: {e}")
+                    return None
+            except Exception as e:
+                _emit_log(callbacks, f"[ERROR] Generic callback exception: {e}")
+                return None
+
+    # Handle object-style callbacks
+    elif hasattr(callbacks, f"request_{asset_type}_selection"):
+        try:
+            callback_method = getattr(callbacks, f"request_{asset_type}_selection")
+            return callback_method(title, platform, asset_options)
+        except Exception as e:
+            _emit_log(callbacks, f"[ERROR] Object callback exception: {e}")
+            return None
+    elif hasattr(callbacks, "request_selection"):
+        try:
+            return callbacks.request_selection(title, platform, asset_options, asset_type)
+        except TypeError:
+            try:
+                return callbacks.request_selection(title, platform, asset_options)
+            except Exception:
+                return None
+        except Exception:
+            return None
+
     return None
 
 
@@ -475,8 +573,9 @@ def search_with_variants(api_key: str, base_url: str, title: str, timeout_s: int
             if delay_s > 0 and variants.index(variant) < len(variants) - 1:
                 time.sleep(delay_s)
 
-            # If we found good results, we can stop
-            if len(all_results) >= 5:
+            # If we found enough unique results from a single variant, we can stop
+            # (but don't stop too early - we want more game options in interactive mode)
+            if len(all_results) >= 20:
                 break
 
         except Exception as e:
@@ -1332,8 +1431,7 @@ def corner_mask_from_border(border_rgba: Image.Image, threshold: int = 18, shrin
 def compose_with_border(base_img: Image.Image, border_path: Path, out_size: int, centering: Tuple[float, float] = (0.5, 0.5)) -> Image.Image:
     base = center_crop_to_square(base_img, out_size, centering=centering)
 
-    border = Image.open(border_path)
-    border = ImageOps.exif_transpose(border).convert("RGBA")
+    border = ImageOps.exif_transpose(safe_load_image(border_path, "RGBA"))
     if border.size != (out_size, out_size):
         border = border.resize((out_size, out_size), Image.LANCZOS)
 
@@ -1606,38 +1704,49 @@ def fetch_multiple_art_from_steamgriddb(
     platform_key: str,
     title: str,
     platform_hints: List[str],
-    callbacks=None
+    callbacks=None,
+    fetch_all_styles: bool = True,  # For interactive mode, fetch ALL styles
+    game_id: Optional[str] = None  # Pre-selected game ID to skip search
 ) -> List[Tuple[bytes, str]]:
     """
     Fetch ALL artwork options from SteamGridDB.
     Returns list of (bytes, source_tag) tuples.
     Uses smart search with multiple variants for better matching.
     Downloads are parallelized for speed.
+
+    If game_id is provided, skips search and fetches directly for that game.
     """
     results = []
 
     try:
-        # Clean the title first for better matching
-        search_title = normalize_for_search(title)
-        _emit_log(callbacks, f"[DEBUG] SteamGridDB: Searching for '{title}' (normalized: '{search_title}')...")
+        # If game_id provided, skip search
+        if game_id:
+            _emit_log(callbacks, f"[DEBUG] SteamGridDB: Using pre-selected game ID {game_id} for '{title}'")
+        else:
+            # Clean the title first for better matching
+            search_title = normalize_for_search(title)
+            _emit_log(callbacks, f"[DEBUG] SteamGridDB: Searching for '{title}' (normalized: '{search_title}')...")
 
-        # Use variant search for better results
-        autocomplete_results = search_with_variants(api_key, base_url, title, timeout_s, delay_s, callbacks)
+            # Use variant search for better results
+            autocomplete_results = search_with_variants(api_key, base_url, title, timeout_s, delay_s, callbacks)
 
-        if not autocomplete_results:
-            _emit_log(callbacks, f"[DEBUG] SteamGridDB: No results found for any search variant")
-            return results
+            if not autocomplete_results:
+                _emit_log(callbacks, f"[DEBUG] SteamGridDB: No results found for any search variant")
+                return results
 
-        if delay_s > 0:
-            time.sleep(delay_s)
+            if delay_s > 0:
+                time.sleep(delay_s)
 
-        # Get best game ID using the normalized title for comparison
-        game_id = choose_best_game_id(api_key, base_url, timeout_s, delay_s, search_title, platform_hints, autocomplete_results, 8, callbacks)
-        if not game_id:
-            return results
+            # Get best game ID using the normalized title for comparison
+            game_id = choose_best_game_id(api_key, base_url, timeout_s, delay_s, search_title, platform_hints, autocomplete_results, 8, callbacks)
+            if not game_id:
+                return results
 
         # Fetch all grids for this game
-        grids = grids_by_game(api_key, base_url, game_id, [prefer_dim], square_styles, timeout_s)
+        # When fetch_all_styles is True, don't filter by styles in the API call - get everything
+        styles_param = None if fetch_all_styles else square_styles
+        grids = grids_by_game(api_key, base_url, game_id, None, styles_param, timeout_s)
+        _emit_log(callbacks, f"[DEBUG] SteamGridDB: Got {len(grids)} grids from API (fetch_all_styles={fetch_all_styles})")
         if not grids:
             return results
 
@@ -1657,6 +1766,12 @@ def fetch_multiple_art_from_steamgriddb(
 
         # Sort by score (highest first) to get the best quality artwork
         suitable_grids.sort(key=lambda x: (x.get("score", 0), x.get("upvotes", 0), x.get("id", 0)), reverse=True)
+
+        # Limit to top 25 results to balance variety vs download time and memory usage
+        max_results = 25
+        if len(suitable_grids) > max_results:
+            _emit_log(callbacks, f"[DEBUG] SteamGridDB: Limiting from {len(suitable_grids)} to {max_results} results")
+            suitable_grids = suitable_grids[:max_results]
 
         _emit_log(callbacks, f"[DEBUG] SteamGridDB: {len(suitable_grids)} suitable grids after filtering, sorted by score")
         if suitable_grids:
@@ -1688,10 +1803,10 @@ def fetch_multiple_art_from_steamgriddb(
                 _emit_log(callbacks, f"[DEBUG] SteamGridDB: Failed to download grid - {e}")
                 return None
 
-        # Use ThreadPoolExecutor for parallel downloads
+        # Use ThreadPoolExecutor for parallel downloads (16 workers for faster fetching)
         from concurrent.futures import ThreadPoolExecutor, as_completed
         indexed_results = []
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=16) as executor:
             futures = [executor.submit(download_grid, (i, grid)) for i, grid in enumerate(suitable_grids)]
             for future in as_completed(futures):
                 result = future.result()
@@ -1708,6 +1823,106 @@ def fetch_multiple_art_from_steamgriddb(
     except Exception as e:
         _emit_log(callbacks, f"[DEBUG] SteamGridDB: Error - {e}")
         return results
+
+
+def fetch_multiple_art_by_game_id(
+    *,
+    api_key: str,
+    base_url: str,
+    timeout_s: int,
+    delay_s: float,
+    cache_dir: Path,
+    allow_animated: bool,
+    prefer_dim: str,
+    square_styles: List[str],
+    square_only: bool,
+    game_id: int,
+    callbacks=None
+) -> List[Tuple[bytes, str]]:
+    """
+    Fetch ALL artwork options from SteamGridDB for a SPECIFIC game ID.
+    Used when user has already selected the game from search.
+    Returns list of (bytes, source_tag) tuples.
+    """
+    results = []
+
+    try:
+        _emit_log(callbacks, f"[DEBUG] SteamGridDB: Fetching artwork for game ID {game_id}...")
+
+        # Fetch all grids for this game
+        grids = grids_by_game(api_key, base_url, str(game_id), [prefer_dim], square_styles, timeout_s)
+        if not grids:
+            _emit_log(callbacks, f"[DEBUG] SteamGridDB: No grids found for game ID {game_id}")
+            return results
+
+        if delay_s > 0:
+            time.sleep(delay_s)
+
+        # Filter grids based on preferences
+        suitable_grids = []
+        for grid in grids:
+            # Check animation
+            if not allow_animated and grid.get("mime", "").startswith("image/webp"):
+                continue
+            # Check if square only
+            if square_only and grid.get("width") != grid.get("height"):
+                continue
+            suitable_grids.append(grid)
+
+        # Sort by score (highest first)
+        suitable_grids.sort(key=lambda x: (x.get("score", 0), x.get("upvotes", 0), x.get("id", 0)), reverse=True)
+
+        # Limit to top 30 results
+        max_results = 30
+        if len(suitable_grids) > max_results:
+            suitable_grids = suitable_grids[:max_results]
+
+        _emit_log(callbacks, f"[DEBUG] SteamGridDB: {len(suitable_grids)} suitable grids for game ID {game_id}")
+
+        # Download grids in parallel (16 workers)
+        def download_grid(idx_grid):
+            idx, grid = idx_grid
+            url = grid.get("url")
+            if not url:
+                return None
+            try:
+                cache_key = sha256_text(url)
+                cache_path = cache_dir / f"{cache_key}.bin"
+
+                if cache_path.exists():
+                    img_bytes = cache_path.read_bytes()
+                else:
+                    img_bytes = download_bytes(url, timeout_s)
+                    cache_path.write_bytes(img_bytes)
+
+                style = grid.get("style", "unknown")
+                source_tag = f"SteamGridDB - {style}"
+                return (idx, img_bytes, source_tag)
+
+            except Exception as e:
+                _emit_log(callbacks, f"[DEBUG] SteamGridDB: Failed to download grid - {e}")
+                return None
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        indexed_results = []
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            futures = [executor.submit(download_grid, (i, grid)) for i, grid in enumerate(suitable_grids)]
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    indexed_results.append(result)
+
+        # Sort results by original index to maintain score order
+        indexed_results.sort(key=lambda x: x[0])
+        results = [(img_bytes, source_tag) for idx, img_bytes, source_tag in indexed_results]
+
+        _emit_log(callbacks, f"[DEBUG] SteamGridDB: Returning {len(results)} artwork options for game ID {game_id}")
+        return results
+
+    except Exception as e:
+        _emit_log(callbacks, f"[DEBUG] SteamGridDB: Error fetching by game ID - {e}")
+        return results
+
 
 def fetch_art_from_steamgriddb_square(
     *,
@@ -1976,6 +2191,237 @@ def fetch_heroes_from_steamgriddb(
     except Exception as e:
         _emit_log(callbacks, f"[HERO] Error fetching heroes: {e}")
         return results
+
+
+def fetch_multiple_heroes_from_steamgriddb(
+    *,
+    api_key: str,
+    base_url: str,
+    timeout_s: int,
+    delay_s: float,
+    cache_dir: Path,
+    allow_animated: bool,
+    prefer_dimensions: List[str],
+    styles: List[str],
+    platform_key: str,
+    title: str,
+    platform_hints: List[str],
+    max_heroes: int = 10,
+    callbacks=None,
+    game_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetch multiple hero images from SteamGridDB for interactive selection.
+    Returns list of dicts with keys: 'image_data' (bytes), 'source' (str), 'width', 'height'
+    """
+    options = []
+
+    if not api_key:
+        return options
+
+    try:
+        _emit_log(callbacks, f"[HERO-INTERACTIVE] Searching SteamGridDB for heroes: '{title}'...")
+
+        # If no game_id provided, search for the game
+        if not game_id:
+            autocomplete_results = search_autocomplete(api_key, base_url, title, timeout_s)
+            if not autocomplete_results:
+                _emit_log(callbacks, f"[HERO-INTERACTIVE] No search results for '{title}'")
+                return options
+
+            if delay_s > 0:
+                time.sleep(delay_s)
+
+            # Use first result for interactive mode
+            game_id = str(autocomplete_results[0].get("id"))
+            game_name = autocomplete_results[0].get("name", "Unknown")
+            _emit_log(callbacks, f"[HERO-INTERACTIVE] Using: '{game_name}' (id={game_id})")
+
+        if not game_id:
+            return options
+
+        # Fetch heroes
+        heroes = heroes_by_game(api_key, base_url, game_id, prefer_dimensions, styles, timeout_s)
+
+        if not heroes:
+            _emit_log(callbacks, f"[HERO-INTERACTIVE] No hero images found for game ID {game_id}")
+            return options
+
+        _emit_log(callbacks, f"[HERO-INTERACTIVE] Found {len(heroes)} hero images")
+
+        if delay_s > 0:
+            time.sleep(delay_s)
+
+        # Filter heroes
+        suitable_heroes = []
+        for hero in heroes:
+            url = hero.get("url", "").strip()
+            if not url:
+                continue
+            if not allow_animated and is_animated(url):
+                continue
+            suitable_heroes.append(hero)
+
+        # Sort by score
+        suitable_heroes.sort(key=lambda x: (x.get("score", 0), x.get("upvotes", 0), x.get("id", 0)), reverse=True)
+
+        # Download heroes for preview (limit to max_heroes)
+        for i, hero in enumerate(suitable_heroes[:max_heroes]):
+            url = hero.get("url")
+            if not url:
+                continue
+
+            try:
+                cache_key = sha256_text(url)
+                cache_path = cache_dir / f"hero_{cache_key}.bin"
+
+                if cache_path.exists():
+                    img_bytes = cache_path.read_bytes()
+                else:
+                    img_bytes = download_bytes(url, timeout_s)
+                    cache_path.write_bytes(img_bytes)
+
+                width = hero.get("width", 0)
+                height = hero.get("height", 0)
+                style = hero.get("style", "unknown")
+                source_tag = f"SteamGridDB Hero ({style}, {width}x{height})"
+
+                options.append({
+                    'image_data': img_bytes,
+                    'source': source_tag,
+                    'width': width,
+                    'height': height,
+                    'provider': 'steamgriddb_hero'
+                })
+
+                if delay_s > 0 and i < len(suitable_heroes) - 1:
+                    time.sleep(delay_s)
+
+            except Exception as e:
+                _emit_log(callbacks, f"[HERO-INTERACTIVE] Failed to download hero {i+1}: {e}")
+                continue
+
+        _emit_log(callbacks, f"[HERO-INTERACTIVE] Retrieved {len(options)} hero options")
+        return options
+
+    except Exception as e:
+        _emit_log(callbacks, f"[HERO-INTERACTIVE] Error fetching heroes: {e}")
+        return options
+
+
+def fetch_multiple_logos_from_steamgriddb(
+    *,
+    api_key: str,
+    base_url: str,
+    timeout_s: int,
+    delay_s: float,
+    cache_dir: Path,
+    allow_animated: bool,
+    styles: List[str],
+    platform_key: str,
+    title: str,
+    platform_hints: List[str],
+    max_logos: int = 10,
+    callbacks=None,
+    game_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetch multiple logo images from SteamGridDB for interactive selection.
+    Returns list of dicts with keys: 'image_data' (bytes), 'source' (str), 'width', 'height'
+    """
+    options = []
+
+    if not api_key:
+        return options
+
+    try:
+        _emit_log(callbacks, f"[LOGO-INTERACTIVE] Searching SteamGridDB for logos: '{title}'...")
+
+        # If no game_id provided, search for the game
+        if not game_id:
+            autocomplete_results = search_autocomplete(api_key, base_url, title, timeout_s)
+            if not autocomplete_results:
+                _emit_log(callbacks, f"[LOGO-INTERACTIVE] No search results for '{title}'")
+                return options
+
+            if delay_s > 0:
+                time.sleep(delay_s)
+
+            # Use first result for interactive mode
+            game_id = str(autocomplete_results[0].get("id"))
+            game_name = autocomplete_results[0].get("name", "Unknown")
+            _emit_log(callbacks, f"[LOGO-INTERACTIVE] Using: '{game_name}' (id={game_id})")
+
+        if not game_id:
+            return options
+
+        # Fetch logos
+        logos = logos_by_game(api_key, base_url, game_id, styles, timeout_s)
+
+        if not logos:
+            _emit_log(callbacks, f"[LOGO-INTERACTIVE] No logo images found for game ID {game_id}")
+            return options
+
+        _emit_log(callbacks, f"[LOGO-INTERACTIVE] Found {len(logos)} logo images")
+
+        if delay_s > 0:
+            time.sleep(delay_s)
+
+        # Filter logos
+        suitable_logos = []
+        for logo in logos:
+            url = logo.get("url", "").strip()
+            if not url:
+                continue
+            if not allow_animated and is_animated(url):
+                continue
+            suitable_logos.append(logo)
+
+        # Sort by score
+        suitable_logos.sort(key=lambda x: (x.get("score", 0), x.get("upvotes", 0), x.get("id", 0)), reverse=True)
+
+        # Download logos for preview (limit to max_logos)
+        for i, logo in enumerate(suitable_logos[:max_logos]):
+            url = logo.get("url")
+            if not url:
+                continue
+
+            try:
+                cache_key = sha256_text(url)
+                cache_path = cache_dir / f"logo_{cache_key}.bin"
+
+                if cache_path.exists():
+                    img_bytes = cache_path.read_bytes()
+                else:
+                    img_bytes = download_bytes(url, timeout_s)
+                    cache_path.write_bytes(img_bytes)
+
+                width = logo.get("width", 0)
+                height = logo.get("height", 0)
+                style = logo.get("style", "unknown")
+                source_tag = f"SteamGridDB Logo ({style}, {width}x{height})"
+
+                options.append({
+                    'image_data': img_bytes,
+                    'source': source_tag,
+                    'width': width,
+                    'height': height,
+                    'provider': 'steamgriddb_logo'
+                })
+
+                if delay_s > 0 and i < len(suitable_logos) - 1:
+                    time.sleep(delay_s)
+
+            except Exception as e:
+                _emit_log(callbacks, f"[LOGO-INTERACTIVE] Failed to download logo {i+1}: {e}")
+                continue
+
+        _emit_log(callbacks, f"[LOGO-INTERACTIVE] Retrieved {len(options)} logo options")
+        return options
+
+    except Exception as e:
+        _emit_log(callbacks, f"[LOGO-INTERACTIVE] Error fetching logos: {e}")
+        return options
 
 
 # ==========================
@@ -3045,7 +3491,14 @@ def fetch_art_from_custom_http(*, timeout_s: int, platform_key: str, title: str)
 def migrate_legacy_art_sources(art_sources: dict) -> dict:
     """Migrate old 'mode' string to new providers list structure."""
     if "providers" in art_sources:
-        return art_sources  # Already migrated
+        # Already migrated, but ensure steamgriddb_square_only setting is synced to provider config
+        # The top-level steamgriddb_square_only setting is the source of truth (set by options dialog)
+        if "steamgriddb_square_only" in art_sources:
+            sg_square = art_sources["steamgriddb_square_only"]
+            for prov in art_sources["providers"]:
+                if prov.get("id") == "steamgriddb":
+                    prov["square_only"] = sg_square
+        return art_sources
 
     # Parse legacy mode string
     mode = art_sources.get("mode", "steamgriddb_then_libretro")
@@ -3102,7 +3555,14 @@ def run_job(
     device_path: Optional[str] = None,
     scrape_logos: bool = True,
     logo_fallback_to_boxart: bool = True,
-    custom_border_settings: Optional[Dict[str, Any]] = None
+    custom_border_settings: Optional[Dict[str, Any]] = None,
+    interactive_settings: Optional[Dict[str, bool]] = None,
+    force_rescrape: bool = False,
+    output_path_override: Optional[str] = None,
+    border_path_override: Optional[str] = None,
+    sgdb_game_id: Optional[int] = None,
+    device_id: Optional[str] = None,
+    game_relative_path: Optional[str] = None
 ) -> Tuple[bool, str]:
 
     config_path = Path(config_path)
@@ -3269,6 +3729,16 @@ def run_job(
 
     _emit_log(callbacks, f"[CONFIG] Fallback icons: use_fallback={use_fallback}, skip_scraping={skip_scraping}")
 
+    # Interactive settings for each asset type (icons, heroes, logos, screenshots)
+    # Load from passed parameter or config file
+    int_settings = interactive_settings or cfg.get("interactive_mode", {}) or {}
+    interactive_icons = interactive_mode and bool(int_settings.get("icons", True))
+    interactive_heroes = interactive_mode and bool(int_settings.get("heroes", False))
+    interactive_logos = interactive_mode and bool(int_settings.get("logos", False))
+    interactive_screenshots = interactive_mode and bool(int_settings.get("screenshots", False))
+
+    _emit_log(callbacks, f"[CONFIG] Interactive mode: icons={interactive_icons}, heroes={interactive_heroes}, logos={interactive_logos}, screenshots={interactive_screenshots}")
+
     # Log provider order for debugging
     _emit_log(callbacks, f"[CONFIG] Provider order: {provider_order}")
     _emit_log(callbacks, f"[CONFIG] Provider settings: {provider_settings}")
@@ -3403,12 +3873,26 @@ def run_job(
         file_ext = get_export_extension(export_format)
 
         for title in titles:
-            # Create folder per game with icon and title images
-            game_folder = out_plat / safe_slug(title)
-            out_path = game_folder / f"icon.{file_ext}"
-            if out_path.exists():
+            # Use output_path_override if specified (for re-scraping)
+            if output_path_override:
+                game_folder = Path(output_path_override)
+                out_path = game_folder / f"icon.{file_ext}"
+            else:
+                # Create folder per game with icon and title images
+                # If game_relative_path is provided (deep search), include it in the path
+                if game_relative_path:
+                    game_folder = out_plat / game_relative_path / safe_slug(title)
+                else:
+                    game_folder = out_plat / safe_slug(title)
+                out_path = game_folder / f"icon.{file_ext}"
+
+            # Skip if already exists, unless force_rescrape is True
+            if out_path.exists() and not force_rescrape:
                 continue
-            tasks.append((platform_key, title, border_path, out_path, rev_plat))
+
+            # Use border_path_override if specified, otherwise use the determined border_path
+            task_border_path = Path(border_path_override) if border_path_override else border_path
+            tasks.append((platform_key, title, task_border_path, out_path, rev_plat))
 
     total = len(tasks)
     if total == 0:
@@ -3426,16 +3910,16 @@ def run_job(
     prefetch_lock = threading.Lock()
     prefetch_thread: Optional[threading.Thread] = None
 
-    def prefetch_artwork(platform_key: str, title: str, hints: List[str], cache_key: str):
+    def prefetch_artwork(platform_key: str, title: str, hints: List[str], cache_key: str, game_id: Optional[str] = None):
         """Prefetch artwork in background and store in cache."""
         try:
-            options = fetch_all_artwork_options_impl(platform_key, title, hints)
+            options = fetch_all_artwork_options_impl(platform_key, title, hints, game_id=game_id)
             with prefetch_lock:
                 prefetch_cache[cache_key] = options
         except Exception as e:
             _emit_log(callbacks, f"[PREFETCH] Failed for {title}: {e}")
 
-    def start_prefetch(platform_key: str, title: str, hints: List[str]):
+    def start_prefetch(platform_key: str, title: str, hints: List[str], game_id: Optional[str] = None):
         """Start prefetching artwork for a game in the background."""
         nonlocal prefetch_thread
         cache_key = f"{platform_key}:{title}"
@@ -3444,12 +3928,12 @@ def run_job(
                 return  # Already cached
         prefetch_thread = threading.Thread(
             target=prefetch_artwork,
-            args=(platform_key, title, hints, cache_key),
+            args=(platform_key, title, hints, cache_key, game_id),
             daemon=True
         )
         prefetch_thread.start()
 
-    def get_prefetched_or_fetch(platform_key: str, title: str, hints: List[str]) -> List[Dict[str, Any]]:
+    def get_prefetched_or_fetch(platform_key: str, title: str, hints: List[str], game_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get prefetched artwork if available, otherwise fetch now."""
         nonlocal prefetch_thread
         cache_key = f"{platform_key}:{title}"
@@ -3467,19 +3951,23 @@ def run_job(
                 return options
 
         # Not in cache, fetch now
-        return fetch_all_artwork_options_impl(platform_key, title, hints)
+        return fetch_all_artwork_options_impl(platform_key, title, hints, game_id=game_id)
 
-    def fetch_all_artwork_options(platform_key: str, title: str, hints: List[str]) -> List[Dict[str, Any]]:
+    def fetch_all_artwork_options(platform_key: str, title: str, hints: List[str], game_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Wrapper that uses prefetch cache when available."""
-        return get_prefetched_or_fetch(platform_key, title, hints)
+        return get_prefetched_or_fetch(platform_key, title, hints, game_id=game_id)
 
-    def fetch_all_artwork_options_impl(platform_key: str, title: str, hints: List[str]) -> List[Dict[str, Any]]:
+    def fetch_all_artwork_options_impl(platform_key: str, title: str, hints: List[str], game_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Fetch ALL artwork options from ALL providers IN PARALLEL (doesn't stop at first match).
         Returns list of dicts with keys: 'image_data' (bytes), 'source' (str), 'provider' (str)
+
+        If game_id is provided, uses it directly for SteamGridDB instead of searching.
         """
         options = []
         options_lock = threading.Lock()
+        # Capture game_id in closure for inner function
+        sgdb_game_id_for_fetch = game_id
 
         def fetch_from_steamgriddb():
             if cancel.is_cancelled:
@@ -3495,11 +3983,13 @@ def run_job(
                     allow_animated=allow_animated,
                     prefer_dim=prefer_dim,
                     square_styles=square_styles,
-                    square_only=sg_square_only,
+                    square_only=False,  # Don't filter by square in interactive mode - show all
                     platform_key=platform_key,
                     title=title,
                     platform_hints=hints,
                     callbacks=callbacks,
+                    fetch_all_styles=True,  # Fetch ALL styles in interactive mode
+                    game_id=sgdb_game_id_for_fetch,  # Use pre-selected game ID if available
                 )
                 with options_lock:
                     for img_bytes, source_tag in results:
@@ -3656,17 +4146,19 @@ def run_job(
             'custom_http': fetch_from_custom_http,
         }
 
-        # Run all enabled providers in parallel
-        threads = []
-        for prov in provider_order:
-            if prov in provider_funcs:
-                t = threading.Thread(target=provider_funcs[prov], daemon=True)
-                threads.append(t)
-                t.start()
+        # Run all enabled providers in parallel using ThreadPoolExecutor for better performance
+        from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 
-        # Wait for all threads to complete (with timeout)
-        for t in threads:
-            t.join(timeout=30)  # 30 second timeout per provider
+        funcs_to_run = [provider_funcs[prov] for prov in provider_order if prov in provider_funcs]
+
+        with ThreadPoolExecutor(max_workers=len(funcs_to_run)) as executor:
+            futures = [executor.submit(func) for func in funcs_to_run]
+            # Wait for all with a total timeout of 45 seconds
+            for future in as_completed(futures, timeout=45):
+                try:
+                    future.result()  # Results are stored in options via options_lock
+                except Exception as e:
+                    _emit_log(callbacks, f"[INTERACTIVE] Provider error: {e}")
 
         return options
 
@@ -3757,9 +4249,11 @@ def run_job(
             return False
 
         # Interactive mode: fetch from ALL providers and let user choose
+        _emit_log(callbacks, f"[DEBUG] interactive_mode={interactive_mode}, skip_scraping={skip_scraping}")
         if interactive_mode and not skip_scraping:
             _emit_log(callbacks, f"[INTERACTIVE] {platform_key}: {title} - Fetching from all providers...")
-            artwork_options = fetch_all_artwork_options(platform_key, title, hints)
+            # Pass sgdb_game_id if provided (for "Search Different Game" feature)
+            artwork_options = fetch_all_artwork_options(platform_key, title, hints, game_id=str(sgdb_game_id) if sgdb_game_id else None)
 
             if not artwork_options:
                 # Try fallback icon if enabled
@@ -3796,8 +4290,11 @@ def run_job(
                     return False
 
             # Request user selection from all options (only if we have options and didn't use fallback)
+            _emit_log(callbacks, f"[DEBUG] artwork_options count: {len(artwork_options) if artwork_options else 0}, img_bytes is None: {img_bytes is None}")
             if artwork_options and img_bytes is None:
+                _emit_log(callbacks, f"[DEBUG] About to request user selection for {title}...")
                 selected_index = _request_user_selection(callbacks, title, platform_key, artwork_options)
+                _emit_log(callbacks, f"[DEBUG] User selection returned: {selected_index}")
 
                 if selected_index == -1:
                     # User cancelled all - set cancel token
@@ -3977,7 +4474,7 @@ def run_job(
                 return False
 
         try:
-            src_img = Image.open(BytesIO(img_bytes))
+            src_img = safe_load_image(img_bytes)
 
             # Logo detection and cropping if enabled and source matches
             if ld_enabled and source_tag in ld_sources:
@@ -4032,30 +4529,65 @@ def run_job(
                     # Prefer "white" and "black" which are more standardized
                     logo_styles = logo_cfg.get("styles", ["white", "black"])
 
-                    logo_result = fetch_logos_from_steamgriddb(
-                        api_key=api_key,
-                        base_url=base_url,
-                        timeout_s=timeout_s,
-                        delay_s=delay_s,
-                        cache_dir=cache_dir,
-                        allow_animated=allow_animated,
-                        styles=logo_styles,
-                        platform_key=platform_key,
-                        title=title,
-                        platform_hints=hints,
-                        callbacks=callbacks
-                    )
+                    if interactive_logos:
+                        # Fetch multiple logos for user selection
+                        logo_options = fetch_multiple_logos_from_steamgriddb(
+                            api_key=api_key,
+                            base_url=base_url,
+                            timeout_s=timeout_s,
+                            delay_s=delay_s,
+                            cache_dir=cache_dir,
+                            allow_animated=allow_animated,
+                            styles=logo_styles,
+                            platform_key=platform_key,
+                            title=title,
+                            platform_hints=hints,
+                            max_logos=10,
+                            callbacks=callbacks
+                        )
 
-                    if logo_result:
-                        logo_bytes, _ = logo_result
-                        try:
-                            logo_img = Image.open(BytesIO(logo_bytes))
-                            logo_img = ImageOps.exif_transpose(logo_img).convert("RGBA")
-                            save_image_for_export(logo_img, title_path, export_format, jpeg_quality)
-                            logo_saved = True
-                            _emit_log(callbacks, f"[LOGO] Saved logo as title for {title}")
-                        except Exception as le:
-                            _emit_log(callbacks, f"[LOGO] Failed to save logo: {le}")
+                        if logo_options:
+                            # Request user selection
+                            selected_idx = _request_asset_selection(callbacks, title, platform_key, "logo", logo_options)
+
+                            if selected_idx is not None and selected_idx >= 0 and selected_idx < len(logo_options):
+                                logo_bytes = logo_options[selected_idx]['image_data']
+                                try:
+                                    logo_img = ImageOps.exif_transpose(safe_load_image(logo_bytes, "RGBA"))
+                                    save_image_for_export(logo_img, title_path, export_format, jpeg_quality)
+                                    logo_saved = True
+                                    _emit_log(callbacks, f"[LOGO] Saved user-selected logo as title for {title}")
+                                except Exception as le:
+                                    _emit_log(callbacks, f"[LOGO] Failed to save logo: {le}")
+                            elif selected_idx == -1:
+                                _emit_log(callbacks, f"[LOGO] User cancelled logo selection for {title}")
+                            else:
+                                _emit_log(callbacks, f"[LOGO] User skipped logo selection for {title}")
+                    else:
+                        # Non-interactive: fetch single best logo
+                        logo_result = fetch_logos_from_steamgriddb(
+                            api_key=api_key,
+                            base_url=base_url,
+                            timeout_s=timeout_s,
+                            delay_s=delay_s,
+                            cache_dir=cache_dir,
+                            allow_animated=allow_animated,
+                            styles=logo_styles,
+                            platform_key=platform_key,
+                            title=title,
+                            platform_hints=hints,
+                            callbacks=callbacks
+                        )
+
+                        if logo_result:
+                            logo_bytes, _ = logo_result
+                            try:
+                                logo_img = ImageOps.exif_transpose(safe_load_image(logo_bytes, "RGBA"))
+                                save_image_for_export(logo_img, title_path, export_format, jpeg_quality)
+                                logo_saved = True
+                                _emit_log(callbacks, f"[LOGO] Saved logo as title for {title}")
+                            except Exception as le:
+                                _emit_log(callbacks, f"[LOGO] Failed to save logo: {le}")
                 except Exception as logo_err:
                     _emit_log(callbacks, f"[LOGO] Error fetching logo for {title}: {logo_err}")
 
@@ -4078,31 +4610,75 @@ def run_job(
                     hero_dimensions = hero_cfg.get("prefer_dimensions", ["1920x620", "3840x1240"])
                     hero_styles = hero_cfg.get("styles", ["alternate", "blurred", "material"])
 
-                    heroes = fetch_heroes_from_steamgriddb(
-                        api_key=api_key,
-                        base_url=base_url,
-                        timeout_s=timeout_s,
-                        delay_s=delay_s,
-                        cache_dir=cache_dir,
-                        allow_animated=allow_animated,
-                        prefer_dimensions=hero_dimensions,
-                        styles=hero_styles,
-                        platform_key=platform_key,
-                        title=title,
-                        platform_hints=hints,
-                        max_heroes=hero_count,
-                        callbacks=callbacks
-                    )
+                    if interactive_heroes:
+                        # Fetch multiple heroes for user selection
+                        hero_options = fetch_multiple_heroes_from_steamgriddb(
+                            api_key=api_key,
+                            base_url=base_url,
+                            timeout_s=timeout_s,
+                            delay_s=delay_s,
+                            cache_dir=cache_dir,
+                            allow_animated=allow_animated,
+                            prefer_dimensions=hero_dimensions,
+                            styles=hero_styles,
+                            platform_key=platform_key,
+                            title=title,
+                            platform_hints=hints,
+                            max_heroes=15,  # Show more options for selection
+                            callbacks=callbacks
+                        )
 
-                    for hero_bytes, hero_filename in heroes:
-                        hero_path = out_path.parent / f"{hero_filename}.{file_ext}"
-                        try:
-                            hero_img = Image.open(BytesIO(hero_bytes))
-                            hero_img = ImageOps.exif_transpose(hero_img).convert("RGBA")
-                            save_image_for_export(hero_img, hero_path, export_format, jpeg_quality)
-                            _emit_log(callbacks, f"[HERO] Saved {hero_filename} for {title}")
-                        except Exception as he:
-                            _emit_log(callbacks, f"[HERO] Failed to save {hero_filename}: {he}")
+                        if hero_options:
+                            # Request user selection for each hero slot
+                            for hero_idx in range(hero_count):
+                                if not hero_options:
+                                    break
+
+                                selected_idx = _request_asset_selection(callbacks, title, platform_key, "hero", hero_options)
+
+                                if selected_idx is not None and selected_idx >= 0 and selected_idx < len(hero_options):
+                                    hero_bytes = hero_options[selected_idx]['image_data']
+                                    hero_filename = f"hero_{hero_idx + 1}"
+                                    hero_path = out_path.parent / f"{hero_filename}.{file_ext}"
+                                    try:
+                                        hero_img = ImageOps.exif_transpose(safe_load_image(hero_bytes, "RGBA"))
+                                        save_image_for_export(hero_img, hero_path, export_format, jpeg_quality)
+                                        _emit_log(callbacks, f"[HERO] Saved user-selected {hero_filename} for {title}")
+                                        # Remove selected option so it can't be selected again
+                                        hero_options.pop(selected_idx)
+                                    except Exception as he:
+                                        _emit_log(callbacks, f"[HERO] Failed to save {hero_filename}: {he}")
+                                elif selected_idx == -1:
+                                    _emit_log(callbacks, f"[HERO] User cancelled hero selection for {title}")
+                                    break
+                                else:
+                                    _emit_log(callbacks, f"[HERO] User skipped hero {hero_idx + 1} for {title}")
+                    else:
+                        # Non-interactive: fetch best heroes automatically
+                        heroes = fetch_heroes_from_steamgriddb(
+                            api_key=api_key,
+                            base_url=base_url,
+                            timeout_s=timeout_s,
+                            delay_s=delay_s,
+                            cache_dir=cache_dir,
+                            allow_animated=allow_animated,
+                            prefer_dimensions=hero_dimensions,
+                            styles=hero_styles,
+                            platform_key=platform_key,
+                            title=title,
+                            platform_hints=hints,
+                            max_heroes=hero_count,
+                            callbacks=callbacks
+                        )
+
+                        for hero_bytes, hero_filename in heroes:
+                            hero_path = out_path.parent / f"{hero_filename}.{file_ext}"
+                            try:
+                                hero_img = ImageOps.exif_transpose(safe_load_image(hero_bytes, "RGBA"))
+                                save_image_for_export(hero_img, hero_path, export_format, jpeg_quality)
+                                _emit_log(callbacks, f"[HERO] Saved {hero_filename} for {title}")
+                            except Exception as he:
+                                _emit_log(callbacks, f"[HERO] Failed to save {hero_filename}: {he}")
 
                 except Exception as hero_err:
                     _emit_log(callbacks, f"[HERO] Error downloading heroes for {title}: {hero_err}")
@@ -4160,8 +4736,7 @@ def run_job(
                     for screenshot_bytes, screenshot_filename in screenshots:
                         screenshot_path = out_path.parent / f"{screenshot_filename}.{file_ext}"
                         try:
-                            screenshot_img = Image.open(BytesIO(screenshot_bytes))
-                            screenshot_img = ImageOps.exif_transpose(screenshot_img).convert("RGBA")
+                            screenshot_img = ImageOps.exif_transpose(safe_load_image(screenshot_bytes, "RGBA"))
                             save_image_for_export(screenshot_img, screenshot_path, export_format, jpeg_quality)
                             _emit_log(callbacks, f"[SCREENSHOT] Saved {screenshot_filename} for {title}")
                         except Exception as se:
@@ -4246,7 +4821,8 @@ def run_job(
             copied, copy_errors = copy_output_to_device(
                 output_dir=output_dir,
                 device_base_path=device_path,
-                callbacks=callbacks
+                callbacks=callbacks,
+                device_id=device_id
             )
             _emit_log(callbacks, f"[DEVICE] Copied {copied} items to device ({copy_errors} errors)")
         except Exception as copy_err:
@@ -4258,7 +4834,8 @@ def run_job(
 def copy_output_to_device(
     output_dir: Path,
     device_base_path: str,
-    callbacks=None
+    callbacks=None,
+    device_id: Optional[str] = None
 ) -> Tuple[int, int]:
     """
     Copy generated output to connected Android device via ADB.
@@ -4267,6 +4844,7 @@ def copy_output_to_device(
         output_dir: Local output directory containing platform folders
         device_base_path: Base path on device (e.g., /sdcard/Android/media/com.iisulauncher/iiSULauncher/assets/media/roms/consoles)
         callbacks: Progress callbacks
+        device_id: Optional device ID to target (if multiple devices connected)
 
     Returns:
         Tuple of (files_copied, errors)
@@ -4289,6 +4867,11 @@ def copy_output_to_device(
             _emit_log(callbacks, "[DEVICE] ADB not found. Please install Android SDK Platform Tools.")
             return 0, 1
 
+    # Build base ADB command with optional device ID
+    base_adb_cmd = [adb_path]
+    if device_id:
+        base_adb_cmd.extend(["-s", device_id])
+
     # Check for connected devices
     try:
         result = subprocess.run(
@@ -4303,7 +4886,12 @@ def copy_output_to_device(
             _emit_log(callbacks, "[DEVICE] No Android devices connected. Enable USB debugging and connect device.")
             return 0, 1
 
-        _emit_log(callbacks, f"[DEVICE] Found {len(devices)} connected device(s)")
+        # If device_id specified, verify it's in the list
+        if device_id and device_id not in devices:
+            _emit_log(callbacks, f"[DEVICE] Specified device {device_id} not found. Available: {devices}")
+            return 0, 1
+
+        _emit_log(callbacks, f"[DEVICE] Found {len(devices)} connected device(s), using: {device_id or devices[0]}")
 
     except Exception as e:
         _emit_log(callbacks, f"[DEVICE] Failed to check devices: {e}")
@@ -4322,51 +4910,62 @@ def copy_output_to_device(
         platform_name = platform_folder.name
         _emit_log(callbacks, f"[DEVICE] Processing platform: {platform_name}")
 
-        # Iterate through game folders
-        for game_folder in platform_folder.iterdir():
-            if not game_folder.is_dir():
-                continue
+        # Recursively process game folders (supports deep search nested directories)
+        def process_folder(local_folder: Path, device_folder: str):
+            nonlocal copied, errors
+            for item in local_folder.iterdir():
+                if item.is_dir():
+                    # Check if this is a game folder (has asset files) or a category folder
+                    has_assets = any(f.suffix.lower() in ('.png', '.jpg', '.jpeg', '.mp3', '.ogg', '.flac')
+                                   for f in item.iterdir() if f.is_file())
+                    if has_assets:
+                        # This is a game folder - copy its contents
+                        game_name = item.name
+                        device_game_path = f"{device_folder}/{game_name}"
 
-            game_name = game_folder.name
-            device_game_path = f"{device_base_path}/{platform_name}/{game_name}"
+                        # Create directory on device
+                        try:
+                            subprocess.run(
+                                base_adb_cmd + ["shell", "mkdir", "-p", device_game_path],
+                                capture_output=True, timeout=30,
+                                **_get_subprocess_flags()
+                            )
+                        except Exception as e:
+                            _emit_log(callbacks, f"[DEVICE] Failed to create directory for {game_name}: {e}")
+                            errors += 1
+                            continue
 
-            # Create directory on device
-            try:
-                subprocess.run(
-                    [adb_path, "shell", "mkdir", "-p", device_game_path],
-                    capture_output=True, timeout=30,
-                    **_get_subprocess_flags()
-                )
-            except Exception as e:
-                _emit_log(callbacks, f"[DEVICE] Failed to create directory for {game_name}: {e}")
-                errors += 1
-                continue
+                        # Copy all files in game folder
+                        for file_path in item.iterdir():
+                            if not file_path.is_file():
+                                continue
 
-            # Copy all files in game folder
-            for file_path in game_folder.iterdir():
-                if not file_path.is_file():
-                    continue
+                            device_file_path = f"{device_game_path}/{file_path.name}"
 
-                device_file_path = f"{device_game_path}/{file_path.name}"
+                            try:
+                                result = subprocess.run(
+                                    base_adb_cmd + ["push", str(file_path), device_file_path],
+                                    capture_output=True, text=True, timeout=60,
+                                    **_get_subprocess_flags()
+                                )
 
-                try:
-                    result = subprocess.run(
-                        [adb_path, "push", str(file_path), device_file_path],
-                        capture_output=True, text=True, timeout=60,
-                        **_get_subprocess_flags()
-                    )
+                                if result.returncode == 0:
+                                    copied += 1
+                                    _emit_log(callbacks, f"[DEVICE] Copied {file_path.name} to {game_name}/")
+                                else:
+                                    _emit_log(callbacks, f"[DEVICE] Failed to copy {file_path.name}: {result.stderr}")
+                                    errors += 1
 
-                    if result.returncode == 0:
-                        copied += 1
+                            except subprocess.TimeoutExpired:
+                                _emit_log(callbacks, f"[DEVICE] Timeout copying {file_path.name}")
+                                errors += 1
+                            except Exception as e:
+                                _emit_log(callbacks, f"[DEVICE] Error copying {file_path.name}: {e}")
+                                errors += 1
                     else:
-                        _emit_log(callbacks, f"[DEVICE] Failed to copy {file_path.name}: {result.stderr}")
-                        errors += 1
+                        # This is a category folder (deep search) - recurse into it
+                        process_folder(item, f"{device_folder}/{item.name}")
 
-                except subprocess.TimeoutExpired:
-                    _emit_log(callbacks, f"[DEVICE] Timeout copying {file_path.name}")
-                    errors += 1
-                except Exception as e:
-                    _emit_log(callbacks, f"[DEVICE] Error copying {file_path.name}: {e}")
-                    errors += 1
+        process_folder(platform_folder, f"{device_base_path}/{platform_name}")
 
     return copied, errors

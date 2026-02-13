@@ -5,20 +5,27 @@ Main application with tabbed interface
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, QSize
-from PySide6.QtGui import QIcon, QFontDatabase, QDesktopServices, QPixmap, QPainter, QColor, QBrush
+from PySide6.QtCore import (
+    Qt, QUrl, QSize, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup,
+    QSequentialAnimationGroup, QTimer, QPoint, QRect, Property, Signal, QObject
+)
+from PySide6.QtGui import (
+    QIcon, QFontDatabase, QDesktopServices, QPixmap, QPainter, QColor, QBrush,
+    QLinearGradient, QRadialGradient, QPen, QPainterPath, QFont
+)
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget,
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+    QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGraphicsOpacityEffect,
+    QStackedWidget, QFrame, QSizePolicy, QGraphicsDropShadowEffect
 )
 
-from app_paths import get_app_dir, get_logo_path, get_theme_path, get_fonts_dir, get_src_dir, get_config_path, verify_required_assets
+from app_paths import get_app_dir, get_logo_path, get_theme_path, get_fonts_dir, get_src_dir, get_config_path, verify_required_assets, get_config, invalidate_config_cache
 
 
 class DotPatternWidget(QWidget):
     """
     Widget that draws a dot pattern background matching iiSU design language.
-    The dot pattern is drawn at 10% opacity with light gray dots.
+    The dot pattern is drawn at 12% opacity with light gray dots.
     """
 
     def __init__(self, parent=None, dark_mode: bool = True):
@@ -32,17 +39,17 @@ class DotPatternWidget(QWidget):
         self.update()
 
     def paintEvent(self, event):
-        """Draw the dot pattern background."""
+        """Draw the dot pattern background matching iiSU Launcher aesthetic."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        # Get colors based on theme
+        # Get colors based on theme - matches Workshop website
         if self._dark_mode:
-            bg_color = QColor("#212529")
-            dot_color = QColor(180, 180, 180, 25)  # Light gray at ~10% opacity
+            bg_color = QColor("#0a0a0f")  # Deep dark base matching website
+            dot_color = QColor(176, 176, 176, 24)  # 12% opacity dots
         else:
-            bg_color = QColor("#F5F5F7")
-            dot_color = QColor(100, 100, 100, 25)  # Gray at ~10% opacity
+            bg_color = QColor("#e8eef5")  # Light background matching website
+            dot_color = QColor(100, 100, 100, 15)  # 6% opacity dots
 
         # Fill background
         painter.fillRect(self.rect(), bg_color)
@@ -52,7 +59,7 @@ class DotPatternWidget(QWidget):
         painter.setBrush(QBrush(dot_color))
 
         dot_size = 2
-        spacing = 20
+        spacing = 20  # Matches iiSU design spec
 
         # Calculate visible area and draw dots
         rect = self.rect()
@@ -90,10 +97,478 @@ def create_colored_icon(icon_path: Path, color: QColor) -> QIcon:
 
 # Import UI components
 from icon_generator_tab import IconGeneratorTab
-from border_generator_tab import BorderGeneratorTab
-from custom_image_tab import CustomImageTab
-from cover_generator_tab import CoverGeneratorTab
+from custom_tab import CustomTab
 from rom_browser_tab import ROMBrowserTab
+from asset_db_tab import AssetDBTab
+from soundbyte_tab import SoundbyteTab
+from background_music import get_music_manager
+
+
+class LazyTabPlaceholder(QWidget):
+    """
+    Lightweight placeholder shown while a tab's real content is deferred.
+    Stores a factory callable that produces the real widget on first access.
+    """
+
+    def __init__(self, factory, parent=None):
+        super().__init__(parent)
+        self.factory = factory
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
+        lbl = QLabel("Loading...")
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setObjectName("label_muted")
+        layout.addWidget(lbl)
+
+
+class _GlowOrbWidget(QWidget):
+    """Paints a soft radial gradient orb — used as an animated accent behind onboarding pages."""
+
+    def __init__(self, color: QColor, radius: int = 180, parent=None):
+        super().__init__(parent)
+        self._color = color
+        self._radius = radius
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setFixedSize(radius * 2, radius * 2)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        center = self.rect().center()
+        grad = QRadialGradient(center, self._radius)
+        c = QColor(self._color)
+        c.setAlpha(55)
+        grad.setColorAt(0.0, c)
+        c.setAlpha(18)
+        grad.setColorAt(0.45, c)
+        c.setAlpha(0)
+        grad.setColorAt(1.0, c)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(grad))
+        p.drawEllipse(self.rect())
+        p.end()
+
+
+class OnboardingOverlay(QWidget):
+    """
+    Full-window animated onboarding overlay with slide transitions,
+    gradient glow orbs, and the iiSU frosted-glass aesthetic.
+
+    Renders as a translucent layer over the main window — not a popup dialog.
+    Pages slide left/right with content fading in per element (stagger).
+    """
+
+    closed = Signal()
+
+    # Page definitions: (emoji_icon, title, body, accent_color)
+    PAGES = [
+        (
+            "logo",  # special: use the app logo
+            "Welcome to v{version}",
+            "A major update with a new Workshop, shareable per-game\n"
+            "links, and full hero & logo support.",
+            "#00DDFF",
+        ),
+        (
+            "🎨",
+            "iiSU Workshop",
+            "The Community DB is now the Workshop. Browse, download,\n"
+            "and apply icons, heroes, and logos from the community library.",
+            "#B71AEB",
+        ),
+        (
+            "🔗",
+            "Per-Game Links",
+            "Every game in the Workshop now has its own shareable\n"
+            "URL. Send a link to jump straight to any game's assets.",
+            "#067DBA",
+        ),
+        (
+            "🚀",
+            "Ready to Go",
+            "Your library and settings are right where you left them.\n"
+            "Jump in and start creating!",
+            "#8FFFB1",
+        ),
+    ]
+
+    def __init__(self, version: str, dark_mode: bool, parent=None):
+        super().__init__(parent)
+        self._version = version
+        self._dark_mode = dark_mode
+        self._current = 0
+        self._animating = False
+        self._anims = []  # prevent GC of animation objects
+
+        # Fill entire parent window
+        self.setObjectName("onboarding_overlay")
+        if parent:
+            self.setGeometry(parent.rect())
+
+        self._build_ui()
+        self._populate_page(0, animate=False)
+
+        # Start the entrance animation after a tiny delay
+        QTimer.singleShot(80, self._entrance_animation)
+
+    # ── UI construction ──────────────────────────────────────────
+
+    def _build_ui(self):
+        self.setAutoFillBackground(False)
+        self.setAttribute(Qt.WA_StyledBackground, False)
+
+        # --- Glow orbs (positioned absolutely, animated later) ---
+        self._orb_left = _GlowOrbWidget(QColor("#00DDFF"), 200, self)
+        self._orb_right = _GlowOrbWidget(QColor("#B71AEB"), 160, self)
+        self._orb_left.move(-60, -40)
+        self._orb_right.move(self.width() - 120, self.height() - 140)
+
+        # --- Central glass card ---
+        self._card = QFrame(self)
+        self._card.setObjectName("onboarding_card")
+
+        card_layout = QVBoxLayout(self._card)
+        card_layout.setContentsMargins(48, 40, 48, 28)
+        card_layout.setSpacing(0)
+
+        # Top area: icon + text (vertically centered, fills the card)
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setAlignment(Qt.AlignCenter)
+        content_layout.setSpacing(10)
+
+        # Icon / logo area — tight fit, no wasted vertical space
+        self._icon_label = QLabel()
+        self._icon_label.setObjectName("onboarding_icon")
+        self._icon_label.setAlignment(Qt.AlignCenter)
+        self._icon_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self._icon_label.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(self._icon_label)
+
+        # Version badge (small pill)
+        self._badge = QLabel()
+        self._badge.setObjectName("onboarding_badge")
+        self._badge.setAlignment(Qt.AlignCenter)
+        self._badge.setFixedHeight(24)
+        self._badge.hide()  # only shown on welcome page
+        content_layout.addWidget(self._badge)
+
+        # Title
+        self._title_label = QLabel()
+        self._title_label.setObjectName("onboarding_title")
+        self._title_label.setAlignment(Qt.AlignCenter)
+        content_layout.addWidget(self._title_label)
+
+        content_layout.addSpacing(6)
+
+        # Body
+        self._body_label = QLabel()
+        self._body_label.setObjectName("onboarding_body")
+        self._body_label.setAlignment(Qt.AlignCenter)
+        self._body_label.setWordWrap(True)
+        self._body_label.setMaximumWidth(460)
+        content_layout.addWidget(self._body_label, alignment=Qt.AlignHCenter)
+
+        card_layout.addWidget(content_widget, 1)
+
+        # Accent line (thin gradient separator)
+        accent_line = QFrame()
+        accent_line.setObjectName("onboarding_accent_line")
+        accent_line.setFixedHeight(2)
+        card_layout.addWidget(accent_line)
+
+        card_layout.addSpacing(16)
+
+        # Bottom bar: progress dots · back / next
+        bottom = QHBoxLayout()
+        bottom.setSpacing(6)
+
+        # Progress bar (segmented)
+        self._progress_segments = []
+        progress_container = QWidget()
+        progress_container.setObjectName("onboarding_progress_container")
+        progress_layout = QHBoxLayout(progress_container)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.setSpacing(6)
+        for i in range(len(self.PAGES)):
+            seg = QFrame()
+            seg.setFixedHeight(4)
+            seg.setMinimumWidth(32)
+            seg.setObjectName("progress_active" if i == 0 else "progress_inactive")
+            self._progress_segments.append(seg)
+            progress_layout.addWidget(seg)
+        bottom.addWidget(progress_container)
+
+        bottom.addStretch()
+
+        # Back button
+        self._btn_back = QPushButton("Back")
+        self._btn_back.setObjectName("onboarding_btn_back")
+        self._btn_back.setCursor(Qt.PointingHandCursor)
+        self._btn_back.setFixedHeight(36)
+        self._btn_back.setVisible(False)
+        self._btn_back.clicked.connect(self._go_prev)
+        bottom.addWidget(self._btn_back)
+
+        # Next / Get Started button
+        self._btn_next = QPushButton("Next")
+        self._btn_next.setObjectName("onboarding_btn_next")
+        self._btn_next.setCursor(Qt.PointingHandCursor)
+        self._btn_next.setFixedHeight(36)
+        self._btn_next.setMinimumWidth(120)
+        self._btn_next.clicked.connect(self._go_next)
+        bottom.addWidget(self._btn_next)
+
+        card_layout.addLayout(bottom)
+
+    # ── Page content ─────────────────────────────────────────────
+
+    def _populate_page(self, index: int, animate: bool = True):
+        icon_key, title_tpl, body, accent = self.PAGES[index]
+        title = title_tpl.format(version=self._version)
+
+        # Icon
+        if icon_key == "logo":
+            logo_path = get_logo_path()
+            if logo_path.exists():
+                pm = QPixmap(str(logo_path)).scaledToHeight(80, Qt.SmoothTransformation)
+                self._icon_label.setPixmap(pm)
+                self._icon_label.setText("")
+            else:
+                self._icon_label.setText("✦")
+            self._badge.setText(f"v{self._version}")
+            self._badge.show()
+        else:
+            self._icon_label.setPixmap(QPixmap())  # clear pixmap
+            self._icon_label.setText(icon_key)
+            self._badge.hide()
+
+        self._title_label.setText(title)
+        self._body_label.setText(body)
+
+        # Update progress segments
+        for i, seg in enumerate(self._progress_segments):
+            seg.setObjectName("progress_active" if i <= index else "progress_inactive")
+            seg.style().unpolish(seg)
+            seg.style().polish(seg)
+
+        # Update buttons
+        self._btn_back.setVisible(index > 0)
+        self._btn_next.setText("Get Started" if index == len(self.PAGES) - 1 else "Next")
+
+        # Move orbs to match accent color
+        self._update_orb_accent(accent)
+
+        if animate:
+            self._stagger_content_in()
+
+    def _update_orb_accent(self, hex_color: str):
+        """Reposition and recolor the left orb to accent the current page."""
+        # We repaint the orb by swapping it out — lightweight
+        self._orb_left._color = QColor(hex_color)
+        self._orb_left.update()
+
+    # ── Animations ───────────────────────────────────────────────
+
+    def _entrance_animation(self):
+        """Fade-in + scale-up the card on first show."""
+        # Card starts invisible and slightly smaller
+        effect = QGraphicsOpacityEffect(self._card)
+        self._card.setGraphicsEffect(effect)
+        effect.setOpacity(0.0)
+
+        fade = QPropertyAnimation(effect, b"opacity")
+        fade.setDuration(400)
+        fade.setStartValue(0.0)
+        fade.setEndValue(1.0)
+        fade.setEasingCurve(QEasingCurve.OutCubic)
+
+        # Also fade-in the whole overlay background
+        overlay_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(overlay_effect)
+        overlay_effect.setOpacity(0.0)
+
+        bg_fade = QPropertyAnimation(overlay_effect, b"opacity")
+        bg_fade.setDuration(350)
+        bg_fade.setStartValue(0.0)
+        bg_fade.setEndValue(1.0)
+        bg_fade.setEasingCurve(QEasingCurve.OutCubic)
+
+        group = QParallelAnimationGroup(self)
+        group.addAnimation(bg_fade)
+        group.addAnimation(fade)
+        group.finished.connect(lambda: (
+            self._card.setGraphicsEffect(None),
+            self.setGraphicsEffect(None),
+        ))
+        self._anims.append(group)
+        group.start()
+
+        # Stagger content in after card appears
+        QTimer.singleShot(250, self._stagger_content_in)
+
+    def _stagger_content_in(self):
+        """Fade-in icon → title → body sequentially for a polished feel."""
+        targets = [self._icon_label, self._title_label, self._body_label]
+        if self._badge.isVisible():
+            targets.insert(1, self._badge)
+
+        group = QSequentialAnimationGroup(self)
+        for widget in targets:
+            effect = QGraphicsOpacityEffect(widget)
+            widget.setGraphicsEffect(effect)
+            effect.setOpacity(0.0)
+
+            anim = QPropertyAnimation(effect, b"opacity")
+            anim.setDuration(200)
+            anim.setStartValue(0.0)
+            anim.setEndValue(1.0)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            group.addAnimation(anim)
+
+        # Remove all effects after finishing to avoid render issues
+        def _cleanup():
+            for w in targets:
+                w.setGraphicsEffect(None)
+        group.finished.connect(_cleanup)
+        self._anims.append(group)
+        group.start()
+
+    def _slide_transition(self, direction: int):
+        """
+        Slide the card content left or right.
+        direction: +1 = slide left (next), -1 = slide right (back)
+        """
+        if self._animating:
+            return
+        self._animating = True
+
+        # Fade out current content
+        effect = QGraphicsOpacityEffect(self._card)
+        self._card.setGraphicsEffect(effect)
+
+        fade_out = QPropertyAnimation(effect, b"opacity")
+        fade_out.setDuration(180)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.InCubic)
+
+        def _on_faded_out():
+            self._card.setGraphicsEffect(None)
+            new_index = self._current + direction
+            if 0 <= new_index < len(self.PAGES):
+                self._current = new_index
+                self._populate_page(self._current, animate=True)
+
+            # Fade back in
+            effect2 = QGraphicsOpacityEffect(self._card)
+            self._card.setGraphicsEffect(effect2)
+            effect2.setOpacity(0.0)
+
+            fade_in = QPropertyAnimation(effect2, b"opacity")
+            fade_in.setDuration(220)
+            fade_in.setStartValue(0.0)
+            fade_in.setEndValue(1.0)
+            fade_in.setEasingCurve(QEasingCurve.OutCubic)
+            fade_in.finished.connect(lambda: (
+                self._card.setGraphicsEffect(None),
+                setattr(self, '_animating', False),
+            ))
+            self._anims.append(fade_in)
+            fade_in.start()
+
+        fade_out.finished.connect(_on_faded_out)
+        self._anims.append(fade_out)
+        fade_out.start()
+
+    # ── Navigation ───────────────────────────────────────────────
+
+    def _go_next(self):
+        if self._animating:
+            return
+        if self._current < len(self.PAGES) - 1:
+            self._slide_transition(+1)
+        else:
+            self._exit_animation()
+
+    def _go_prev(self):
+        if self._animating:
+            return
+        if self._current > 0:
+            self._slide_transition(-1)
+
+    def _exit_animation(self):
+        """Fade the entire overlay out and emit closed signal."""
+        self._animating = True
+        effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(effect)
+
+        fade = QPropertyAnimation(effect, b"opacity")
+        fade.setDuration(300)
+        fade.setStartValue(1.0)
+        fade.setEndValue(0.0)
+        fade.setEasingCurve(QEasingCurve.InCubic)
+        fade.finished.connect(lambda: (
+            self.setGraphicsEffect(None),
+            self.hide(),
+            self.closed.emit(),
+        ))
+        self._anims.append(fade)
+        fade.start()
+
+    # ── Layout / painting ────────────────────────────────────────
+
+    def paintEvent(self, event):
+        """Paint the semi-transparent overlay backdrop with gradient wash."""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        # Dark scrim
+        if self._dark_mode:
+            scrim = QColor(6, 6, 12, 210)
+        else:
+            scrim = QColor(200, 210, 225, 200)
+        p.fillRect(self.rect(), scrim)
+
+        # Subtle gradient wash from top-left
+        wash = QLinearGradient(0, 0, self.width(), self.height())
+        if self._dark_mode:
+            wash.setColorAt(0.0, QColor(0, 221, 255, 12))
+            wash.setColorAt(0.5, QColor(43, 31, 208, 8))
+            wash.setColorAt(1.0, QColor(183, 26, 235, 10))
+        else:
+            wash.setColorAt(0.0, QColor(0, 180, 220, 15))
+            wash.setColorAt(0.5, QColor(43, 31, 208, 8))
+            wash.setColorAt(1.0, QColor(183, 26, 235, 10))
+        p.fillRect(self.rect(), wash)
+        p.end()
+
+    def resizeEvent(self, event):
+        """Keep the glass card centered and orbs positioned."""
+        super().resizeEvent(event)
+        w, h = self.width(), self.height()
+
+        # Card: 60% wide, max 640px; 70% tall, max 520px
+        card_w = min(int(w * 0.6), 640)
+        card_h = min(int(h * 0.75), 520)
+        card_x = (w - card_w) // 2
+        card_y = (h - card_h) // 2
+        self._card.setGeometry(card_x, card_y, card_w, card_h)
+
+        # Orbs float around the card edges
+        self._orb_left.move(card_x - 100, card_y - 60)
+        self._orb_right.move(card_x + card_w - 80, card_y + card_h - 100)
+
+    def keyPressEvent(self, event):
+        """Arrow keys and Escape for navigation."""
+        if event.key() == Qt.Key_Escape:
+            self._exit_animation()
+        elif event.key() in (Qt.Key_Right, Qt.Key_Space, Qt.Key_Return):
+            self._go_next()
+        elif event.key() == Qt.Key_Left:
+            self._go_prev()
+        else:
+            super().keyPressEvent(event)
 
 
 class MainWindowWithTabs(QMainWindow):
@@ -102,10 +577,32 @@ class MainWindowWithTabs(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("iiSU Asset Tool")
-        self.setMinimumSize(1200, 800)
+        # Allow smaller window sizes for different screen resolutions
+        self.setMinimumSize(800, 600)
 
-        # Theme state (load from settings)
+        # Theme state (load from settings) - must be set before _set_initial_size
         self._dark_mode = self._load_theme_preference()
+
+        # Set preferred size based on available screen geometry
+        self._set_initial_size()
+
+    def _set_initial_size(self):
+        """Set initial window size based on available screen space."""
+        from PySide6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen()
+        if screen:
+            available = screen.availableGeometry()
+            # Use 80% of available width/height, capped at reasonable maximums
+            width = min(int(available.width() * 0.8), 1400)
+            height = min(int(available.height() * 0.8), 900)
+            # Ensure minimum sizes
+            width = max(width, 800)
+            height = max(height, 600)
+            self.resize(width, height)
+            # Center the window
+            x = available.x() + (available.width() - width) // 2
+            y = available.y() + (available.height() - height) // 2
+            self.move(x, y)
 
         # Set window icon if logo exists
         logo_path = get_logo_path()
@@ -123,24 +620,34 @@ class MainWindowWithTabs(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Header with logo and title
+        # Header with logo and title - responsive layout
         header_widget = QWidget()
         header_widget.setObjectName("app_header")
         header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(20, 15, 20, 15)
+        # Use proportional margins that scale better
+        header_layout.setContentsMargins(15, 10, 15, 10)
+        header_layout.setSpacing(10)
 
-        # Logo
+        # Logo - scale based on available space
         if logo_path.exists():
             from PySide6.QtGui import QPixmap
+            from PySide6.QtWidgets import QSizePolicy
             logo_label = QLabel()
+            logo_label.setObjectName("app_logo")
             logo_pixmap = QPixmap(str(logo_path))
-            scaled_logo = logo_pixmap.scaledToHeight(48, Qt.SmoothTransformation)
+            # Store original pixmap for resize events
+            self._logo_pixmap = logo_pixmap
+            self._logo_label = logo_label
+            scaled_logo = logo_pixmap.scaledToHeight(40, Qt.SmoothTransformation)
             logo_label.setPixmap(scaled_logo)
+            logo_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             header_layout.addWidget(logo_label)
 
-        # Title
+        # Title - allow it to shrink if needed
         title = QLabel("iiSU Asset Tool")
         title.setObjectName("header")
+        from PySide6.QtWidgets import QSizePolicy
+        title.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         header_layout.addWidget(title)
 
         header_layout.addStretch(1)
@@ -153,40 +660,34 @@ class MainWindowWithTabs(QMainWindow):
         # Icon color for current theme
         icon_color = QColor("#FFFFFF") if self._dark_mode else QColor("#1D1D1F")
 
-        # Theme toggle button
+        # Theme toggle button - responsive sizing
         self.btn_theme = QPushButton()
-        self.btn_theme.setMaximumWidth(40)
-        self.btn_theme.setMinimumWidth(40)
-        self.btn_theme.setMaximumHeight(40)
+        self.btn_theme.setFixedSize(36, 36)
         self._update_theme_button()
         self.btn_theme.clicked.connect(self._toggle_theme)
         header_layout.addWidget(self.btn_theme)
 
-        # Info button (about/credits)
+        # Info button (about/credits) - responsive sizing
         self.btn_info = QPushButton()
-        self.btn_info.setMaximumWidth(40)
-        self.btn_info.setMinimumWidth(40)
-        self.btn_info.setMaximumHeight(40)
+        self.btn_info.setFixedSize(36, 36)
         self.btn_info.setToolTip("About & Credits")
         if info_icon_path.exists():
             self.btn_info.setIcon(create_colored_icon(info_icon_path, icon_color))
-            self.btn_info.setIconSize(QSize(20, 20))
+            self.btn_info.setIconSize(QSize(18, 18))
         else:
             self.btn_info.setText("ℹ")
         self.btn_info.clicked.connect(self._show_info_dialog)
         header_layout.addWidget(self.btn_info)
 
-        # Settings button
+        # Settings button - responsive sizing
         self.btn_options = QPushButton()
-        self.btn_options.setMaximumWidth(40)
-        self.btn_options.setMinimumWidth(40)
-        self.btn_options.setMaximumHeight(40)
+        self.btn_options.setFixedSize(36, 36)
         self.btn_options.setToolTip("Settings")
         if gear_icon_path.exists():
             self.btn_options.setIcon(create_colored_icon(gear_icon_path, icon_color))
-            self.btn_options.setIconSize(QSize(20, 20))
+            self.btn_options.setIconSize(QSize(18, 18))
         else:
-            self.btn_options.setText("⚙")
+            self.btn_options.setText("Cfg")
         self.btn_options.clicked.connect(self._open_settings)
         header_layout.addWidget(self.btn_options)
 
@@ -197,26 +698,180 @@ class MainWindowWithTabs(QMainWindow):
         self.tabs.setTabPosition(QTabWidget.North)
         self.tabs.setMovable(False)
 
-        # Add tabs
+        # Add tabs - Library loaded eagerly (shown at startup), others deferred
         self.rom_browser_tab = ROMBrowserTab()
-        self.tabs.addTab(self.rom_browser_tab, "ROM Browser")
-        self.tabs.addTab(IconGeneratorTab(), "Icon Scraper")
-        self.tabs.addTab(CustomImageTab(), "Custom Icons")
-        self.tabs.addTab(BorderGeneratorTab(), "Custom Borders")
-        self.tabs.addTab(CoverGeneratorTab(), "Custom Covers")
+        self.icon_generator_tab = LazyTabPlaceholder(lambda: IconGeneratorTab())
+        self.custom_tab = LazyTabPlaceholder(lambda: CustomTab())
+        self.asset_db_tab = LazyTabPlaceholder(lambda: AssetDBTab())
+        self.soundbyte_tab = LazyTabPlaceholder(lambda: SoundbyteTab())
+
+        self.tabs.addTab(self.rom_browser_tab, "Library")
+        self.tabs.addTab(self.icon_generator_tab, "Title Search")
+        self.tabs.addTab(self.custom_tab, "Custom")
+        self.tabs.addTab(self.asset_db_tab, "iiSU Workshop")
+        self.tabs.addTab(self.soundbyte_tab, "Soundbytes")
+
+        # Realize deferred tabs on first switch
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        self._tab_anim = None  # Keep ref to prevent GC
 
         layout.addWidget(self.tabs)
+
+        # Initialize background music (iiSU OST by Thaddeus Silva)
+        self._init_background_music()
+
+        # Check for onboarding (show after a short delay to let the UI settle)
+        self._check_onboarding()
+
+    def _init_background_music(self):
+        """Initialize background music playback."""
+        try:
+            music_manager = get_music_manager()
+            music_manager.initialize()
+        except Exception as e:
+            print(f"Failed to initialize background music: {e}")
+
+    # ------------------------------------------------------------------
+    # Onboarding / version tracking
+    # ------------------------------------------------------------------
+    def _check_onboarding(self):
+        """Show onboarding dialog for new or updated users."""
+        try:
+            cfg = get_config()
+            last_seen = cfg.get("ui", {}).get("last_seen_version", "0.0.0")
+            current_version = "2.0.0"
+
+            if self._version_compare(last_seen, current_version) < 0:
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(500, lambda: self._show_onboarding(current_version))
+        except Exception as e:
+            print(f"Failed to check onboarding: {e}")
+
+    @staticmethod
+    def _version_compare(v1: str, v2: str) -> int:
+        """Compare two version strings. Returns -1, 0, or 1."""
+        parts1 = [int(x) for x in v1.split(".")]
+        parts2 = [int(x) for x in v2.split(".")]
+        for a, b in zip(parts1, parts2):
+            if a < b:
+                return -1
+            if a > b:
+                return 1
+        if len(parts1) < len(parts2):
+            return -1
+        if len(parts1) > len(parts2):
+            return 1
+        return 0
+
+    def _show_onboarding(self, version: str):
+        """Show the what's new onboarding overlay (full-window, animated)."""
+        self._onboarding = OnboardingOverlay(version, self._dark_mode, self._central_widget)
+        self._onboarding.setGeometry(self._central_widget.rect())
+        self._onboarding.closed.connect(lambda: self._save_last_seen_version(version))
+        self._onboarding.show()
+        self._onboarding.raise_()
+        self._onboarding.setFocus()
+
+    def _save_last_seen_version(self, version: str):
+        """Save the last seen version to config."""
+        try:
+            import yaml
+            from pathlib import Path as _Path
+            cfg_path = _Path(get_config_path())
+            if cfg_path.exists():
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+                if "ui" not in cfg:
+                    cfg["ui"] = {}
+                cfg["ui"]["last_seen_version"] = version
+                with open(cfg_path, "w", encoding="utf-8") as f:
+                    yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+                invalidate_config_cache()
+        except Exception as e:
+            print(f"Failed to save version: {e}")
+
+    # ------------------------------------------------------------------
+    # Lazy tab loading + fade transition
+    # ------------------------------------------------------------------
+    def _on_tab_changed(self, index: int):
+        """Realize a lazy tab on first click and play a subtle fade-in."""
+        widget = self.tabs.widget(index)
+        if isinstance(widget, LazyTabPlaceholder):
+            self._realize_tab(index, widget)
+        else:
+            self._fade_in_tab(widget)
+
+    def _realize_tab(self, index: int, placeholder: LazyTabPlaceholder):
+        """Replace a LazyTabPlaceholder with the real widget.
+
+        Uses a zero-timer to let Qt paint the "Loading..." placeholder first,
+        then constructs the real widget on the next event-loop tick so the
+        tab switch itself feels instant.
+        """
+        from PySide6.QtCore import QTimer
+
+        def _do_realize():
+            label = self.tabs.tabText(index)
+            real_widget = placeholder.factory()
+
+            # Store reference on self so the rest of the app can reach it
+            attr_map = {
+                1: "icon_generator_tab",
+                2: "custom_tab",
+                3: "asset_db_tab",
+                4: "soundbyte_tab",
+            }
+            attr = attr_map.get(index)
+            if attr:
+                setattr(self, attr, real_widget)
+
+            # Block signals during the swap to prevent cascading
+            # currentChanged events from triggering more realize calls
+            self.tabs.blockSignals(True)
+            self.tabs.removeTab(index)
+            self.tabs.insertTab(index, real_widget, label)
+            self.tabs.setCurrentIndex(index)
+            self.tabs.blockSignals(False)
+
+            # Fade-in the newly created tab
+            self._fade_in_tab(real_widget)
+
+        QTimer.singleShot(0, _do_realize)
+
+    def _fade_in_tab(self, widget: QWidget):
+        """Play a quick 150 ms opacity fade-in on *widget*."""
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        anim = QPropertyAnimation(effect, b"opacity")
+        anim.setDuration(150)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        # Remove the graphics effect once animation finishes to avoid
+        # interfering with child widget rendering
+        anim.finished.connect(lambda: widget.setGraphicsEffect(None))
+        self._tab_anim = anim  # prevent GC
+        anim.start()
+
+    def _ensure_icon_generator_realized(self):
+        """Force-realize the icon_generator_tab if still a placeholder."""
+        if isinstance(self.icon_generator_tab, LazyTabPlaceholder):
+            self._realize_tab(1, self.icon_generator_tab)
+
+    def closeEvent(self, event):
+        """Handle window close - release music resources."""
+        try:
+            music_manager = get_music_manager()
+            music_manager.release()
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def _load_theme_preference(self) -> bool:
         """Load theme preference from config. Returns True for dark mode, False for light."""
         try:
-            from pathlib import Path
-            import yaml
-            cfg_path = Path(get_config_path())
-            if cfg_path.exists():
-                with open(cfg_path, "r", encoding="utf-8") as f:
-                    cfg = yaml.safe_load(f) or {}
-                return cfg.get("ui", {}).get("dark_mode", True)
+            cfg = get_config()
+            return cfg.get("ui", {}).get("dark_mode", True)
         except Exception:
             pass
         return True  # Default to dark mode
@@ -235,6 +890,7 @@ class MainWindowWithTabs(QMainWindow):
                 cfg["ui"]["dark_mode"] = self._dark_mode
                 with open(cfg_path, "w", encoding="utf-8") as f:
                     yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+                invalidate_config_cache()
         except Exception as e:
             print(f"Failed to save theme preference: {e}")
 
@@ -253,9 +909,9 @@ class MainWindowWithTabs(QMainWindow):
             except Exception as e:
                 print(f"Failed to load theme: {e}")
                 if self._dark_mode:
-                    self.setStyleSheet("QWidget { background-color: #212529; color: #E9E9E9; }")
+                    self.setStyleSheet("QWidget { background-color: #0a0a0f; color: #E9E9E9; }")
                 else:
-                    self.setStyleSheet("QWidget { background-color: #F5F5F7; color: #1D1D1F; }")
+                    self.setStyleSheet("QWidget { background-color: #e8eef5; color: #1D1D1F; }")
         else:
             print(f"Theme file not found: {theme_path}")
             if self._dark_mode:
@@ -273,21 +929,35 @@ class MainWindowWithTabs(QMainWindow):
             sun_icon_path = src_dir / "sun-3337.png"
             if sun_icon_path.exists():
                 self.btn_theme.setIcon(create_colored_icon(sun_icon_path, icon_color))
-                self.btn_theme.setIconSize(QSize(20, 20))
+                self.btn_theme.setIconSize(QSize(18, 18))
                 self.btn_theme.setText("")
             else:
-                self.btn_theme.setText("☀")
+                self.btn_theme.setText("Light")
             self.btn_theme.setToolTip("Switch to Light Mode")
         else:
             # Show moon icon (to switch to dark mode)
             moon_icon_path = src_dir / "dark-mode-6682.png"
             if moon_icon_path.exists():
                 self.btn_theme.setIcon(create_colored_icon(moon_icon_path, icon_color))
-                self.btn_theme.setIconSize(QSize(20, 20))
+                self.btn_theme.setIconSize(QSize(18, 18))
                 self.btn_theme.setText("")
             else:
-                self.btn_theme.setText("🌙")
+                self.btn_theme.setText("Dark")
             self.btn_theme.setToolTip("Switch to Dark Mode")
+
+    def resizeEvent(self, event):
+        """Handle window resize to adjust responsive elements."""
+        super().resizeEvent(event)
+        # Scale logo based on window height
+        if hasattr(self, '_logo_pixmap') and hasattr(self, '_logo_label'):
+            # Logo height: 40px at 600px window height, scales up to 48px at larger sizes
+            window_height = self.height()
+            logo_height = min(48, max(32, int(window_height * 0.06)))
+            scaled = self._logo_pixmap.scaledToHeight(logo_height, Qt.SmoothTransformation)
+            self._logo_label.setPixmap(scaled)
+        # Keep onboarding overlay filling the central widget
+        if hasattr(self, '_onboarding') and self._onboarding and self._onboarding.isVisible():
+            self._onboarding.setGeometry(self._central_widget.rect())
 
     def _toggle_theme(self):
         """Toggle between light and dark themes."""
@@ -332,14 +1002,27 @@ class MainWindowWithTabs(QMainWindow):
 
         <h3>Features</h3>
         <ul>
-            <li><b>ROM Browser</b> - Scan and manage your ROM collection by platform</li>
-            <li><b>Icon Scraper</b> - Automatically fetch and generate game icons with platform borders</li>
-            <li><b>Cover Generator</b> - Create high-quality game covers</li>
-            <li><b>Custom Icons</b> - Design custom icons with layer support:
+            <li><b>Library</b> - Scan and manage your game collection by platform</li>
+            <li><b>Title Search</b> - Automatically fetch and generate game icons with platform borders</li>
+            <li><b>Custom</b> - Design custom icons, borders, and covers with layer support:
                 <ul>
                     <li>Background layer (game art)</li>
                     <li>Logo overlay layer (transparent PNG)</li>
                     <li>Independent controls for each layer (position, scale, rotation, opacity)</li>
+                </ul>
+            </li>
+            <li><b>iiSU Workshop</b> - Browse the iiSU Workshop:
+                <ul>
+                    <li>Community-driven icon workshop for iiSU Launcher</li>
+                    <li>Multiple variants per game</li>
+                    <li>One-click download and apply</li>
+                </ul>
+            </li>
+            <li><b>Soundbytes</b> - Download game music for iiSU hover sounds:
+                <ul>
+                    <li>Search KHInsider's game music database</li>
+                    <li>Filter by gamerip quality for best audio</li>
+                    <li>Preview and select specific tracks</li>
                 </ul>
             </li>
             <li><b>Device Manager</b> - Push assets directly to your Android device via ADB</li>
@@ -362,6 +1045,7 @@ class MainWindowWithTabs(QMainWindow):
             <li><a href="https://thumbnails.libretro.com/" style="color: #00D4FF;">Libretro Thumbnails</a> - RetroArch boxart collection</li>
             <li><a href="https://www.igdb.com/" style="color: #00D4FF;">IGDB</a> - Internet Game Database (covers)</li>
             <li><a href="https://thegamesdb.net/" style="color: #00D4FF;">TheGamesDB</a> - Game information and artwork</li>
+            <li><a href="https://downloads.khinsider.com/" style="color: #00D4FF;">KHInsider</a> - Video game music database (soundbytes)</li>
         </ul>
 
         <h3>Supported Platforms</h3>
@@ -376,13 +1060,15 @@ class MainWindowWithTabs(QMainWindow):
         <p>Built for the <a href="https://iisu.network/" style="color: #00D4FF;">iiSU Network</a> community.</p>
         <p>Special thanks to the iiSU team for the design aesthetic and inspiration.</p>
         <p>Logo by <b>Caddypillar</b></p>
+        <p>iiSU OST by <b>Thaddeus Silva</b></p>
+        <p>Workshop contributions by <b>N1NTENDUDE</b> and <b>Sniper</b></p>
 
         <h3>License</h3>
         <p>This tool is provided as-is for creating custom game library assets.<br>
         Ensure compliance with artwork source terms of service.</p>
 
         <p style="color: #666; font-size: 10px; margin-top: 20px;">
-        Version 1.2.1 | Desktop + Android companion app available
+        Version 2.0.0 | Desktop + Android companion app available
         </p>
         """)
         layout.addWidget(text)
@@ -399,8 +1085,11 @@ class MainWindowWithTabs(QMainWindow):
         import yaml
         from pathlib import Path
 
-        # Get the current icon generator tab to access its settings
-        icon_tab = self.tabs.widget(1)  # Icon Scraper is now the second tab (index 1)
+        # Ensure icon_generator_tab is realized (settings depend on it)
+        self._ensure_icon_generator_realized()
+
+        # Get the icon generator tab (Title Search, index 1)
+        icon_tab = self.icon_generator_tab
 
         # Load all settings from config
         rom_settings = {}
@@ -413,26 +1102,25 @@ class MainWindowWithTabs(QMainWindow):
         custom_platforms = {}
         processing_settings = {}
         export_settings = {}
+        hidden_titles = {}
 
         if hasattr(icon_tab, 'config_path'):
             try:
-                cfg_path = Path(icon_tab.config_path)
-                if cfg_path.exists():
-                    with open(cfg_path, "r", encoding="utf-8") as f:
-                        cfg = yaml.safe_load(f) or {}
-                    rom_settings = cfg.get("rom_directory", {})
-                    hero_settings = cfg.get("hero_images", {})
-                    fallback_settings = cfg.get("fallback_icons", {})
-                    screenshot_settings = cfg.get("screenshots", {})
-                    device_settings = cfg.get("device_copy", {})
-                    logo_settings = cfg.get("logos", {})
-                    custom_border_settings = cfg.get("custom_borders", {})
-                    custom_platforms = cfg.get("custom_platforms", {})
-                    processing_settings = cfg.get("processing", {})
-                    export_settings = {
-                        "format": cfg.get("export_format", "PNG"),
-                        "jpeg_quality": cfg.get("jpeg_quality", 95)
-                    }
+                cfg = get_config()
+                rom_settings = cfg.get("rom_directory", {})
+                hero_settings = cfg.get("hero_images", {})
+                fallback_settings = cfg.get("fallback_icons", {})
+                screenshot_settings = cfg.get("screenshots", {})
+                device_settings = cfg.get("device_copy", {})
+                logo_settings = cfg.get("logos", {})
+                custom_border_settings = cfg.get("custom_borders", {})
+                custom_platforms = cfg.get("custom_platforms", {})
+                processing_settings = cfg.get("processing", {})
+                export_settings = {
+                    "format": cfg.get("export_format", "PNG"),
+                    "jpeg_quality": cfg.get("jpeg_quality", 95)
+                }
+                hidden_titles = cfg.get("hidden_titles", {})
             except Exception:
                 pass
 
@@ -485,6 +1173,10 @@ class MainWindowWithTabs(QMainWindow):
             if custom_platforms:
                 dialog.set_custom_platforms(custom_platforms)
 
+            # Set hidden titles if available
+            if hidden_titles:
+                dialog.set_hidden_titles(hidden_titles)
+
             if dialog.exec():
                 # Update the icon tab's stored values
                 icon_tab.config_path = dialog.get_config_path()
@@ -508,6 +1200,7 @@ class MainWindowWithTabs(QMainWindow):
                 export_settings = dialog.get_export_settings()
                 custom_border_settings = dialog.get_custom_border_settings()
                 custom_platforms = dialog.get_custom_platforms()
+                hidden_titles = dialog.get_hidden_titles()
                 processing_settings = {
                     "workers": dialog.get_workers(),
                     "limit": dialog.get_limit()
@@ -605,19 +1298,26 @@ class MainWindowWithTabs(QMainWindow):
 
             with open(cfg_path, "w", encoding="utf-8") as f:
                 yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            invalidate_config_cache()
 
         except Exception as e:
             print(f"Failed to save settings: {e}")
 
 
 def main():
+    # Enable high DPI scaling BEFORE creating QApplication
+    # This must be done first for proper font/UI rendering
+    import os
+    os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+    os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
+
     # Windows: Set App User Model ID for taskbar icon
     import platform
     if platform.system() == "Windows":
         try:
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("iiSU.IconGenerator.1.0")
-        except:
+        except Exception:
             pass
 
     # Load saved API keys into environment on startup
@@ -631,6 +1331,13 @@ def main():
         print(f"Note: Could not load saved API keys: {e}")
 
     app = QApplication(sys.argv)
+
+    # Enable high DPI font rendering for sharper text
+    from PySide6.QtGui import QFont
+    font = app.font()
+    font.setHintingPreference(QFont.PreferFullHinting)
+    font.setStyleStrategy(QFont.PreferAntialias)
+    app.setFont(font)
 
     # Check for missing required assets and warn user
     asset_check = verify_required_assets()

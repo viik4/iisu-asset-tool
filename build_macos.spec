@@ -43,8 +43,6 @@ a = Analysis(
         'PySide6.QtWidgets',
         'PySide6.QtSvg',
         'PIL',
-        'PIL._imagingtk',
-        'PIL._tkinter_finder',
         'PIL.ImageQt',
         'yaml',
         'requests',
@@ -58,7 +56,12 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'tkinter',
+        '_tkinter',
+        'PIL._imagingtk',
+        'PIL._tkinter_finder',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -99,13 +102,17 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='iiSU Asset Tool.app',
-    icon='logo.png' if os.path.exists('logo.png') else None,
+    # Note: macOS requires .icns format for app icons. The icon is set by the CI/CD workflow
+    # which creates app_icon.icns from logo.png using iconutil, then injects it into the bundle.
+    icon=None,
     bundle_identifier='com.iisu.assettool',
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSAppleScriptEnabled': False,
         'CFBundleDocumentTypes': [],
-        'CFBundleShortVersionString': '1.0.0',
-        'CFBundleVersion': '1.0.0',
+        'CFBundleShortVersionString': '1.3.0',
+        'CFBundleVersion': '1.3.0',
+        # Icon will be set by the workflow post-build
+        'CFBundleIconFile': 'app_icon',
     },
 )

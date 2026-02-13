@@ -178,7 +178,7 @@ class SourcePriorityAdapter(
             viewHolder: RecyclerView.ViewHolder,
             target: RecyclerView.ViewHolder
         ): Boolean {
-            moveItem(viewHolder.adapterPosition, target.adapterPosition)
+            moveItem(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
             return true
         }
 

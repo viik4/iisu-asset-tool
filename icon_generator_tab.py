@@ -12,7 +12,7 @@ from PIL import Image
 from PySide6.QtCore import Qt, Signal, QObject, QSize, QUrl, Slot
 from PySide6.QtGui import QIcon, QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
+    QWidget, QVBoxLayout, QHBoxLayout, QDialog,
     QLabel, QPushButton, QListWidget, QListWidgetItem,
     QSpinBox, QLineEdit, QProgressBar, QTextEdit, QFileDialog,
     QMessageBox, QComboBox, QCheckBox, QTabWidget, QButtonGroup, QRadioButton,
@@ -23,7 +23,7 @@ import run_backend
 from preview_window import show_preview_dialog
 from source_priority_widget import SourcePriorityWidget
 from options_dialog import OptionsDialog
-from app_paths import get_borders_dir, get_config_path
+from app_paths import get_borders_dir, get_config_path, get_config, invalidate_config_cache
 
 
 class BackendCallbacks(QObject):
@@ -45,14 +45,15 @@ class IconGeneratorTab(QWidget):
         self._worker_thread = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(16)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(12)
 
         layout = QHBoxLayout()
         root.addLayout(layout, 1)
 
         # ---------- Left column ----------
         left = QVBoxLayout()
+        left.setSpacing(12)
         layout.addLayout(left, 3)
 
         # Store settings (not visible in UI)
@@ -62,264 +63,431 @@ class IconGeneratorTab(QWidget):
         self.source_priority = SourcePriorityWidget()  # Hidden, managed by options dialog
         self.fallback_settings = {}  # Fallback icon settings, managed by options dialog
         self.custom_border_settings = {}  # Custom border settings, managed by options dialog
+        self.steamgriddb_settings = {"square_only": True}  # SteamGridDB settings, managed by options dialog
+        self.interactive_settings = {"icons": True, "heroes": False, "logos": False, "screenshots": False}  # Per-artwork interactive mode
 
-        # Search/Filter row
-        row_filter = QHBoxLayout()
-        row_filter.addWidget(QLabel("Mode:"))
-        self.search_mode = QComboBox()
-        self.search_mode.addItems(["Search by Name", "Process All Games", "Filter by Letter"])
-        self.search_mode.currentIndexChanged.connect(self._on_search_mode_changed)
-        row_filter.addWidget(self.search_mode)
+        # ===== SEARCH CARD (Simplified - single search bar) =====
+        search_card = QFrame()
+        search_card.setObjectName("card")
+        search_card_layout = QVBoxLayout(search_card)
+        search_card_layout.setContentsMargins(12, 10, 12, 10)
+        search_card_layout.setSpacing(10)
+
+        # Unified search row with integrated controls
+        search_row = QHBoxLayout()
+        search_row.setSpacing(8)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Enter search term...")
-        self.search_input.setVisible(True)  # Visible by default since Search by Name is default
-        row_filter.addWidget(self.search_input, 1)
+        self.search_input.setPlaceholderText("Search games on SteamGridDB...")
+        self.search_input.setMinimumHeight(40)
+        self.search_input.returnPressed.connect(self._perform_search)
+        search_row.addWidget(self.search_input, 1)
 
+        # Hidden mode selector (kept for compatibility, but always "Search by Name")
+        self.search_mode = QComboBox()
+        self.search_mode.addItems(["Search by Name", "Process All Games", "Filter by Letter"])
+        self.search_mode.setVisible(False)  # Hidden - mode selection moved to processing dialog
+
+        # Hidden letter filter (kept for compatibility)
         self.letter_filter = QComboBox()
         self.letter_filter.addItems(["All"] + [chr(i) for i in range(ord('A'), ord('Z')+1)] + ["0-9", "#"])
         self.letter_filter.setVisible(False)
-        row_filter.addWidget(self.letter_filter)
 
-        # Region preference dropdown
-        row_filter.addWidget(QLabel("Region:"))
+        self.btn_search = QPushButton("Search")
+        self.btn_search.setObjectName("btn_primary")
+        self.btn_search.setMinimumHeight(40)
+        self.btn_search.setMinimumWidth(90)
+        self.btn_search.setToolTip("Search SteamGridDB for games")
+        self.btn_search.clicked.connect(self._perform_search)
+        search_row.addWidget(self.btn_search)
+
+        # Settings button
+        self.btn_settings = QPushButton("Settings")
+        self.btn_settings.setMinimumHeight(40)
+        self.btn_settings.setMinimumWidth(70)
+        self.btn_settings.setToolTip("API keys, sources, output format")
+        self.btn_settings.clicked.connect(self.open_options)
+        self.btn_settings.setObjectName("btn_secondary")
+        search_row.addWidget(self.btn_settings)
+
+        search_card_layout.addLayout(search_row)
+
+        # Quick options in a compact row below search
+        options_row = QHBoxLayout()
+        options_row.setSpacing(16)
+
+        # Region preference (compact)
+        region_label = QLabel("Region:")
+        region_label.setObjectName("label_muted")
+        options_row.addWidget(region_label)
         self.region_combo = QComboBox()
         self.region_combo.setToolTip("Prefer artwork from a specific region")
         self.region_combo.addItem("Any", "any")
         self.region_combo.addItem("USA", "USA")
         self.region_combo.addItem("Europe", "EUR")
         self.region_combo.addItem("Japan", "JPN")
-        self.region_combo.setFixedWidth(90)
-        row_filter.addWidget(self.region_combo)
+        self.region_combo.setMinimumWidth(70)
+        self.region_combo.setMinimumHeight(28)
+        options_row.addWidget(self.region_combo)
 
-        # Interactive mode checkbox - enabled by default
+        options_row.addSpacing(8)
+
+        # Interactive mode toggle
         self.interactive_mode = QCheckBox("Interactive Mode")
-        self.interactive_mode.setToolTip("Manually select artwork from all available sources for each title")
-        self.interactive_mode.setChecked(True)  # Enabled by default
+        self.interactive_mode.setToolTip("Choose artwork manually for each game")
+        self.interactive_mode.setChecked(True)
         self.interactive_mode.stateChanged.connect(self._on_interactive_mode_changed)
-        row_filter.addWidget(self.interactive_mode)
+        self.interactive_mode.setObjectName("label_muted")
+        options_row.addWidget(self.interactive_mode)
 
-        # Hero images checkbox
-        self.download_heroes = QCheckBox("Download Heroes")
-        self.download_heroes.setToolTip("Also download hero/banner images from SteamGridDB")
+        options_row.addStretch()
+
+        # Hidden settings (managed by Options dialog)
+        self.download_heroes = QCheckBox()
         self.download_heroes.setChecked(True)
-        row_filter.addWidget(self.download_heroes)
+        self.download_heroes.setVisible(False)
 
-        row_filter.addStretch(1)
-        left.addLayout(row_filter)
+        self.square_only_toggle = QCheckBox()
+        self.square_only_toggle.setChecked(True)
+        self.square_only_toggle.setVisible(False)
+        self.square_only_toggle.stateChanged.connect(self._on_square_only_changed)
 
-        # Buttons row
-        row_btns = QHBoxLayout()
-        self.btn_search = QPushButton("Search")
-        self.btn_search.setToolTip("Search for games by name")
-        self.btn_start = QPushButton("Start Processing")
+        search_card_layout.addLayout(options_row)
+
+        left.addWidget(search_card)
+
+        # ===== ACTION BAR (Simplified) =====
+        action_row = QHBoxLayout()
+        action_row.setSpacing(8)
+
+        # Primary action button
+        self.btn_start = QPushButton("Generate Icons")
         self.btn_start.setObjectName("btn_start")
-        self.btn_cancel = QPushButton("Cancel")
-        self.btn_cancel.setEnabled(False)
-        self.btn_open_out = QPushButton("Open Output")
-        self.btn_open_out.setEnabled(True)
-        self.btn_show_logs = QPushButton("Logs")
-        self.btn_show_logs.setToolTip("Show processing logs")
-
-        self.btn_search.clicked.connect(self._perform_search)
+        self.btn_start.setMinimumHeight(42)
+        self.btn_start.setMinimumWidth(150)
         self.btn_start.clicked.connect(self.start_job)
+        action_row.addWidget(self.btn_start)
+
+        # Cancel button
+        self.btn_cancel = QPushButton("Cancel")
+        self.btn_cancel.setMinimumHeight(42)
+        self.btn_cancel.setMinimumWidth(70)
+        self.btn_cancel.setEnabled(False)
+        self.btn_cancel.setToolTip("Cancel processing")
         self.btn_cancel.clicked.connect(self.cancel_job)
-        self.btn_open_out.clicked.connect(self.open_output_dir)
-        self.btn_show_logs.clicked.connect(self._show_logs_dialog)
+        self.btn_cancel.setObjectName("btn_secondary")
+        action_row.addWidget(self.btn_cancel)
 
-        row_btns.addWidget(self.btn_search)
-        row_btns.addWidget(self.btn_start)
-        row_btns.addWidget(self.btn_cancel)
-        row_btns.addWidget(self.btn_open_out)
-        row_btns.addWidget(self.btn_show_logs)
-        row_btns.addStretch(1)
-        left.addLayout(row_btns)
-
-        # Progress
+        # Progress bar (takes remaining space)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
-        left.addWidget(self.progress)
+        self.progress.setMinimumHeight(42)
+        self.progress.setTextVisible(True)
+        self.progress.setFormat("Ready")
+        action_row.addWidget(self.progress, 1)
+
+        # Output folder button
+        self.btn_open_out = QPushButton("Output")
+        self.btn_open_out.setMinimumHeight(42)
+        self.btn_open_out.setMinimumWidth(65)
+        self.btn_open_out.setToolTip("Open output folder")
+        self.btn_open_out.clicked.connect(self.open_output_dir)
+        self.btn_open_out.setObjectName("btn_secondary")
+        action_row.addWidget(self.btn_open_out)
+
+        # Logs button
+        self.btn_show_logs = QPushButton("Logs")
+        self.btn_show_logs.setMinimumHeight(42)
+        self.btn_show_logs.setMinimumWidth(55)
+        self.btn_show_logs.setToolTip("View processing logs")
+        self.btn_show_logs.clicked.connect(self._show_logs_dialog)
+        self.btn_show_logs.setObjectName("btn_secondary")
+        action_row.addWidget(self.btn_show_logs)
+
+        left.addLayout(action_row)
 
         # Hidden log storage (for logs dialog)
         self.log_content = ""
 
-        # Split view: Search Results on top, Preview on bottom
+        # ===== MAIN CONTENT SPLITTER =====
         splitter = QSplitter(Qt.Vertical)
 
-        # Search Results Panel
-        search_results_container = QWidget()
-        search_results_layout = QVBoxLayout(search_results_container)
-        search_results_layout.setContentsMargins(0, 0, 0, 0)
-        search_results_layout.setSpacing(4)
+        # Search Results Card
+        search_results_card = QFrame()
+        search_results_card.setObjectName("results_card")
+        search_results_layout = QVBoxLayout(search_results_card)
+        search_results_layout.setContentsMargins(10, 10, 10, 10)
+        search_results_layout.setSpacing(6)
 
-        search_header = QLabel("Search Results")
-        search_header.setObjectName("subheader")
-        search_results_layout.addWidget(search_header)
-
-        # Search results list with selectable items - single selection for clearer UX
-        self.search_results_list = QListWidget()
-        self.search_results_list.setSelectionMode(QListWidget.SingleSelection)
-        self.search_results_list.setAlternatingRowColors(False)  # Disable for cleaner look
-        self.search_results_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1e2127;
-                border: 1px solid #3a3d42;
-                border-radius: 6px;
-                outline: none;
-                padding: 4px;
-            }
-            QListWidget::item {
-                padding: 10px 12px;
-                margin: 2px 0;
-                border-radius: 4px;
-                background-color: #2a2d32;
-                color: #e0e0e0;
-            }
-            QListWidget::item:hover {
-                background-color: #353840;
-                border: 1px solid #4a4d52;
-            }
-            QListWidget::item:selected {
-                background-color: #3d7eff;
-                color: white;
-                border: 1px solid #5a8fff;
-            }
-            QListWidget::item:selected:hover {
-                background-color: #4a88ff;
-            }
-        """)
-        self.search_results_list.setMinimumHeight(150)
-        search_results_layout.addWidget(self.search_results_list, 1)  # Give it stretch
-
-        # Status label for search results
+        results_header_row = QHBoxLayout()
+        search_header = QLabel("Results")
+        search_header.setObjectName("label_header")
+        results_header_row.addWidget(search_header)
+        results_header_row.addStretch()
         self.search_status = QLabel("Enter a game name and click Search")
-        self.search_status.setStyleSheet("font-size: 11px; opacity: 0.6;")
-        search_results_layout.addWidget(self.search_status)
+        self.search_status.setObjectName("label_muted")
+        results_header_row.addWidget(self.search_status)
+        search_results_layout.addLayout(results_header_row)
 
-        splitter.addWidget(search_results_container)
+        self.search_results_list = QListWidget()
+        self.search_results_list.setObjectName("search_results_list")
+        self.search_results_list.setSelectionMode(QListWidget.SingleSelection)
+        self.search_results_list.setAlternatingRowColors(False)
+        self.search_results_list.setMinimumHeight(120)
+        search_results_layout.addWidget(self.search_results_list, 1)
 
-        # Live Preview Panel
-        preview_container = QWidget()
-        preview_layout = QVBoxLayout(preview_container)
-        preview_layout.setContentsMargins(0, 0, 0, 0)
-        preview_layout.setSpacing(8)
+        splitter.addWidget(search_results_card)
 
-        preview_header = QLabel("Live Preview")
-        preview_header.setObjectName("header")
+        # Live Preview Card
+        preview_card = QFrame()
+        preview_card.setObjectName("preview_card")
+        preview_layout = QVBoxLayout(preview_card)
+        preview_layout.setContentsMargins(10, 10, 10, 10)
+        preview_layout.setSpacing(6)
+
+        preview_header = QLabel("Generated Icons")
+        preview_header.setObjectName("label_header")
         preview_layout.addWidget(preview_header)
 
-        # Scrollable grid for generated icons
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
 
         self.preview_grid_widget = QWidget()
         self.preview_grid_layout = QGridLayout(self.preview_grid_widget)
-        self.preview_grid_layout.setSpacing(4)  # Compact spacing
-        self.preview_grid_layout.setContentsMargins(4, 4, 4, 4)
+        self.preview_grid_layout.setSpacing(6)
+        self.preview_grid_layout.setContentsMargins(0, 0, 0, 0)
 
         scroll_area.setWidget(self.preview_grid_widget)
         preview_layout.addWidget(scroll_area, 1)
 
-        splitter.addWidget(preview_container)
+        splitter.addWidget(preview_card)
 
-        # Set initial splitter sizes (search results bigger, preview smaller)
-        splitter.setSizes([350, 200])
-
+        splitter.setSizes([300, 250])
         left.addWidget(splitter, 1)
 
-        # Track preview items
         self.preview_items = []
-        self.max_preview_items = 50  # Limit to last 50 generated icons
+        self.max_preview_items = 50
 
-        # ---------- Right column ----------
+        # ===== RIGHT COLUMN - PLATFORMS (Simplified with filter chips) =====
         right = QVBoxLayout()
+        right.setSpacing(8)
         layout.addLayout(right, 2)
 
-        right.addWidget(QLabel("Platforms"))
+        # Platform card
+        platform_card = QFrame()
+        platform_card.setObjectName("platform_card")
+        platform_layout = QVBoxLayout(platform_card)
+        platform_layout.setContentsMargins(12, 12, 12, 12)
+        platform_layout.setSpacing(8)
 
-        # Sort controls - Single dropdown
-        row_sort = QHBoxLayout()
-        row_sort.addWidget(QLabel("Sort:"))
+        # Platform header row
+        platform_header_row = QHBoxLayout()
+        platform_title = QLabel("Platforms")
+        platform_title.setObjectName("label_header")
+        platform_header_row.addWidget(platform_title)
 
-        self.sort_mode = QComboBox()
-        self.sort_mode.addItems([
-            "Name",
-            "Type then Release Year",
-            "Type",
-            "Release Year",
-            "Release Year then Type"
-        ])
-        self.sort_mode.currentIndexChanged.connect(self._on_sort_changed)
-        row_sort.addWidget(self.sort_mode)
+        # Selection counter badge
+        self.platform_counter = QLabel("0 selected")
+        self.platform_counter.setObjectName("badge")
+        platform_header_row.addWidget(self.platform_counter)
 
-        row_sort.addStretch(1)
-        right.addLayout(row_sort)
+        platform_header_row.addStretch()
 
-        # Tabbed publisher filter
-        self.publisher_tabs = QTabWidget()
-        self.platform_lists = {}  # Store list widgets for each tab
-
-        # Create tabs for each publisher
-        publishers = ["All", "Nintendo", "Sony", "Microsoft", "Sega", "Google"]
-        for publisher in publishers:
-            platform_list = QListWidget()
-            platform_list.setSelectionMode(QListWidget.NoSelection)
-            platform_list.setViewMode(QListWidget.IconMode)
-            platform_list.setResizeMode(QListWidget.Adjust)
-            platform_list.setMovement(QListWidget.Static)
-            platform_list.setWrapping(True)
-            platform_list.setWordWrap(True)
-            platform_list.setIconSize(QSize(96, 96))
-            platform_list.setSpacing(10)
-            platform_list.itemClicked.connect(self.toggle_platform)
-
-            self.publisher_tabs.addTab(platform_list, publisher)
-            self.platform_lists[publisher] = platform_list
-
-        right.addWidget(self.publisher_tabs, 1)
-
-        # Select buttons
-        row_sel = QHBoxLayout()
-        btn_all = QPushButton("Select all")
-        btn_none = QPushButton("Select none")
+        # Quick actions
+        btn_all = QPushButton("All")
+        btn_all.setObjectName("btn_select")
+        btn_all.setMinimumHeight(26)
+        btn_all.setMinimumWidth(50)
+        btn_all.setToolTip("Select all visible platforms")
         btn_all.clicked.connect(self.select_all)
-        btn_none.clicked.connect(self.select_none)
-        row_sel.addWidget(btn_all)
-        row_sel.addWidget(btn_none)
-        row_sel.addStretch(1)
-        right.addLayout(row_sel)
+        platform_header_row.addWidget(btn_all)
 
-        # Load initial platforms
-        self.load_platforms_from_config()
+        btn_none = QPushButton("None")
+        btn_none.setObjectName("btn_small")
+        btn_none.setMinimumHeight(26)
+        btn_none.setMinimumWidth(50)
+        btn_none.setToolTip("Clear selection")
+        btn_none.clicked.connect(self.select_none)
+        platform_header_row.addWidget(btn_none)
+
+        platform_layout.addLayout(platform_header_row)
+
+        # Filter chips row (replaces tabs for cleaner look)
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(6)
+
+        self.publisher_filter_buttons = {}
+        self.current_publisher_filter = "All"
+
+        for publisher in ["All", "Nintendo", "Sony", "Microsoft", "Sega", "Other"]:
+            btn = QPushButton(publisher)
+            btn.setObjectName("filter_chip")
+            btn.setMinimumHeight(24)
+            btn.setCheckable(True)
+            btn.setChecked(publisher == "All")
+            btn.clicked.connect(lambda checked, p=publisher: self._on_publisher_filter_clicked(p))
+            filter_row.addWidget(btn)
+            self.publisher_filter_buttons[publisher] = btn
+
+        filter_row.addStretch()
+
+        # Sort dropdown (compact)
+        sort_label = QLabel("Sort:")
+        sort_label.setObjectName("label_muted")
+        filter_row.addWidget(sort_label)
+        self.sort_mode = QComboBox()
+        self.sort_mode.addItems(["Name", "Year", "Type"])
+        self.sort_mode.setMinimumWidth(65)
+        self.sort_mode.setMinimumHeight(24)
+        self.sort_mode.currentIndexChanged.connect(self._on_sort_changed)
+        filter_row.addWidget(self.sort_mode)
+
+        filter_row.addSpacing(8)
+
+        # Icon size control
+        size_label = QLabel("Size:")
+        size_label.setObjectName("label_muted")
+        filter_row.addWidget(size_label)
+        self.icon_size_combo = QComboBox()
+        self.icon_size_combo.addItems(["S", "M", "L", "XL"])
+        self.icon_size_combo.setCurrentIndex(1)  # Default to Medium (72px)
+        self.icon_size_combo.setMinimumWidth(50)
+        self.icon_size_combo.setMinimumHeight(24)
+        self.icon_size_combo.setToolTip("Platform icon display size")
+        self.icon_size_combo.currentIndexChanged.connect(self._on_icon_size_changed)
+        filter_row.addWidget(self.icon_size_combo)
+
+        platform_layout.addLayout(filter_row)
+
+        # Single unified platform list (replaces tabbed view)
+        self.main_platform_list = QListWidget()
+        self.main_platform_list.setObjectName("platform_list")
+        self.main_platform_list.setSelectionMode(QListWidget.MultiSelection)
+        self.main_platform_list.setViewMode(QListWidget.IconMode)
+        self.main_platform_list.setResizeMode(QListWidget.Adjust)
+        self.main_platform_list.setMovement(QListWidget.Static)
+        self.main_platform_list.setWrapping(True)
+        self.main_platform_list.setWordWrap(True)
+        self.main_platform_list.setIconSize(QSize(72, 72))
+        self.main_platform_list.setSpacing(6)
+        self.main_platform_list.itemSelectionChanged.connect(self._on_platform_selection_changed)
+
+        platform_layout.addWidget(self.main_platform_list, 1)
+
+        # Keep old data structures for compatibility (hidden)
+        self.publisher_tabs = None  # No longer used
+        self.platform_lists = {"All": QListWidget()}  # Internal tracking only
+        for publisher in ["Nintendo", "Sony", "Microsoft", "Sega", "Other"]:
+            self.platform_lists[publisher] = QListWidget()
+
+        right.addWidget(platform_card, 1)
+
+        # Defer platform loading to next event-loop tick so the tab
+        # constructor returns immediately and the UI stays responsive.
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self.load_platforms_from_config)
 
     # ---------- Interactive mode ----------
-    def _request_artwork_selection(self, title: str, platform: str, artwork_options):
+    def _request_game_selection(self, title: str, platform: str):
         """
-        Request user to select artwork from options.
+        Request user to search and select a game from SteamGridDB.
         Called from worker thread, so must use thread-safe Qt mechanisms.
-        Returns selected index, None if skipped, -1 if cancelled all.
+        Returns selected game ID, None if skipped/cancelled, -1 if cancelled all.
         """
-        from artwork_picker_dialog import ArtworkPickerDialog
+        from game_search_dialog import GameSearchDialog
         from queue import Queue
         from PySide6.QtCore import QCoreApplication
 
-        self.append_log(f"[INTERACTIVE] Request for {title} with {len(artwork_options)} options")
+        self.append_log(f"[INTERACTIVE] Requesting game selection for '{title}'")
 
         # Store data in instance variables so main thread can access them
-        self._dialog_title = title
-        self._dialog_platform = platform
-        self._dialog_options = artwork_options
-        self._dialog_result = Queue()
+        self._game_search_title = title
+        self._game_search_platform = platform
+        self._game_search_result = Queue()
 
         # Use QMetaObject.invokeMethod to run on main thread
         from PySide6.QtCore import QMetaObject, Qt
         QMetaObject.invokeMethod(
             self,
+            "_show_game_search_dialog_on_main_thread",
+            Qt.ConnectionType.BlockingQueuedConnection
+        )
+
+        # Get result from queue
+        result = self._game_search_result.get()
+        self.append_log(f"[INTERACTIVE] Game selection result: {result}")
+        return result
+
+    @Slot()
+    def _show_game_search_dialog_on_main_thread(self):
+        """Show game search dialog on main thread - called via invokeMethod."""
+        from game_search_dialog import GameSearchDialog
+        try:
+            self.append_log(f"[INTERACTIVE] Showing game search dialog for '{self._game_search_title}'")
+
+            selected_game = GameSearchDialog.search_and_select(
+                parent=self,
+                initial_query=self._game_search_title,
+                title=f"Search Game: {self._game_search_title}"
+            )
+
+            if selected_game:
+                game_id = selected_game.get("id")
+                game_name = selected_game.get("name", "Unknown")
+                self.append_log(f"[INTERACTIVE] User selected: {game_name} (ID: {game_id})")
+                self._game_search_result.put(game_id)
+            else:
+                # User cancelled
+                self.append_log(f"[INTERACTIVE] User cancelled game selection")
+                self._game_search_result.put(None)
+
+        except Exception as e:
+            self.append_log(f"[INTERACTIVE] Game search dialog error: {e}")
+            import traceback
+            self.append_log(f"[INTERACTIVE] {traceback.format_exc()}")
+            self._game_search_result.put(None)
+
+    def _request_artwork_selection(self, title: str, platform: str, artwork_options, asset_type: str = "icon"):
+        """
+        Request user to select artwork from options.
+        Called from worker thread, so must use thread-safe Qt mechanisms.
+        Returns selected index, None if skipped, -1 if cancelled all.
+
+        Args:
+            title: Game title
+            platform: Platform key
+            artwork_options: List of artwork option dicts
+            asset_type: Type of asset ('icon', 'hero', 'logo', 'screenshot')
+        """
+        from artwork_picker_dialog import ArtworkPickerDialog
+        from queue import Queue
+        from PySide6.QtCore import QCoreApplication
+        import threading
+
+        type_label = asset_type.upper() if asset_type else "ICON"
+        self.append_log(f"[INTERACTIVE-{type_label}] Request for {title} with {len(artwork_options)} options")
+        self.append_log(f"[INTERACTIVE-{type_label}] Current thread: {threading.current_thread().name}")
+
+        # Store data in instance variables so main thread can access them
+        self._dialog_title = title
+        self._dialog_platform = platform
+        self._dialog_options = artwork_options
+        self._dialog_asset_type = asset_type
+        self._dialog_result = Queue()
+
+        # Use QMetaObject.invokeMethod to run on main thread
+        from PySide6.QtCore import QMetaObject, Qt
+        self.append_log(f"[INTERACTIVE-{type_label}] About to invoke dialog on main thread...")
+
+        success = QMetaObject.invokeMethod(
+            self,
             "_show_selection_dialog_on_main_thread",
             Qt.ConnectionType.BlockingQueuedConnection
         )
+
+        self.append_log(f"[INTERACTIVE-{type_label}] invokeMethod returned: {success}")
 
         # Get result from queue
         result = self._dialog_result.get()
@@ -329,22 +497,32 @@ class IconGeneratorTab(QWidget):
     @Slot()
     def _show_selection_dialog_on_main_thread(self):
         """Show dialog on main thread - called via invokeMethod."""
+        import threading
+        asset_type = getattr(self, '_dialog_asset_type', 'icon')
+        type_label = asset_type.upper() if asset_type else "ICON"
+        self.append_log(f"[INTERACTIVE-{type_label}] _show_selection_dialog_on_main_thread ENTERED, thread: {threading.current_thread().name}")
         from artwork_picker_dialog import ArtworkPickerDialog
         try:
-            self.append_log(f"[INTERACTIVE] Showing dialog for {self._dialog_title}")
+            self.append_log(f"[INTERACTIVE-{type_label}] Showing dialog for {self._dialog_title} with {len(self._dialog_options)} options")
+
+            # Determine if we should show the square filter (only for icons)
+            show_filter = (asset_type == "icon")
 
             dialog = ArtworkPickerDialog(
                 title=self._dialog_title,
                 platform=self._dialog_platform,
                 artwork_options=self._dialog_options,
-                parent=self
+                parent=self,
+                asset_type=asset_type,
+                show_filter=show_filter,
+                on_filter_changed=self._handle_filter_change if show_filter else None
             )
 
             # Show dialog modally
             dialog_result = dialog.exec()
             selected = dialog.get_selected_index()
 
-            self.append_log(f"[INTERACTIVE] Dialog result: exec={dialog_result}, selected={selected}")
+            self.append_log(f"[INTERACTIVE-{type_label}] Dialog result: exec={dialog_result}, selected={selected}")
             self._dialog_result.put(selected)
 
         except Exception as e:
@@ -352,6 +530,20 @@ class IconGeneratorTab(QWidget):
             self.append_log(f"[ERROR] Dialog exception: {e}")
             self.append_log(f"[ERROR] Traceback: {traceback.format_exc()}")
             self._dialog_result.put(None)
+
+    def _handle_filter_change(self, square_only: bool):
+        """Handle filter change in artwork picker dialog.
+
+        Note: Due to the backend architecture, changing the filter during dialog
+        display requires re-fetching results. This stores the preference for
+        future searches and updates the current dialog if possible.
+        """
+        self._square_only_filter = square_only
+        self.append_log(f"[FILTER] Square only filter changed to: {square_only}")
+
+        # Get current dialog and re-search if possible
+        # This is a simplified implementation - full implementation would
+        # require deeper integration with the backend search flow
 
     # ---------- UI helpers ----------
     def _find_file_case_insensitive(self, directory: Path, filename: str) -> Path:
@@ -390,7 +582,7 @@ class IconGeneratorTab(QWidget):
         preview_item.setScaledContents(True)
         preview_item.setFrameShape(QFrame.Box)
         preview_item.setLineWidth(2)
-        preview_item.setStyleSheet("QLabel { border: 2px solid #3A4048; border-radius: 8px; }")
+        preview_item.setObjectName("preview_border_frame")
 
         # Load and set pixmap
         pixmap = QPixmap(str(path))
@@ -426,21 +618,30 @@ class IconGeneratorTab(QWidget):
 
     def _on_search_mode_changed(self, index):
         """Show/hide search controls based on selected mode."""
-        mode = self.search_mode.currentText()
+        # Kept for compatibility but no longer used in UI
+        pass
 
-        if mode == "Search by Name":
-            self.search_input.setVisible(True)
-            self.letter_filter.setVisible(False)
-        elif mode == "Filter by Letter":
-            self.search_input.setVisible(False)
-            self.letter_filter.setVisible(True)
-        else:  # Process All Games
-            self.search_input.setVisible(False)
-            self.letter_filter.setVisible(False)
+    def _on_publisher_filter_clicked(self, publisher):
+        """Handle publisher filter chip click."""
+        # Update button checked states - styling handled by QSS via :checked selector
+        for p, btn in self.publisher_filter_buttons.items():
+            btn.setChecked(p == publisher)
+
+        self.current_publisher_filter = publisher
+        self._refresh_platform_list_filter()
 
     def _on_sort_changed(self):
         """Re-sort platforms when sort order changes."""
         self.load_platforms_from_config()
+
+    def _on_icon_size_changed(self, index: int):
+        """Update platform icon display size."""
+        # Size mapping: S=48, M=72, L=96, XL=128
+        sizes = [48, 72, 96, 128]
+        new_size = sizes[index] if index < len(sizes) else 72
+        self.main_platform_list.setIconSize(QSize(new_size, new_size))
+        # Adjust grid size to match icon size with padding
+        self.main_platform_list.setGridSize(QSize(new_size + 24, new_size + 36))
 
     def _on_interactive_mode_changed(self, state):
         """Show warning when interactive mode is disabled."""
@@ -452,6 +653,47 @@ class IconGeneratorTab(QWidget):
                 "without prompting you for each game.\n\n"
                 "The first matching result from your enabled sources will be used."
             )
+
+    def _on_square_only_changed(self, state):
+        """Update steamgriddb_settings when square_only toggle changes."""
+        self.steamgriddb_settings["square_only"] = (state == Qt.Checked)
+
+        # Save the setting to config
+        self._save_steamgriddb_setting_to_config()
+
+        if state == Qt.Unchecked:
+            # Show info about cropping when disabled
+            QMessageBox.information(
+                self,
+                "All Dimensions Enabled",
+                "SteamGridDB will now show artwork of all dimensions.\n\n"
+                "In Interactive Mode, you can use the 'Crop' button on\n"
+                "non-square artwork to crop it to a square format."
+            )
+
+    def _save_steamgriddb_setting_to_config(self):
+        """Save steamgriddb_settings to config file."""
+        cfg_path = Path(self.config_path)
+        if not cfg_path.exists():
+            return
+
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+
+            if "art_sources" not in cfg:
+                cfg["art_sources"] = {}
+
+            cfg["art_sources"]["steamgriddb_square_only"] = self.steamgriddb_settings.get("square_only", True)
+
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            invalidate_config_cache()
+
+            self.append_log(f"[CONFIG] SteamGridDB square_only set to {self.steamgriddb_settings.get('square_only', True)}")
+
+        except Exception as e:
+            self.append_log(f"[ERROR] Failed to save steamgriddb setting: {e}")
 
     # ---------- Config and platforms ----------
     def _show_logs_dialog(self):
@@ -467,14 +709,6 @@ class IconGeneratorTab(QWidget):
         log_view = QTextEdit()
         log_view.setReadOnly(True)
         log_view.setPlainText(self.log_content if self.log_content else "No logs yet.")
-        log_view.setStyleSheet("""
-            QTextEdit {
-                background-color: #1a1d21;
-                color: #e0e0e0;
-                font-family: monospace;
-                font-size: 11px;
-            }
-        """)
         layout.addWidget(log_view)
 
         # Buttons
@@ -542,7 +776,7 @@ class IconGeneratorTab(QWidget):
                     try:
                         from datetime import datetime
                         year = f" ({datetime.fromtimestamp(release_date).year})"
-                    except:
+                    except (ValueError, OSError, OverflowError):
                         pass
 
                 item_text = f"{game_name}{year}"
@@ -577,12 +811,42 @@ class IconGeneratorTab(QWidget):
     def _get_selected_platforms(self):
         """Get list of currently selected platform IDs."""
         selected = []
-        for platform_list in self.platform_lists.values():
-            for i in range(platform_list.count()):
-                item = platform_list.item(i)
-                if item.data(Qt.UserRole + 1):  # Selected state
-                    selected.append(item.data(Qt.UserRole))
+        seen = set()
+
+        # Use the main unified platform list
+        for item in self.main_platform_list.selectedItems():
+            plat_id = item.data(Qt.UserRole + 3)
+            if not plat_id:
+                plat_id = item.text()
+            if plat_id not in seen:
+                selected.append(plat_id)
+                seen.add(plat_id)
         return selected
+
+    def _refresh_platform_list_filter(self):
+        """Refresh the main platform list based on current publisher filter."""
+        # Store current selections
+        selected_ids = set()
+        for i in range(self.main_platform_list.count()):
+            item = self.main_platform_list.item(i)
+            if item.isSelected():
+                plat_id = item.data(Qt.UserRole + 3) or item.text()
+                selected_ids.add(plat_id)
+
+        # Show/hide items based on filter
+        publisher_filter = self.current_publisher_filter
+
+        for i in range(self.main_platform_list.count()):
+            item = self.main_platform_list.item(i)
+            item_publisher = item.data(Qt.UserRole)  # Publisher stored in UserRole
+
+            if publisher_filter == "All":
+                item.setHidden(False)
+            elif publisher_filter in ["Nintendo", "Sony", "Microsoft", "Sega"]:
+                item.setHidden(item_publisher != publisher_filter)
+            else:  # "Other"
+                major_publishers = ["Nintendo", "Sony", "Microsoft", "Sega"]
+                item.setHidden(item_publisher in major_publishers)
 
     def _show_processing_options_dialog(self, selected_game_names, search_input_text, platforms, total_games_estimate):
         """Show dialog to choose what to process."""
@@ -611,7 +875,6 @@ class IconGeneratorTab(QWidget):
             games_text = selected_game_names[0] if len(selected_game_names) == 1 else f"{len(selected_game_names)} games"
             radio_selected = QRadioButton(f"Selected game: \"{games_text}\" ({len(selected_game_names)} game{'s' if len(selected_game_names) > 1 else ''})")
             radio_selected.setChecked(True)
-            radio_selected.setStyleSheet("QRadioButton { padding: 8px; }")
             button_group.addButton(radio_selected, 1)
             layout.addWidget(radio_selected)
 
@@ -620,7 +883,6 @@ class IconGeneratorTab(QWidget):
             radio_keyword = QRadioButton(f"Search keyword: \"{search_input_text}\" (search across all games)")
             if not selected_game_names:
                 radio_keyword.setChecked(True)
-            radio_keyword.setStyleSheet("QRadioButton { padding: 8px; }")
             button_group.addButton(radio_keyword, 2)
             layout.addWidget(radio_keyword)
 
@@ -628,7 +890,6 @@ class IconGeneratorTab(QWidget):
         radio_all = QRadioButton(f"All games for selected platforms (~{total_games_estimate:,} games)")
         if not selected_game_names and not search_input_text:
             radio_all.setChecked(True)
-        radio_all.setStyleSheet("QRadioButton { padding: 8px; }")
         button_group.addButton(radio_all, 3)
         layout.addWidget(radio_all)
 
@@ -680,9 +941,11 @@ class IconGeneratorTab(QWidget):
             source_priority_widget=self.source_priority
         )
 
-        # Set current custom border settings if available
+        # Set current settings
         if self.custom_border_settings:
             dialog.set_custom_border_settings(self.custom_border_settings)
+        dialog.set_steamgriddb_settings(self.steamgriddb_settings)
+        dialog.set_interactive_settings(self.interactive_settings)
 
         if dialog.exec() == QDialog.Accepted:
             # Update stored values
@@ -701,6 +964,18 @@ class IconGeneratorTab(QWidget):
             # Update custom border settings
             self.custom_border_settings = dialog.get_custom_border_settings()
 
+            # Sync hero settings
+            hero_settings = dialog.get_hero_settings()
+            self.download_heroes.setChecked(hero_settings.get("enabled", True))
+
+            # Sync SteamGridDB settings
+            self.steamgriddb_settings = dialog.get_steamgriddb_settings()
+            self.square_only_toggle.setChecked(self.steamgriddb_settings.get("square_only", True))
+
+            # Sync interactive mode settings
+            self.interactive_settings = dialog.get_interactive_settings()
+            self._save_interactive_settings_to_config()
+
             # Reload platforms if config changed
             self.load_platforms_from_config()
 
@@ -709,26 +984,41 @@ class IconGeneratorTab(QWidget):
         self.open_options()
 
     def load_platforms_from_config(self):
-        cfg_path = Path(self.config_path)
-        if not cfg_path.exists():
-            for platform_list in self.platform_lists.values():
-                platform_list.clear()
-            self.append_log(f"Config file not found: {cfg_path}")
-            return
-
         try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
+            cfg = get_config()
         except Exception as e:
+            self.main_platform_list.clear()
             self.append_log(f"Failed to load config: {e}")
             return
+
+        # Load SteamGridDB square_only setting from config
+        art_sources = cfg.get("art_sources", {})
+        if "steamgriddb_square_only" in art_sources:
+            self.steamgriddb_settings["square_only"] = art_sources["steamgriddb_square_only"]
+            self.square_only_toggle.setChecked(self.steamgriddb_settings["square_only"])
+
+        # Load interactive mode settings from config
+        interactive_cfg = cfg.get("interactive_mode", {})
+        if interactive_cfg:
+            self.interactive_settings["icons"] = interactive_cfg.get("icons", True)
+            self.interactive_settings["heroes"] = interactive_cfg.get("heroes", False)
+            self.interactive_settings["logos"] = interactive_cfg.get("logos", False)
+            self.interactive_settings["screenshots"] = interactive_cfg.get("screenshots", False)
+            self.append_log(f"[CONFIG] Interactive settings: {self.interactive_settings}")
 
         platforms_cfg = cfg.get("platforms", {})
         platform_icons_dir = Path(cfg.get("paths", {}).get("platform_icons_dir", "./platform_icons"))
 
-        # Clear all tabs
-        for platform_list in self.platform_lists.values():
-            platform_list.clear()
+        # Store current selections before clearing
+        selected_ids = set()
+        for i in range(self.main_platform_list.count()):
+            item = self.main_platform_list.item(i)
+            if item.isSelected():
+                plat_id = item.data(Qt.UserRole + 3) or item.text()
+                selected_ids.add(plat_id)
+
+        # Clear the main list
+        self.main_platform_list.clear()
 
         # Build platform data with metadata
         platform_data = []
@@ -752,16 +1042,12 @@ class IconGeneratorTab(QWidget):
 
             if sort_text == "Name":
                 return (platform["id"],)
-            elif sort_text == "Type then Release Year":
-                return (type_order.get(platform["type"], 99), platform["year"], platform["id"])
-            elif sort_text == "Type":
-                return (type_order.get(platform["type"], 99), platform["id"])
-            elif sort_text == "Release Year":
+            elif sort_text == "Year":
                 return (platform["year"], platform["id"])
-            elif sort_text == "Release Year then Type":
-                return (platform["year"], type_order.get(platform["type"], 99), platform["id"])
+            elif sort_text == "Type":
+                return (type_order.get(platform["type"], 99), platform["year"], platform["id"])
 
-            return (platform["id"],)  # Fallback
+            return (platform["id"],)
 
         platform_data.sort(key=get_sort_key)
 
@@ -791,18 +1077,17 @@ class IconGeneratorTab(QWidget):
             "NEO_GEO_POCKET_COLOR": "NGPC",
         }
 
-        # Add platforms to appropriate tabs
+        # Add platforms to the unified list
         for plat in platform_data:
             plat_id = plat["id"]
             publisher = plat["publisher"]
             plat_config = plat["config"]
 
             # Check if platform has a border (skip if not)
-            # Use border_file from config if specified, otherwise fall back to {plat_id}.png
             border_filename = plat_config.get("border_file", f"{plat_id}.png")
             border_path = borders_dir / border_filename
             if not border_path.exists():
-                continue  # Skip platforms without borders
+                continue
 
             # Simplify platform name
             display_name = name_abbreviations.get(plat_id, plat_id.replace("_", " "))
@@ -810,12 +1095,10 @@ class IconGeneratorTab(QWidget):
             # Create item
             item = QListWidgetItem()
             item.setText(display_name)
-            item.setCheckState(Qt.Unchecked)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setData(Qt.UserRole, publisher)  # Store publisher
-            item.setData(Qt.UserRole + 1, plat["year"])  # Store year
-            item.setData(Qt.UserRole + 2, plat["type"])  # Store type
-            item.setData(Qt.UserRole + 3, plat_id)  # Store actual platform ID for backend
+            item.setData(Qt.UserRole, publisher)  # Store publisher for filtering
+            item.setData(Qt.UserRole + 1, plat["year"])
+            item.setData(Qt.UserRole + 2, plat["type"])
+            item.setData(Qt.UserRole + 3, plat_id)  # Actual platform ID
 
             # Try to find platform icon
             icon_filename = f"{plat_id}.png"
@@ -825,27 +1108,26 @@ class IconGeneratorTab(QWidget):
                 icon = QIcon(str(icon_path))
                 item.setIcon(icon)
 
-            # Add to "All" tab
-            item_all = item.clone()
-            self.platform_lists["All"].addItem(item_all)
+            # Add to main list
+            self.main_platform_list.addItem(item)
 
-            # Add to publisher-specific tab
-            if publisher in self.platform_lists:
-                item_pub = item.clone()
-                self.platform_lists[publisher].addItem(item_pub)
+            # Restore selection if was selected before
+            if plat_id in selected_ids:
+                item.setSelected(True)
+
+        # Apply current filter
+        self._refresh_platform_list_filter()
+
+        # Update counter
+        self._update_platform_counter()
 
         # Also load source order
         self.load_source_order_from_config()
 
     def load_source_order_from_config(self):
         """Load source priority from config file."""
-        cfg_path = Path(self.config_path)
-        if not cfg_path.exists():
-            return
-
         try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
+            cfg = get_config()
 
             art_sources = cfg.get("art_sources", {})
 
@@ -889,11 +1171,41 @@ class IconGeneratorTab(QWidget):
             # Write back
             with open(cfg_path, "w", encoding="utf-8") as f:
                 yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            invalidate_config_cache()
 
             self.append_log(f"[CONFIG] Export format set to {export_settings.get('format', 'JPEG')}")
 
         except Exception as e:
             self.append_log(f"Failed to save export settings: {e}")
+
+    def _save_interactive_settings_to_config(self):
+        """Save interactive mode settings to config file."""
+        cfg_path = Path(self.config_path)
+        if not cfg_path.exists():
+            return
+
+        try:
+            # Load current config
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+
+            # Update interactive_mode settings
+            cfg["interactive_mode"] = {
+                "icons": self.interactive_settings.get("icons", True),
+                "heroes": self.interactive_settings.get("heroes", False),
+                "logos": self.interactive_settings.get("logos", False),
+                "screenshots": self.interactive_settings.get("screenshots", False)
+            }
+
+            # Write back
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            invalidate_config_cache()
+
+            self.append_log(f"[CONFIG] Interactive settings saved: {self.interactive_settings}")
+
+        except Exception as e:
+            self.append_log(f"Failed to save interactive settings: {e}")
 
     def save_source_order_to_config(self, source_order=None):
         """Save current source priority to config file."""
@@ -932,6 +1244,7 @@ class IconGeneratorTab(QWidget):
             # Write back
             with open(cfg_path, "w", encoding="utf-8") as f:
                 yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            invalidate_config_cache()
 
             self.append_log("[CONFIG] Source priority saved to config.yaml")
             QMessageBox.information(self, "Success", "Source priority saved to config.yaml")
@@ -945,22 +1258,33 @@ class IconGeneratorTab(QWidget):
         # Could add validation or auto-save here
         pass
 
-    def toggle_platform(self, item: QListWidgetItem):
-        """Toggle platform checkbox when item is clicked."""
-        current = item.checkState()
-        item.setCheckState(Qt.Unchecked if current == Qt.Checked else Qt.Checked)
+    def _on_platform_selection_changed(self):
+        """Handle platform selection change."""
+        self._update_platform_counter()
+
+    def _update_platform_counter(self):
+        """Update the platform selection counter badge."""
+        count = len(self._get_selected_platforms())
+        if count == 0:
+            self.platform_counter.setText("0 selected")
+            self.platform_counter.setObjectName("label_muted")
+        else:
+            self.platform_counter.setText(f"{count} selected")
+            self.platform_counter.setObjectName("badge")
+        # Force style recalculation after objectName change
+        self.platform_counter.style().unpolish(self.platform_counter)
+        self.platform_counter.style().polish(self.platform_counter)
 
     def select_all(self):
-        # Get current tab's list widget
-        current_list = self.publisher_tabs.currentWidget()
-        for i in range(current_list.count()):
-            current_list.item(i).setCheckState(Qt.Checked)
+        """Select all visible platforms."""
+        for i in range(self.main_platform_list.count()):
+            item = self.main_platform_list.item(i)
+            if not item.isHidden():
+                item.setSelected(True)
 
     def select_none(self):
-        # Get current tab's list widget
-        current_list = self.publisher_tabs.currentWidget()
-        for i in range(current_list.count()):
-            current_list.item(i).setCheckState(Qt.Unchecked)
+        """Deselect all platforms."""
+        self.main_platform_list.clearSelection()
 
     # ---------- Job control ----------
     def start_job(self):
@@ -969,20 +1293,8 @@ class IconGeneratorTab(QWidget):
             QMessageBox.warning(self, "Config missing", "Please choose a valid config.yaml")
             return
 
-        # Get selected platforms from all tabs
-        platforms = []
-        seen = set()  # Avoid duplicates
-        for platform_list in self.platform_lists.values():
-            for i in range(platform_list.count()):
-                item = platform_list.item(i)
-                if item.checkState() == Qt.Checked:
-                    # Get actual platform ID from UserRole + 3 (not the display name)
-                    plat_id = item.data(Qt.UserRole + 3)
-                    if not plat_id:  # Fallback to text if data not available
-                        plat_id = item.text()
-                    if plat_id not in seen:
-                        platforms.append(plat_id)
-                        seen.add(plat_id)
+        # Get selected platforms from all tabs (using selection instead of checkState)
+        platforms = self._get_selected_platforms()
 
         if not platforms:
             QMessageBox.information(self, "No platforms selected", "Select at least one platform.")
@@ -1005,8 +1317,7 @@ class IconGeneratorTab(QWidget):
 
         # Count total games for "all" option (estimate from config)
         try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
+            cfg = get_config()
             total_games = 0
             for plat_id in platforms:
                 plat_cfg = cfg.get("platforms", {}).get(plat_id, {})
@@ -1015,7 +1326,7 @@ class IconGeneratorTab(QWidget):
                     total_games += len(games)
                 else:
                     total_games += 100  # Estimate if no local list
-        except:
+        except Exception:
             total_games = len(platforms) * 100  # Rough estimate
 
         # Show processing options dialog
@@ -1075,6 +1386,10 @@ class IconGeneratorTab(QWidget):
                     "log": lambda msg: callbacks.log.emit(str(msg)),
                     "preview": lambda path: callbacks.preview.emit(str(path)),
                     "request_selection": self._request_artwork_selection,
+                    # Asset-specific selection callbacks for interactive mode
+                    "request_hero_selection": lambda t, p, opts: self._request_artwork_selection(t, p, opts, "hero"),
+                    "request_logo_selection": lambda t, p, opts: self._request_artwork_selection(t, p, opts, "logo"),
+                    "request_screenshot_selection": lambda t, p, opts: self._request_artwork_selection(t, p, opts, "screenshot"),
                 }
 
                 ok, msg = run_backend.run_job(
@@ -1092,7 +1407,9 @@ class IconGeneratorTab(QWidget):
                     hero_count=1,
                     region_preference=region_pref,
                     fallback_settings=self.fallback_settings,
-                    custom_border_settings=self.custom_border_settings
+                    custom_border_settings=self.custom_border_settings,
+                    steamgriddb_square_only=self.steamgriddb_settings.get("square_only", True),
+                    interactive_settings=self.interactive_settings if self.interactive_mode.isChecked() else None
                 )
 
             except Exception as e:
@@ -1173,14 +1490,8 @@ class IconGeneratorTab(QWidget):
 
     def open_output_dir(self):
         """Open output directory in file explorer."""
-        cfg_path = Path(self.config_path)
-        if not cfg_path.exists():
-            QMessageBox.warning(self, "Config Error", "Config file not found.")
-            return
-
         try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
+            cfg = get_config()
         except Exception as e:
             QMessageBox.warning(self, "Config Error", f"Failed to load config: {e}")
             return
@@ -1213,12 +1524,12 @@ class IconGeneratorTab(QWidget):
         device_base_path = self.device_settings.get("path", "/sdcard/Android/media/com.iisulauncher/iiSULauncher/assets/media/roms/consoles")
 
         # Get output directory
-        cfg_path = Path(self.config_path)
         try:
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
+            cfg = get_config()
+            cfg_path = Path(self.config_path)
             output_dir = cfg_path.parent / cfg.get("paths", {}).get("output_dir", "./output")
-        except:
+        except Exception:
+            cfg_path = Path(self.config_path)
             output_dir = cfg_path.parent / "output"
 
         if not output_dir.exists():
@@ -1262,7 +1573,7 @@ class IconGeneratorTab(QWidget):
                         [adb_path, "-s", device_id, "shell", f'mkdir -p "{device_game_path}"'],
                         capture_output=True, text=True, timeout=10
                     )
-                except:
+                except Exception:
                     pass
 
                 # Push each asset file

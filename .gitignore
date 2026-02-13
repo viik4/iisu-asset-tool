@@ -1,32 +1,20 @@
-# Python
+# ──── Python ────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-
-# Virtual environments
 venv/
 env/
 ENV/
+*.egg-info/
 
-# Build artifacts
+# ──── Build artifacts ────
 build/
 dist/
 releases/
-*.egg-info/
 
-# Cache and data
-data/cache/
-data/dataset_cache/
-*.db
-*.sqlite
-
-# Output directories
-output/
-review/
-
-# IDE
+# ──── IDE / Editor ────
 .vscode/
 .idea/
 .vs/
@@ -34,46 +22,86 @@ review/
 *.swo
 *~
 
-# OS
+# ──── OS ────
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Config (optional - uncomment if you don't want to share API keys)
-# config.yaml
-
-# Logs
+# ──── Logs & env ────
 *.log
+*_debug.log
 .env
 
+# ──── Temp files ────
+*.tmp
+*.bak
+tmpclaude-*
+nul
 
-# Debug and test files
+# ──── Debug / test scripts ────
 debug_*.py
 debug_*.png
 test_*.py
 inspect_*.py
-*_debug.log
 
-# Temp files
-*.tmp
-*.bak
-tmpclaude-*
+# ──── Credentials & secrets ────
+credentials.json
+token.json
+.admin_key
 
-# Cache directories
-.cache/
-__pycache__/
-/.claude
-
-# APK files and extracted content (for analysis)
+# ──── Binaries & large files ────
 *.apk
-src/extracted_iiSU/
-src/starterpack.zip
+*.exe
+!android/gradlew.bat
+cloudflared-config.yml
 
-# Android build artifacts
+# ──── Desktop output / runtime ────
+output/
+review/
+data/cache/
+data/dataset_cache/
+.cache/
+
+# ──── Config (contains user API keys) ────
+config.yaml
+
+# ──── Asset server runtime ────
+asset_server/__pycache__/
+asset_server/assets.db
+asset_server/.admin_key
+
+# ──── Asset storage (uploaded game assets — runtime data) ────
+asset_storage/
+
+# ──── Promo (local use only) ────
+promo/
+
+# ──── Preview / draft images ────
+*-preview.png
+thumbnail-draft-*.png
+
+# ──── Old / deprecated files ────
+logo_old.png
+drive_debug.html
+tutorial_voiceover_script.txt
+src/
+google_drive_backup/
+iisu-asset-tool/
+
+# ──── Android build artifacts ────
 android/.gradle/
 android/app/build/
 android/build/
 android/local.properties
 *.aar
 *.ap_
-tutorial_voiceover_script.txt
+
+# ──── Playwright / MCP ────
+.playwright-mcp/
+
+# ──── Claude ────
+.claude/
+/asset_server
+CLAUDE.md
+iiSUAssetPack.zip
+/iiSUAssetPack

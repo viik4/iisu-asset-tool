@@ -1,228 +1,196 @@
-output_size: 1024
-export_format: PNG
-jpeg_quality: 95
-steamgriddb:
-  api_key_env: SGDB_API_KEY
-  base_url: https://www.steamgriddb.com/api/v2
-  request_timeout_seconds: 40
-  delay_seconds: 0.25
-  allow_animated: false
-  prefer_dimensions:
-  - 1024x1024
-  square_styles:
-  - alternate
-  - material
-  - white_logo
-  - blurred
-  - no_logo
-paths:
-  borders_dir: ./borders
-  platform_icons_dir: ./platform_icons
-  output_dir: ./output
-  review_dir: ./review
-  cache_dir: ./data/cache
-  dataset_cache_dir: ./data/dataset_cache
+art_sources:
+  libretro_crop_mode: center_crop
+  mode: steamgriddb_then_libretro
+  providers:
+  - enabled: true
+    id: steamgriddb
+  - enabled: true
+    id: igdb
+  - enabled: true
+    id: libretro
+  - enabled: true
+    id: thegamesdb
+  - enabled: true
+    id: steam
+  steamgriddb_square_only: true
+auto_centering:
+  alpha_threshold: 16
+  enabled: true
+  margin_pct: 0.06
+  search_span: 0.22
+  search_steps: 5
+  sources:
+  - libretro_boxart
+  tolerance: 0.06
+background_music:
+  enabled: false
+  volume: 50
+custom_borders:
+  enabled: false
+  path: ''
+  per_platform: {}
 dataset:
-  source: github_zip
-  repo_zip_url: https://github.com/Elbriga14/EveryVideoGameEver/archive/refs/heads/main.zip
   gamesdb_subdir: EveryVideoGameEver-main/GamesDB
   per_platform_limit: 0
-platforms:
-  NES:
-    border_file: NES.png
-    icon_file: NES.png
-    publisher: Nintendo
-    year: 1983
-    type: console
-  SNES:
-    border_file: SNES.png
-    icon_file: SNES.png
-    publisher: Nintendo
-    year: 1990
-    type: console
-  N64:
-    border_file: N64.png
-    icon_file: N64.png
-    publisher: Nintendo
-    year: 1996
-    type: console
-  GAMECUBE:
-    border_file: Gamecube.png
-    icon_file: GAMECUBE.png
-    publisher: Nintendo
-    year: 2001
-    type: console
-  WII:
-    border_file: Wii.png
-    publisher: Nintendo
-    year: 2006
-    type: console
-  WII_U:
-    border_file: Wii_U.png
-    publisher: Nintendo
-    year: 2012
-    type: console
+  repo_zip_url: https://github.com/Elbriga14/EveryVideoGameEver/archive/refs/heads/main.zip
+  source: github_zip
+device_copy:
+  enabled: true
+  path: /sdcard/Android/media/com.iisulauncher/iiSULauncher/assets/media/roms/consoles
+export_format: PNG
+fallback_icons:
+  use_platform_icon_fallback: true
+  skip_scraping_use_platform_icon: false
+  fallback_icons_path: ''
+hero_images:
+  enabled: true
+  count: 1
+  save_with_icons: true
+hidden_titles:
   SWITCH:
-    border_file: Switch.png
-    publisher: Nintendo
-    year: 2017
-    type: hybrid
-  GAME_BOY:
-    border_file: Game_Boy.png
-    publisher: Nintendo
-    year: 1989
-    type: handheld
-  GAME_BOY_COLOR:
-    border_file: Game_Boy_Color.png
-    publisher: Nintendo
-    year: 1998
-    type: handheld
-  GAME_BOY_ADVANCE:
-    border_file: Game_Boy_Advance.png
-    publisher: Nintendo
-    year: 2001
-    type: handheld
-  NINTENDO_DS:
-    border_file: NINTENDO_DS.png
-    publisher: Nintendo
-    year: 2004
-    type: handheld
-  NINTENDO_3DS:
-    border_file: NINTENDO_3DS.png
-    publisher: Nintendo
-    year: 2011
-    type: handheld
-  PS1:
-    border_file: PSX.png
-    icon_file: PSX.png
-    publisher: Sony
-    year: 1994
-    type: console
-  PS2:
-    border_file: PS2.png
-    publisher: Sony
-    year: 2000
-    type: console
-  PS3:
-    border_file: PS3.png
-    publisher: Sony
-    year: 2006
-    type: console
-  PS4:
-    border_file: PS4.png
-    publisher: Sony
-    year: 2013
-    type: console
-  PS5:
-    border_file: PS5.png
-    publisher: Sony
-    year: 2020
-    type: console
-  PSP:
-    border_file: PSP.png
-    publisher: Sony
-    year: 2004
-    type: handheld
-    wikipedia_url: https://en.wikipedia.org/wiki/List_of_PlayStation_Portable_games
-  PS_VITA:
-    border_file: PS_Vita.png
-    publisher: Sony
-    year: 2011
-    type: handheld
-    wikipedia_url: "https://en.wikipedia.org/wiki/List_of_PlayStation_Vita_games_(A\u2013\
-      D)"
-  XBOX:
-    border_file: Xbox.png
-    publisher: Microsoft
-    year: 2001
-    type: console
-  XBOX_360:
-    border_file: XBOX_360.png
-    publisher: Microsoft
-    year: 2005
-    type: console
-  MASTER_SYSTEM:
-    border_file: MASTER_SYSTEM.png
-    publisher: Sega
-    year: 1985
-    type: console
-  GENESIS:
-    border_file: GENESIS.png
-    publisher: Sega
-    year: 1988
-    type: console
-  SEGA_CD:
-    border_file: SEGA_CD.png
-    publisher: Sega
-    year: 1991
-    type: console
-  SEGA_32X:
-    border_file: SEGA_32X.png
-    publisher: Sega
-    year: 1994
-    type: console
-  SATURN:
-    border_file: Saturn.png
-    publisher: Sega
-    year: 1994
-    type: console
-  DREAMCAST:
-    border_file: Dreamcast.png
-    publisher: Sega
-    year: 1998
-    type: console
-  GAME_GEAR:
-    border_file: Game_Gear.png
-    publisher: Sega
-    year: 1990
-    type: handheld
-  ANDROID:
-    border_file: Android.png
-    publisher: Google
-    year: 2008
-    type: mobile
-  ARCADE:
-    border_file: Arcade.png
-    publisher: Various
-    year: 1971
-    type: arcade
-  STEAM:
-    border_file: Steam.png
-    icon_file: Steam.png
-    publisher: Valve
-    year: 2003
-    type: pc
-  PC:
-    border_file: PC.png
-    icon_file: PC.png
-    publisher: Various
-    year: 1981
-    type: pc
+  - .nsz_temp_1763708578470
+  - .nsz_temp_1763697426701
+  - dlc
+igdb:
+  base_url: https://api.igdb.com/v4
+  client_id_env: IGDB_CLIENT_ID
+  client_secret_env: IGDB_CLIENT_SECRET
+  cover_size: cover_big
+  delay_seconds: 0.25
+  platform_map:
+    ANDROID: 34
+    ARCADE: 52
+    DREAMCAST: 23
+    GAMECUBE: 21
+    GAME_BOY: 33
+    GAME_BOY_ADVANCE: 24
+    GAME_BOY_COLOR: 22
+    GAME_GEAR: 35
+    GENESIS: 29
+    MASTER_SYSTEM: 64
+    N64: 4
+    NES: 18
+    NINTENDO_3DS: 37
+    NINTENDO_DS: 20
+    PC: 6
+    PS1: 7
+    PS2: 8
+    PS3: 9
+    PS4: 48
+    PS5: 167
+    PSP: 38
+    PS_VITA: 46
+    SATURN: 32
+    SEGA_32X: 30
+    SEGA_CD: 78
+    SNES: 19
+    STEAM: 6
+    SWITCH: 130
+    WII: 5
+    WII_U: 41
+    XBOX: 11
+    XBOX_360: 12
+  prefer_image_type: cover
+  request_timeout_seconds: 30
+iisu_asset_db:
+  api_key: ''
+  cache_duration_minutes: 60
+  enabled: true
+  folder_id: 1117Sy2o0JlRB96HaNvvkK9igXIlP6SVq
+  server_url: https://assets.iisu.community
+interactive_mode:
+  heroes: true
+  icons: true
+  logos: true
+  screenshots: true
+jpeg_quality: 95
+libretro:
+  base_url: https://thumbnails.libretro.com
+  playlist_names:
+    ARCADE: MAME
+    DREAMCAST: Sega - Dreamcast
+    GAMECUBE: Nintendo - GameCube
+    GAME_BOY: Nintendo - Game Boy
+    GAME_BOY_ADVANCE: Nintendo - Game Boy Advance
+    GAME_BOY_COLOR: Nintendo - Game Boy Color
+    GAME_GEAR: Sega - Game Gear
+    GENESIS: Sega - Mega Drive - Genesis
+    MASTER_SYSTEM: Sega - Master System - Mark III
+    N64: Nintendo - Nintendo 64
+    NES: Nintendo - Nintendo Entertainment System
+    NINTENDO_3DS: Nintendo - Nintendo 3DS
+    NINTENDO_DS: Nintendo - Nintendo DS
+    PC: DOS
+    PS1: Sony - PlayStation
+    PS2: Sony - PlayStation 2
+    PS3: Sony - PlayStation 3
+    PSP: Sony - PlayStation Portable
+    PS_VITA: Sony - PlayStation Vita
+    SATURN: Sega - Saturn
+    SEGA_32X: Sega - 32X
+    SEGA_CD: Sega - Mega-CD - Sega CD
+    SNES: Nintendo - Super Nintendo Entertainment System
+    STEAM: Steam
+    SWITCH: Nintendo - Nintendo Switch
+    WII: Nintendo - Wii
+    WII_U: Nintendo - Wii U
+    XBOX: Microsoft - Xbox
+    XBOX_360: Microsoft - Xbox 360
+  type_dir: Named_Boxarts
+logo_detection:
+  enabled: true
+  max_crop_ratio: 0.85
+  method: auto
+  min_content_ratio: 0.15
+  sources:
+  - libretro_boxart
+  - steamgriddb_square
+logos:
+  scrape_logos: true
+  fallback_to_boxart: true
+output_size: 1024
+paths:
+  borders_dir: ./borders
+  cache_dir: ./data/cache
+  dataset_cache_dir: ./data/dataset_cache
+  output_dir: ./output
+  platform_icons_dir: ./platform_icons
+  review_dir: ./review
 platform_aliases:
-  NES:
-  - NESGames
-  SNES:
-  - SNESGames
-  N64:
-  - N64Games
+  ANDROID:
+  - ANDROID
+  ARCADE:
+  - ARCADE
+  - ArcadeGames
+  DREAMCAST:
+  - DREAMCASTGames
   GAMECUBE:
   - GAMECUBEGames
-  WII:
-  - WIIGames
-  WII_U:
-  - WII_UGames
-  SWITCH:
-  - SWITCHGames
   GAME_BOY:
   - GBGames
-  GAME_BOY_COLOR:
-  - GBCGames
   GAME_BOY_ADVANCE:
   - GBAGames
-  NINTENDO_DS:
-  - DSGames
+  GAME_BOY_COLOR:
+  - GBCGames
+  GAME_GEAR:
+  - GAMEGEARGames
+  GENESIS:
+  - GENESISGames
+  MASTER_SYSTEM:
+  - MASTER_SYSTEMGames
+  N64:
+  - N64Games
+  NES:
+  - NESGames
   NINTENDO_3DS:
   - 3DSGames
+  NINTENDO_DS:
+  - DSGames
+  PC:
+  - PC
+  - PCGames
+  - Windows
+  - DOS
   PS1:
   - PS1Games
   PS2:
@@ -235,130 +203,259 @@ platform_aliases:
   - PSPGames
   PS_VITA:
   - PS_VITAGames
+  SATURN:
+  - SATURNGames
+  SEGA_32X:
+  - SEGA32XGames
+  SEGA_CD:
+  - SEGA_CDGames
+  SNES:
+  - SNESGames
+  STEAM:
+  - STEAM
+  - SteamGames
+  SWITCH:
+  - SWITCHGames
+  WII:
+  - WIIGames
+  WII_U:
+  - WII_UGames
   XBOX:
   - XBOXGames
   XBOX_360:
   - XBOX_360Games
-  MASTER_SYSTEM:
-  - MASTER_SYSTEMGames
-  GENESIS:
-  - GENESISGames
-  SEGA_CD:
-  - SEGA_CDGames
-  SEGA_32X:
-  - SEGA32XGames
-  SATURN:
-  - SATURNGames
-  DREAMCAST:
-  - DREAMCASTGames
-  GAME_GEAR:
-  - GAMEGEARGames
+platforms:
   ANDROID:
-  - ANDROID
+    border_file: Android.png
+    publisher: Google
+    type: mobile
+    year: 2008
   ARCADE:
-  - ARCADE
-  - ArcadeGames
-  STEAM:
-  - STEAM
-  - SteamGames
+    border_file: Arcade.png
+    publisher: Various
+    type: arcade
+    year: 1971
+  DREAMCAST:
+    border_file: Dreamcast.png
+    publisher: Sega
+    type: console
+    year: 1998
+  GAMECUBE:
+    border_file: Gamecube.png
+    icon_file: GAMECUBE.png
+    publisher: Nintendo
+    type: console
+    year: 2001
+  GAME_BOY:
+    border_file: Game_Boy.png
+    publisher: Nintendo
+    type: handheld
+    year: 1989
+  GAME_BOY_ADVANCE:
+    border_file: Game_Boy_Advance.png
+    publisher: Nintendo
+    type: handheld
+    year: 2001
+  GAME_BOY_COLOR:
+    border_file: Game_Boy_Color.png
+    publisher: Nintendo
+    type: handheld
+    year: 1998
+  GAME_GEAR:
+    border_file: Game_Gear.png
+    publisher: Sega
+    type: handheld
+    year: 1990
+  GENESIS:
+    border_file: GENESIS.png
+    publisher: Sega
+    type: console
+    year: 1988
+  MASTER_SYSTEM:
+    border_file: MASTER_SYSTEM.png
+    publisher: Sega
+    type: console
+    year: 1985
+  N64:
+    border_file: N64.png
+    icon_file: N64.png
+    publisher: Nintendo
+    type: console
+    year: 1996
+  NES:
+    border_file: NES.png
+    icon_file: NES.png
+    publisher: Nintendo
+    type: console
+    year: 1983
+  NINTENDO_3DS:
+    border_file: NINTENDO_3DS.png
+    publisher: Nintendo
+    type: handheld
+    year: 2011
+  NINTENDO_DS:
+    border_file: NINTENDO_DS.png
+    publisher: Nintendo
+    type: handheld
+    year: 2004
   PC:
-  - PC
-  - PCGames
-  - Windows
-  - DOS
-libretro:
-  base_url: https://thumbnails.libretro.com
-  type_dir: Named_Boxarts
-  playlist_names:
-    NES: Nintendo - Nintendo Entertainment System
-    SNES: Nintendo - Super Nintendo Entertainment System
-    N64: Nintendo - Nintendo 64
-    GAMECUBE: Nintendo - GameCube
-    WII: Nintendo - Wii
-    WII_U: Nintendo - Wii U
-    SWITCH: Nintendo - Nintendo Switch
-    GAME_BOY: Nintendo - Game Boy
-    GAME_BOY_COLOR: Nintendo - Game Boy Color
-    GAME_BOY_ADVANCE: Nintendo - Game Boy Advance
-    NINTENDO_DS: Nintendo - Nintendo DS
-    NINTENDO_3DS: Nintendo - Nintendo 3DS
-    PS1: Sony - PlayStation
-    PS2: Sony - PlayStation 2
-    PS3: Sony - PlayStation 3
-    PSP: Sony - PlayStation Portable
-    PS_VITA: Sony - PlayStation Vita
-    XBOX: Microsoft - Xbox
-    XBOX_360: Microsoft - Xbox 360
-    MASTER_SYSTEM: Sega - Master System - Mark III
-    GENESIS: Sega - Mega Drive - Genesis
-    SEGA_CD: Sega - Mega-CD - Sega CD
-    SEGA_32X: Sega - 32X
-    SATURN: Sega - Saturn
-    DREAMCAST: Sega - Dreamcast
-    GAME_GEAR: Sega - Game Gear
-    ARCADE: MAME
-    STEAM: Steam
-    PC: DOS
-igdb:
-  client_id_env: IGDB_CLIENT_ID
-  client_secret_env: IGDB_CLIENT_SECRET
-  base_url: https://api.igdb.com/v4
-  request_timeout_seconds: 30
+    border_file: PC.png
+    icon_file: PC.png
+    publisher: Various
+    type: pc
+    year: 1981
+  PS1:
+    border_file: PSX.png
+    icon_file: PSX.png
+    publisher: Sony
+    type: console
+    year: 1994
+  PS2:
+    border_file: PS2.png
+    publisher: Sony
+    type: console
+    year: 2000
+  PS3:
+    border_file: PS3.png
+    publisher: Sony
+    type: console
+    year: 2006
+  PS4:
+    border_file: PS4.png
+    publisher: Sony
+    type: console
+    year: 2013
+  PS5:
+    border_file: PS5.png
+    publisher: Sony
+    type: console
+    year: 2020
+  PSP:
+    border_file: PSP.png
+    publisher: Sony
+    type: handheld
+    wikipedia_url: https://en.wikipedia.org/wiki/List_of_PlayStation_Portable_games
+    year: 2004
+  PS_VITA:
+    border_file: PS_Vita.png
+    publisher: Sony
+    type: handheld
+    wikipedia_url: "https://en.wikipedia.org/wiki/List_of_PlayStation_Vita_games_(A\u2013\
+      D)"
+    year: 2011
+  SATURN:
+    border_file: Saturn.png
+    publisher: Sega
+    type: console
+    year: 1994
+  SEGA_32X:
+    border_file: SEGA_32X.png
+    publisher: Sega
+    type: console
+    year: 1994
+  SEGA_CD:
+    border_file: SEGA_CD.png
+    publisher: Sega
+    type: console
+    year: 1991
+  SNES:
+    border_file: SNES.png
+    icon_file: SNES.png
+    publisher: Nintendo
+    type: console
+    year: 1990
+  STEAM:
+    border_file: Steam.png
+    icon_file: Steam.png
+    publisher: Valve
+    type: pc
+    year: 2003
+  SWITCH:
+    border_file: Switch.png
+    publisher: Nintendo
+    type: hybrid
+    year: 2017
+  WII:
+    border_file: Wii.png
+    publisher: Nintendo
+    type: console
+    year: 2006
+  WII_U:
+    border_file: Wii_U.png
+    publisher: Nintendo
+    type: console
+    year: 2012
+  XBOX:
+    border_file: Xbox.png
+    publisher: Microsoft
+    type: console
+    year: 2001
+  XBOX_360:
+    border_file: XBOX_360.png
+    publisher: Microsoft
+    type: console
+    year: 2005
+processing:
+  workers: 3
+  limit: 0
+rom_directory:
+  mode: manual
+  rom_path: ''
+  auto_detect: false
+  remember_last_path: true
+  deep_search: true
+  android_apps_path: /storage/emulated/0/Android/media/com.iisulauncher/iiSULauncher/assets/media/android/apps
+screenshots:
+  enabled: true
+  count: 1
+soundbytes:
+  enabled: false
+  gamerip_only: true
+  max_duration_seconds: 180
+  output_format: mp3
+  preferred_tracks:
+  - title
+  - main theme
+  - menu
+  - stage 1
+  - overworld
+steam:
   delay_seconds: 0.25
-  cover_size: cover_big
-  prefer_image_type: cover
-  platform_map:
-    NES: 18
-    SNES: 19
-    N64: 4
-    GAMECUBE: 21
-    WII: 5
-    WII_U: 41
-    SWITCH: 130
-    GAME_BOY: 33
-    GAME_BOY_COLOR: 22
-    GAME_BOY_ADVANCE: 24
-    NINTENDO_DS: 20
-    NINTENDO_3DS: 37
-    PS1: 7
-    PS2: 8
-    PS3: 9
-    PS4: 48
-    PS5: 167
-    PSP: 38
-    PS_VITA: 46
-    XBOX: 11
-    XBOX_360: 12
-    MASTER_SYSTEM: 64
-    GENESIS: 29
-    SEGA_CD: 78
-    SEGA_32X: 30
-    SATURN: 32
-    DREAMCAST: 23
-    GAME_GEAR: 35
-    ANDROID: 34
-    ARCADE: 52
-    STEAM: 6
-    PC: 6
+  request_timeout_seconds: 30
+steamgriddb:
+  allow_animated: false
+  api_key_env: SGDB_API_KEY
+  base_url: https://www.steamgriddb.com/api/v2
+  delay_seconds: 0.25
+  prefer_dimensions:
+  - 1024x1024
+  request_timeout_seconds: 40
+  square_styles:
+  - alternate
+  - material
+  - white_logo
+  - blurred
+  - no_logo
 thegamesdb:
   api_key_env: TGDB_API_KEY
   base_url: https://api.thegamesdb.net/v1
-  request_timeout_seconds: 30
   delay_seconds: 0.5
-  prefer_image_type: boxart
   platform_map:
-    NES: 7
-    SNES: 6
-    N64: 3
+    ANDROID: 4916
+    ARCADE: 23
+    DREAMCAST: 16
     GAMECUBE: 2
-    WII: 9
-    WII_U: 38
-    SWITCH: 4971
     GAME_BOY: 4912
-    GAME_BOY_COLOR: 41
     GAME_BOY_ADVANCE: 12
-    NINTENDO_DS: 8
+    GAME_BOY_COLOR: 41
+    GAME_GEAR: 20
+    GENESIS: 18
+    MASTER_SYSTEM: 35
+    N64: 3
+    NES: 7
     NINTENDO_3DS: 4912
+    NINTENDO_DS: 8
+    PC: 1
     PS1: 10
     PS2: 11
     PS3: 12
@@ -366,88 +463,18 @@ thegamesdb:
     PS5: 4919
     PSP: 13
     PS_VITA: 39
+    SATURN: 17
+    SEGA_32X: 33
+    SEGA_CD: 21
+    SNES: 6
+    STEAM: 1
+    SWITCH: 4971
+    WII: 9
+    WII_U: 38
     XBOX: 14
     XBOX_360: 15
-    MASTER_SYSTEM: 35
-    GENESIS: 18
-    SEGA_CD: 21
-    SEGA_32X: 33
-    SATURN: 17
-    DREAMCAST: 16
-    GAME_GEAR: 20
-    ANDROID: 4916
-    ARCADE: 23
-    STEAM: 1
-    PC: 1
-steam:
+  prefer_image_type: boxart
   request_timeout_seconds: 30
-  delay_seconds: 0.25
-art_sources:
-  mode: steamgriddb_then_libretro
-  steamgriddb_square_only: true
-  libretro_crop_mode: center_crop
-  providers:
-  - id: steamgriddb
-    enabled: true
-  - id: igdb
-    enabled: true
-  - id: libretro
-    enabled: true
-  - id: thegamesdb
-    enabled: true
-  - id: steam
-    enabled: true
-auto_centering:
-  enabled: true
-  sources:
-  - libretro_boxart
-  tolerance: 0.06
-  search_steps: 5
-  search_span: 0.22
-  alpha_threshold: 16
-  margin_pct: 0.06
-logo_detection:
-  enabled: true
-  method: auto
-  sources:
-  - libretro_boxart
-  - steamgriddb_square
-  min_content_ratio: 0.15
-  max_crop_ratio: 0.85
-rom_directory:
-  mode: manual
-  rom_path: ''
-  auto_detect: false
-  remember_last_path: true
-hero_images:
-  enabled: true
-  count: 1
-  save_with_icons: true
 ui:
   dark_mode: true
-fallback_icons:
-  use_platform_icon_fallback: true
-  skip_scraping_use_platform_icon: false
-  fallback_icons_path: ''
-screenshots:
-  enabled: true
-  count: 1
-device_copy:
-  enabled: true
-  path: /sdcard/Android/media/com.iisulauncher/iiSULauncher/assets/media/roms/consoles
-logos:
-  scrape_logos: true
-  fallback_to_boxart: true
-  # Logo styles to fetch from SteamGridDB
-  # Note: "official" is user-submitted and unreliable (can be fan translations/other languages)
-  # "white" and "black" are more standardized logo styles
-  styles:
-  - white
-  - black
-custom_borders:
-  enabled: false
-  path: ''
-  per_platform: {}
-processing:
-  workers: 8
-  limit: 0
+  last_seen_version: 2.0.0

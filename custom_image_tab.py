@@ -9,16 +9,18 @@ from typing import Optional, Tuple
 import math
 
 from PIL import Image, ImageOps, ImageQt, ImageChops
-from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer
+from PySide6.QtCore import Qt, QPointF, QRectF, Signal, QTimer, QThread
 from PySide6.QtGui import QPixmap, QImage, QPainter, QTransform, QWheelEvent, QMouseEvent, QKeyEvent, QPen, QBrush, QColor, QCursor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog,
     QGroupBox, QComboBox, QMessageBox, QGraphicsView, QGraphicsScene,
-    QGraphicsPixmapItem, QSizePolicy, QButtonGroup, QDoubleSpinBox, QCheckBox
+    QGraphicsPixmapItem, QSizePolicy, QButtonGroup, QDoubleSpinBox, QCheckBox,
+    QFrame
 )
 
 from run_backend import compose_with_border, center_crop_to_square, load_yaml, corner_mask_from_border
-from app_paths import get_config_path, get_borders_dir
+from app_paths import get_config_path, get_borders_dir, get_config
+from iisu_image_utils import safe_load_image
 
 
 class TransformHandlesOverlay(QWidget):
@@ -443,7 +445,7 @@ class InteractiveImageView(QGraphicsView):
         self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setBackgroundBrush(Qt.darkGray)
+        self.setBackgroundBrush(self._create_checkerboard_brush())
         self.setFrameShape(QGraphicsView.NoFrame)
 
         # Enable focus for keyboard events
@@ -582,12 +584,145 @@ class InteractiveImageView(QGraphicsView):
         self.arrow_key_pressed.emit(delta_x, delta_y)
         event.accept()
 
+    @staticmethod
+    def _create_checkerboard_brush() -> QBrush:
+        """Create a checkerboard pattern brush for transparency visualization."""
+        tile = 16
+        pixmap = QPixmap(tile * 2, tile * 2)
+        pixmap.fill(QColor(40, 40, 40))
+        painter = QPainter(pixmap)
+        painter.fillRect(0, 0, tile, tile, QColor(60, 60, 60))
+        painter.fillRect(tile, tile, tile, tile, QColor(60, 60, 60))
+        painter.end()
+        return QBrush(pixmap)
+
     def reset_view(self):
         """Reset zoom and pan to fit the image."""
         if self.image_item:
             self.resetTransform()
             self.fitInView(self.image_item, Qt.KeepAspectRatio)
             self.zoom_factor = 1.0
+
+
+class PreviewWorker(QThread):
+    """Worker thread for compositing the preview image off the main thread."""
+    preview_ready = Signal(QImage)
+    error = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self._params = None
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def set_params(self, params: dict):
+        """Set rendering parameters before calling start().
+
+        Keys: background_image, logo_image, rotation, zoom, offset_x, offset_y,
+              logo_scale, logo_offset_x, logo_offset_y, logo_opacity,
+              border_cache, border_mask_cache, preview_size
+        """
+        self._params = params
+        self._cancelled = False
+
+    def run(self):
+        try:
+            if self._cancelled or self._params is None:
+                return
+
+            p = self._params
+            preview_size = p['preview_size']
+
+            # Create transparent canvas
+            result = Image.new("RGBA", (preview_size, preview_size), (0, 0, 0, 0))
+
+            # --- Layer 1: Background ---
+            if p['background_image'] is not None and not self._cancelled:
+                bg = p['background_image']
+
+                # Rotate
+                if p['rotation'] != 0:
+                    bg = bg.rotate(-p['rotation'], expand=True,
+                                   fillcolor=(0, 0, 0, 0), resample=Image.BILINEAR)
+
+                if self._cancelled:
+                    return
+
+                # Zoom
+                if p['zoom'] != 1.0:
+                    w, h = bg.size
+                    bg = bg.resize((int(w * p['zoom']), int(h * p['zoom'])), Image.BILINEAR)
+
+                if self._cancelled:
+                    return
+
+                # Scale for preview
+                scale_factor = preview_size / 1024.0
+                if scale_factor != 1.0:
+                    bg = bg.resize((int(bg.size[0] * scale_factor),
+                                    int(bg.size[1] * scale_factor)), Image.BILINEAR)
+
+                # Position on canvas
+                img_w, img_h = bg.size
+                paste_x = -int((img_w - preview_size) * p['offset_x'])
+                paste_y = -int((img_h - preview_size) * p['offset_y'])
+                result.paste(bg, (paste_x, paste_y), bg)
+
+            if self._cancelled:
+                return
+
+            # --- Layer 2: Logo ---
+            if p['logo_image'] is not None:
+                logo = p['logo_image']
+                logo_w, logo_h = logo.size
+                max_logo_size = int(preview_size * p['logo_scale'])
+                if max_logo_size > 0 and logo_w > 0 and logo_h > 0:
+                    scale_ratio = min(max_logo_size / logo_w, max_logo_size / logo_h)
+                    new_w = int(logo_w * scale_ratio)
+                    new_h = int(logo_h * scale_ratio)
+                    if new_w > 0 and new_h > 0:
+                        scaled_logo = logo.resize((new_w, new_h), Image.BILINEAR)
+
+                        if self._cancelled:
+                            return
+
+                        # Apply opacity
+                        if p['logo_opacity'] < 1.0:
+                            r, g, b, a = scaled_logo.split()
+                            a = a.point(lambda x: int(x * p['logo_opacity']))
+                            scaled_logo = Image.merge("RGBA", (r, g, b, a))
+
+                        # Position
+                        max_x = preview_size - new_w
+                        max_y = preview_size - new_h
+                        lx = int(max(0, max_x) * p['logo_offset_x'])
+                        ly = int(max(0, max_y) * p['logo_offset_y'])
+                        result.paste(scaled_logo, (lx, ly), scaled_logo)
+
+            if self._cancelled:
+                return
+
+            # --- Layer 3: Border ---
+            border = p.get('border_cache')
+            mask = p.get('border_mask_cache')
+            if border is not None and mask is not None:
+                result.putalpha(ImageChops.multiply(result.split()[-1], mask))
+                result = Image.alpha_composite(result, border)
+
+            if self._cancelled:
+                return
+
+            # Convert to QImage (thread-safe)
+            qimage = ImageQt.ImageQt(result)
+            # We must copy the QImage because the underlying PIL data
+            # could be garbage-collected when this method returns
+            self.preview_ready.emit(qimage.copy())
+
+        except Exception as e:
+            if not self._cancelled:
+                self.error.emit(str(e))
 
 
 class CustomImageTab(QWidget):
@@ -640,11 +775,14 @@ class CustomImageTab(QWidget):
         self.platforms_config = {}
         self.borders_dir = get_borders_dir()
 
-        # Debounce timer for slider updates
+        # Debounce timer for preview updates
         self.update_timer = QTimer()
         self.update_timer.setSingleShot(True)
-        self.update_timer.timeout.connect(self._do_update_preview)
-        self.debounce_ms = 50  # Reduced to 50ms for better responsiveness
+        self.update_timer.timeout.connect(self._start_preview_worker)
+        self.debounce_ms = 150  # Worker handles heavy lifting off-thread
+
+        # Preview worker thread
+        self._preview_worker: Optional[PreviewWorker] = None
 
         self._load_config()
         self._setup_ui()
@@ -654,220 +792,94 @@ class CustomImageTab(QWidget):
 
     def _load_config(self):
         """Load platform configuration."""
-        if self.config_path.exists():
-            cfg = load_yaml(self.config_path)
+        try:
+            cfg = get_config()
             self.platforms_config = cfg.get("platforms", {})
             paths = cfg.get("paths", {})
             borders_dir_str = paths.get("borders_dir", "./borders")
             self.borders_dir = (self.config_path.parent / borders_dir_str).resolve()
+        except Exception:
+            pass
 
     def _setup_ui(self):
-        """Setup the user interface."""
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        """Setup the user interface — streamlined single-flow layout."""
+        from PySide6.QtWidgets import QScrollArea, QFrame, QSlider
 
-        # Left panel - Controls (use scroll area for many controls)
-        from PySide6.QtWidgets import QScrollArea
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(0)
+
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(0)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+
+        # ── Left panel: Controls ──
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setMinimumWidth(280)
-        scroll_area.setMaximumWidth(320)
+        scroll_area.setFixedWidth(320)
+        # Styled via QSS (QScrollArea rule)
 
         left_panel = QWidget()
+        # Styled via QSS (QFrame/QWidget transparency rules)
         left_layout = QVBoxLayout(left_panel)
         left_layout.setSpacing(8)
-        left_layout.setContentsMargins(5, 5, 5, 5)
+        left_layout.setContentsMargins(5, 5, 10, 5)
 
-        # Background Layer section (game art)
-        bg_group = QGroupBox("Background Layer (Game Art)")
-        bg_layout = QVBoxLayout(bg_group)
-        bg_layout.setSpacing(6)
-        bg_layout.setContentsMargins(8, 12, 8, 8)
+        # ===== IMAGE CARD =====
+        image_card = QFrame()
+        image_card.setObjectName("card")
+        image_card_layout = QVBoxLayout(image_card)
+        image_card_layout.setContentsMargins(10, 10, 10, 10)
+        image_card_layout.setSpacing(6)
 
-        self.bg_upload_btn = QPushButton("Upload Background")
-        self.bg_upload_btn.setMinimumHeight(32)
+        # Upload Image button (prominent)
+        self.bg_upload_btn = QPushButton("Upload Image")
+        self.bg_upload_btn.setMinimumHeight(36)
         self.bg_upload_btn.clicked.connect(self._upload_background)
-        bg_layout.addWidget(self.bg_upload_btn)
+        self.bg_upload_btn.setObjectName("btn_primary")
+        image_card_layout.addWidget(self.bg_upload_btn)
 
-        self.bg_info = QLabel("No background loaded")
-        self.bg_info.setStyleSheet("font-size: 10px; color: #888;")
-        self.bg_info.setWordWrap(True)
-        bg_layout.addWidget(self.bg_info)
+        self.bg_info = QLabel("No image loaded")
+        self.bg_info.setObjectName("label_muted")
+        image_card_layout.addWidget(self.bg_info)
 
-        self.bg_clear_btn = QPushButton("Clear")
-        self.bg_clear_btn.setMinimumHeight(28)
+        self.bg_clear_btn = QPushButton("Clear Image")
+        self.bg_clear_btn.setMinimumHeight(24)
         self.bg_clear_btn.clicked.connect(self._clear_background)
         self.bg_clear_btn.setEnabled(False)
-        bg_layout.addWidget(self.bg_clear_btn)
+        self.bg_clear_btn.setObjectName("btn_clear")
+        self.bg_clear_btn.setVisible(False)
+        image_card_layout.addWidget(self.bg_clear_btn)
 
-        left_layout.addWidget(bg_group)
+        # Separator
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.HLine)
+        # Styled via QSS (QFrame[frameShape="4"] rule)
+        sep1.setFixedHeight(1)
+        image_card_layout.addWidget(sep1)
 
-        # Logo Layer section (transparent overlay)
-        logo_group = QGroupBox("Logo Layer (Overlay)")
-        logo_layout = QVBoxLayout(logo_group)
-        logo_layout.setSpacing(6)
-        logo_layout.setContentsMargins(8, 12, 8, 8)
-
-        self.logo_upload_btn = QPushButton("Upload Logo")
-        self.logo_upload_btn.setMinimumHeight(32)
+        # Logo section (optional overlay)
+        self.logo_upload_btn = QPushButton("Add Logo (Optional)")
+        self.logo_upload_btn.setMinimumHeight(30)
         self.logo_upload_btn.clicked.connect(self._upload_logo)
-        logo_layout.addWidget(self.logo_upload_btn)
+        self.logo_upload_btn.setObjectName("btn_secondary")
+        image_card_layout.addWidget(self.logo_upload_btn)
 
-        self.logo_info = QLabel("No logo loaded (optional)")
-        self.logo_info.setStyleSheet("font-size: 10px; color: #888;")
-        self.logo_info.setWordWrap(True)
-        logo_layout.addWidget(self.logo_info)
+        self.logo_info = QLabel("Transparent PNG overlay")
+        self.logo_info.setObjectName("label_muted")
+        image_card_layout.addWidget(self.logo_info)
 
-        self.logo_clear_btn = QPushButton("Clear")
-        self.logo_clear_btn.setMinimumHeight(28)
-        self.logo_clear_btn.clicked.connect(self._clear_logo)
-        self.logo_clear_btn.setEnabled(False)
-        logo_layout.addWidget(self.logo_clear_btn)
+        # Logo controls (hidden until logo loaded)
+        self.logo_controls_widget = QWidget()
+        logo_ctrl_layout = QVBoxLayout(self.logo_controls_widget)
+        logo_ctrl_layout.setContentsMargins(0, 4, 0, 0)
+        logo_ctrl_layout.setSpacing(4)
 
-        left_layout.addWidget(logo_group)
-
-        # Platform selection section
-        platform_group = QGroupBox("Platform & Border")
-        platform_layout = QVBoxLayout(platform_group)
-        platform_layout.setSpacing(6)
-        platform_layout.setContentsMargins(8, 12, 8, 8)
-
-        platform_lbl = QLabel("Select Platform:")
-        platform_lbl.setStyleSheet("font-size: 11px;")
-        platform_layout.addWidget(platform_lbl)
-
-        self.platform_combo = QComboBox()
-        self.platform_combo.setMinimumHeight(28)
-        self.platform_combo.addItem("Select Platform...", None)
-
-        # Populate platforms
-        for platform_key, platform_data in sorted(self.platforms_config.items()):
-            border_file = platform_data.get("border_file")
-            if border_file:
-                display_name = platform_key.replace("_", " ").title()
-                self.platform_combo.addItem(display_name, platform_key)
-
-        self.platform_combo.currentIndexChanged.connect(self._on_platform_changed)
-        platform_layout.addWidget(self.platform_combo)
-
-        self.border_info = QLabel("No border selected")
-        self.border_info.setStyleSheet("font-size: 10px; color: #888;")
-        self.border_info.setWordWrap(True)
-        platform_layout.addWidget(self.border_info)
-
-        # Custom border import button
-        custom_border_btn = QPushButton("Import Custom Border")
-        custom_border_btn.setMinimumHeight(28)
-        custom_border_btn.clicked.connect(self._import_custom_border)
-        platform_layout.addWidget(custom_border_btn)
-
-        left_layout.addWidget(platform_group)
-
-        # Transform Controls section (replaces old slider-based adjustments)
-        transform_group = QGroupBox("Transform Controls")
-        transform_layout = QVBoxLayout(transform_group)
-        transform_layout.setSpacing(6)
-        transform_layout.setContentsMargins(8, 12, 8, 8)
-
-        # Layer selection buttons
-        layer_row = QHBoxLayout()
-        layer_row.setSpacing(4)
-        self.bg_layer_btn = QPushButton("Background")
-        self.bg_layer_btn.setCheckable(True)
-        self.bg_layer_btn.setChecked(True)
-        self.bg_layer_btn.setMinimumHeight(28)
-        self.bg_layer_btn.clicked.connect(lambda: self._select_layer('background'))
-        layer_row.addWidget(self.bg_layer_btn)
-
-        self.logo_layer_btn = QPushButton("Logo")
-        self.logo_layer_btn.setCheckable(True)
-        self.logo_layer_btn.setMinimumHeight(28)
-        self.logo_layer_btn.clicked.connect(lambda: self._select_layer('logo'))
-        layer_row.addWidget(self.logo_layer_btn)
-        transform_layout.addLayout(layer_row)
-
-        # Transform info display
-        info_style = "font-size: 11px; padding: 2px;"
-        value_style = "font-size: 11px; font-weight: bold; color: #0078d7;"
-
-        # Scale/Zoom spinbox (editable)
-        scale_row = QHBoxLayout()
-        scale_row.setSpacing(8)
-        scale_lbl = QLabel("Scale:")
-        scale_lbl.setStyleSheet(info_style)
-        scale_lbl.setMinimumWidth(55)
-        scale_row.addWidget(scale_lbl)
-        self.scale_spinbox = QDoubleSpinBox()
-        self.scale_spinbox.setRange(1, 1000)  # 1% to 1000%
-        self.scale_spinbox.setValue(100)
-        self.scale_spinbox.setSuffix("%")
-        self.scale_spinbox.setDecimals(0)
-        self.scale_spinbox.setSingleStep(5)
-        self.scale_spinbox.setMinimumWidth(80)
-        self.scale_spinbox.valueChanged.connect(self._on_scale_spinbox_changed)
-        scale_row.addWidget(self.scale_spinbox)
-        scale_row.addStretch()
-        transform_layout.addLayout(scale_row)
-
-        # Rotation display
-        rotation_row = QHBoxLayout()
-        rotation_row.setSpacing(8)
-        rotation_lbl = QLabel("Rotation:")
-        rotation_lbl.setStyleSheet(info_style)
-        rotation_lbl.setMinimumWidth(55)
-        rotation_row.addWidget(rotation_lbl)
-        self.rotation_value_label = QLabel("0.0°")
-        self.rotation_value_label.setStyleSheet(value_style)
-        rotation_row.addWidget(self.rotation_value_label, 1)
-        transform_layout.addLayout(rotation_row)
-
-        # Position display
-        position_row = QHBoxLayout()
-        position_row.setSpacing(8)
-        position_lbl = QLabel("Position:")
-        position_lbl.setStyleSheet(info_style)
-        position_lbl.setMinimumWidth(55)
-        position_row.addWidget(position_lbl)
-        self.position_value_label = QLabel("(50%, 50%)")
-        self.position_value_label.setStyleSheet(value_style)
-        position_row.addWidget(self.position_value_label, 1)
-        transform_layout.addLayout(position_row)
-
-        # Lock aspect ratio checkbox
-        self.lock_aspect_cb = QCheckBox("Lock Aspect Ratio")
-        self.lock_aspect_cb.setChecked(True)
-        self.lock_aspect_cb.setStyleSheet("font-size: 11px;")
-        self.lock_aspect_cb.stateChanged.connect(self._on_lock_aspect_changed)
-        transform_layout.addWidget(self.lock_aspect_cb)
-
-        # Help text
-        help_text = QLabel("Drag handles to transform\nCorners: Scale | Edges: Resize\nTop circle: Rotate | Inside: Move")
-        help_text.setStyleSheet("font-size: 9px; color: #666;")
-        help_text.setWordWrap(True)
-        transform_layout.addWidget(help_text)
-
-        # Reset button
-        self.reset_transform_btn = QPushButton("Reset Transform")
-        self.reset_transform_btn.setMinimumHeight(28)
-        self.reset_transform_btn.clicked.connect(self._reset_current_layer)
-        transform_layout.addWidget(self.reset_transform_btn)
-
-        left_layout.addWidget(transform_group)
-
-        # Logo Opacity section (kept separate since no visual handle for opacity)
-        opacity_group = QGroupBox("Logo Opacity")
-        opacity_layout = QVBoxLayout(opacity_group)
-        opacity_layout.setSpacing(4)
-        opacity_layout.setContentsMargins(8, 12, 8, 8)
-
-        from PySide6.QtWidgets import QSlider
         opacity_row = QHBoxLayout()
-        opacity_row.setSpacing(8)
+        opacity_row.setSpacing(6)
         opacity_lbl = QLabel("Opacity:")
-        opacity_lbl.setStyleSheet("font-size: 11px;")
-        opacity_lbl.setMinimumWidth(55)
+        opacity_lbl.setObjectName("label_info")
         opacity_row.addWidget(opacity_lbl)
         self.logo_opacity_slider = QSlider(Qt.Horizontal)
         self.logo_opacity_slider.setMinimum(0)
@@ -876,87 +888,194 @@ class CustomImageTab(QWidget):
         self.logo_opacity_slider.valueChanged.connect(self._on_logo_opacity_changed)
         opacity_row.addWidget(self.logo_opacity_slider, 1)
         self.logo_opacity_label = QLabel("100%")
-        self.logo_opacity_label.setStyleSheet("font-size: 11px;")
+        self.logo_opacity_label.setObjectName("label_value")
         self.logo_opacity_label.setMinimumWidth(35)
-        self.logo_opacity_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         opacity_row.addWidget(self.logo_opacity_label)
-        opacity_layout.addLayout(opacity_row)
+        logo_ctrl_layout.addLayout(opacity_row)
 
-        left_layout.addWidget(opacity_group)
+        self.logo_clear_btn = QPushButton("Clear Logo")
+        self.logo_clear_btn.setMinimumHeight(24)
+        self.logo_clear_btn.clicked.connect(self._clear_logo)
+        self.logo_clear_btn.setEnabled(False)
+        self.logo_clear_btn.setObjectName("btn_clear")
+        logo_ctrl_layout.addWidget(self.logo_clear_btn)
 
-        # Export section
-        export_group = QGroupBox("Export")
-        export_layout = QVBoxLayout(export_group)
-        export_layout.setSpacing(6)
-        export_layout.setContentsMargins(8, 12, 8, 8)
+        self.logo_controls_widget.setVisible(False)
+        image_card_layout.addWidget(self.logo_controls_widget)
 
-        self.export_btn = QPushButton("Export Image (1024x1024)")
-        self.export_btn.setMinimumHeight(36)
+        left_layout.addWidget(image_card)
+
+        # ===== PLATFORM BORDER =====
+        border_card = QFrame()
+        border_card.setObjectName("card")
+        border_layout = QVBoxLayout(border_card)
+        border_layout.setContentsMargins(10, 10, 10, 10)
+        border_layout.setSpacing(6)
+
+        border_header = QHBoxLayout()
+        border_title = QLabel("Platform Border")
+        border_title.setObjectName("label_card_title")
+        border_header.addWidget(border_title)
+        border_header.addStretch()
+
+        custom_border_btn = QPushButton("+ Custom")
+        custom_border_btn.setMinimumHeight(22)
+        custom_border_btn.clicked.connect(self._import_custom_border)
+        custom_border_btn.setObjectName("btn_small")
+        border_header.addWidget(custom_border_btn)
+        border_layout.addLayout(border_header)
+
+        self.platform_combo = QComboBox()
+        self.platform_combo.setMinimumHeight(32)
+        self.platform_combo.addItem("Select platform...", None)
+
+        for platform_key, platform_data in sorted(self.platforms_config.items()):
+            border_file = platform_data.get("border_file")
+            if border_file:
+                display_name = platform_key.replace("_", " ").title()
+                self.platform_combo.addItem(display_name, platform_key)
+
+        self.platform_combo.currentIndexChanged.connect(self._on_platform_changed)
+        border_layout.addWidget(self.platform_combo)
+
+        self.border_info = QLabel("Select a platform to apply border")
+        self.border_info.setObjectName("label_muted")
+        border_layout.addWidget(self.border_info)
+
+        left_layout.addWidget(border_card)
+
+        # ===== TOOLBAR CARD (Transform + Export combined) =====
+        toolbar_card = QFrame()
+        toolbar_card.setObjectName("card")
+        toolbar_layout = QVBoxLayout(toolbar_card)
+        toolbar_layout.setContentsMargins(10, 10, 10, 10)
+        toolbar_layout.setSpacing(6)
+
+        # Compact transform readout
+        info_row = QHBoxLayout()
+        info_row.setSpacing(6)
+
+        scale_row = QHBoxLayout()
+        scale_row.setSpacing(4)
+        scale_lbl = QLabel("Scale:")
+        scale_lbl.setObjectName("label_info")
+        scale_row.addWidget(scale_lbl)
+        self.scale_spinbox = QDoubleSpinBox()
+        self.scale_spinbox.setRange(1, 1000)
+        self.scale_spinbox.setValue(100)
+        self.scale_spinbox.setSuffix("%")
+        self.scale_spinbox.setDecimals(0)
+        self.scale_spinbox.setSingleStep(5)
+        self.scale_spinbox.setMinimumWidth(70)
+        self.scale_spinbox.setMaximumHeight(26)
+        self.scale_spinbox.valueChanged.connect(self._on_scale_spinbox_changed)
+        scale_row.addWidget(self.scale_spinbox)
+        info_row.addLayout(scale_row)
+
+        self.rotation_value_label = QLabel("0°")
+        self.rotation_value_label.setObjectName("label_value")
+        info_row.addWidget(self.rotation_value_label)
+
+        self.position_value_label = QLabel("50%, 50%")
+        self.position_value_label.setObjectName("label_value")
+        info_row.addWidget(self.position_value_label)
+
+        info_row.addStretch()
+        toolbar_layout.addLayout(info_row)
+
+        # Options row
+        options_row = QHBoxLayout()
+        options_row.setSpacing(8)
+
+        self.lock_aspect_cb = QCheckBox("Lock Ratio")
+        self.lock_aspect_cb.setChecked(True)
+        self.lock_aspect_cb.setObjectName("cb_small")
+        self.lock_aspect_cb.stateChanged.connect(self._on_lock_aspect_changed)
+        options_row.addWidget(self.lock_aspect_cb)
+
+        self.reset_transform_btn = QPushButton("Reset")
+        self.reset_transform_btn.setMinimumHeight(24)
+        self.reset_transform_btn.clicked.connect(self._reset_current_layer)
+        self.reset_transform_btn.setObjectName("btn_small")
+        options_row.addWidget(self.reset_transform_btn)
+
+        # Active layer indicator
+        self.active_layer_label = QLabel("BG")
+        self.active_layer_label.setObjectName("active_layer_indicator")
+        self.active_layer_label.setAlignment(Qt.AlignCenter)
+        self.active_layer_label.setFixedHeight(22)
+        options_row.addWidget(self.active_layer_label)
+
+        options_row.addStretch()
+        toolbar_layout.addLayout(options_row)
+
+        # Separator
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        # Styled via QSS (QFrame[frameShape="4"] rule)
+        sep2.setFixedHeight(1)
+        toolbar_layout.addWidget(sep2)
+
+        # Export
+        self.export_btn = QPushButton("Export 1024x1024")
+        self.export_btn.setMinimumHeight(40)
         self.export_btn.clicked.connect(self._export_image)
         self.export_btn.setEnabled(False)
-        export_layout.addWidget(self.export_btn)
+        self.export_btn.setObjectName("btn_export")
+        toolbar_layout.addWidget(self.export_btn)
 
-        self.export_info = QLabel("Upload an image and select a platform to export")
-        self.export_info.setStyleSheet("font-size: 10px; color: #888;")
-        self.export_info.setWordWrap(True)
-        export_layout.addWidget(self.export_info)
+        self.export_info = QLabel("Upload image and select platform")
+        self.export_info.setObjectName("label_muted")
+        self.export_info.setAlignment(Qt.AlignCenter)
+        toolbar_layout.addWidget(self.export_info)
 
-        left_layout.addWidget(export_group)
+        left_layout.addWidget(toolbar_card)
 
         left_layout.addStretch()
-
-        # Set scroll area widget
         scroll_area.setWidget(left_panel)
 
-        # Right panel - Preview
-        right_panel = QWidget()
+        # ── Right panel: Preview ──
+        right_panel = QFrame()
+        right_panel.setObjectName("preview_panel")
+        right_panel.setMinimumWidth(450)
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(10, 5, 10, 10)
+        right_layout.setContentsMargins(12, 12, 12, 12)
         right_layout.setSpacing(8)
 
+        preview_header = QHBoxLayout()
         preview_label = QLabel("Preview")
-        preview_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        right_layout.addWidget(preview_label)
+        preview_label.setObjectName("label_card_title")
+        preview_header.addWidget(preview_label)
+        preview_header.addStretch()
 
-        # Preview container to properly center and size the preview
-        preview_container = QWidget()
-        preview_container_layout = QVBoxLayout(preview_container)
-        preview_container_layout.setContentsMargins(0, 0, 0, 0)
-        preview_container_layout.setAlignment(Qt.AlignCenter)
+        preview_help = QLabel("Drag to move · Scroll to zoom · Corners to resize")
+        preview_help.setObjectName("label_muted")
+        preview_header.addWidget(preview_help)
+        right_layout.addLayout(preview_header)
 
         self.preview_view = InteractiveImageView()
-        self.preview_view.setMinimumSize(400, 400)
-        self.preview_view.setMaximumSize(800, 800)
+        self.preview_view.setMinimumSize(350, 350)
         self.preview_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        preview_container_layout.addWidget(self.preview_view, 0, Qt.AlignCenter)
-
-        right_layout.addWidget(preview_container, 1)
-
-        preview_help = QLabel("Scroll to zoom | Arrow keys for fine adjust")
-        preview_help.setStyleSheet("font-size: 10px; color: #666;")
-        preview_help.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(preview_help)
+        right_layout.addWidget(self.preview_view, 1)
 
         # Connect transform handle signals
         self.preview_view.scale_changed.connect(self._on_handle_scale)
         self.preview_view.rotation_changed.connect(self._on_handle_rotation)
         self.preview_view.position_changed.connect(self._on_handle_position)
-
-        # Connect transform lifecycle signals for tracking start values
         self.preview_view.handles_overlay.transform_started.connect(self._on_transform_started)
-
-        # Connect preview zoom signal (scroll wheel)
         self.preview_view.zoom_changed.connect(self._on_wheel_zoom)
-
-        # Connect arrow key signal for fine positioning
         self.preview_view.arrow_key_pressed.connect(lambda dx, dy: self._on_handle_position(dx, dy))
 
-        # Add panels to main layout - use scroll area for left panel
-        layout.addWidget(scroll_area, 0)
-        layout.addWidget(right_panel, 1)
+        # Add panels to layout
+        content_layout.addWidget(scroll_area)
+        content_layout.addWidget(right_panel, 1)
 
-        # Enable keyboard focus for arrow keys
+        layout.addLayout(content_layout)
         self.setFocusPolicy(Qt.StrongFocus)
+
+        # Compatibility stubs for layer toggle buttons (used by _select_layer)
+        self.bg_layer_btn = None
+        self.logo_layer_btn = None
 
     def _upload_background(self):
         """Open file dialog to upload background layer (game art)."""
@@ -972,18 +1091,13 @@ class CustomImageTab(QWidget):
 
         try:
             # Load image
-            loaded_image = Image.open(file_path).convert("RGBA")
+            loaded_image = safe_load_image(file_path, "RGBA")
 
-            # Place image on a 1024x1024 transparent canvas, centered
-            canvas = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+            # Keep the original image at full resolution — the preview and
+            # export pipelines handle scaling via _apply_transformations() and
+            # the offset/zoom system, so there's no need to crop to 1024×1024.
             img_w, img_h = loaded_image.size
-
-            # Center the loaded image on the canvas
-            paste_x = (1024 - img_w) // 2
-            paste_y = (1024 - img_h) // 2
-            canvas.paste(loaded_image, (paste_x, paste_y), loaded_image)
-
-            self.background_image = canvas
+            self.background_image = loaded_image
             self._update_composite_image()
 
             # Clear cache
@@ -996,9 +1110,17 @@ class CustomImageTab(QWidget):
                 f"Original: {img_w}x{img_h} ({size_mb:.2f} MB)"
             )
             self.bg_clear_btn.setEnabled(True)
+            self.bg_clear_btn.setVisible(True)
 
             # Reset background adjustments
             self._reset_background_adjustments()
+
+            # Auto-fit: if image is larger than 1024×1024, set initial zoom
+            # so the entire image is visible within the export viewport
+            if img_w > 1024 or img_h > 1024:
+                fit_zoom = min(1024 / img_w, 1024 / img_h)
+                self.zoom = fit_zoom
+                self._update_transform_info()
 
             # Select background layer and update handles
             self._select_layer('background')
@@ -1026,7 +1148,7 @@ class CustomImageTab(QWidget):
 
         try:
             # Load logo image - keep original size for scaling
-            self.logo_image = Image.open(file_path).convert("RGBA")
+            self.logo_image = safe_load_image(file_path, "RGBA")
 
             # Update composite
             self._update_composite_image()
@@ -1043,6 +1165,11 @@ class CustomImageTab(QWidget):
             )
             self.logo_clear_btn.setEnabled(True)
 
+            # Show logo controls and switch to logo layer
+            if hasattr(self, 'logo_controls_widget'):
+                self.logo_controls_widget.setVisible(True)
+            self._select_layer('logo')
+
             # Update preview
             self._schedule_update()
 
@@ -1054,8 +1181,9 @@ class CustomImageTab(QWidget):
         self.background_image = None
         self._update_composite_image()
         self.preview_cache = None
-        self.bg_info.setText("No background loaded")
+        self.bg_info.setText("No image loaded")
         self.bg_clear_btn.setEnabled(False)
+        self.bg_clear_btn.setVisible(False)
         self._schedule_update()
         self._check_export_ready()
 
@@ -1064,8 +1192,11 @@ class CustomImageTab(QWidget):
         self.logo_image = None
         self._update_composite_image()
         self.preview_cache = None
-        self.logo_info.setText("No logo loaded (optional)")
+        self.logo_info.setText("Transparent PNG overlay")
         self.logo_clear_btn.setEnabled(False)
+        if hasattr(self, 'logo_controls_widget'):
+            self.logo_controls_widget.setVisible(False)
+        self._select_layer('background')
         self._schedule_update()
 
     def _update_composite_image(self):
@@ -1125,7 +1256,7 @@ class CustomImageTab(QWidget):
 
         try:
             # Load and validate border image
-            border_img = Image.open(file_path).convert("RGBA")
+            border_img = safe_load_image(file_path, "RGBA")
 
             # Check if it's 1024x1024
             if border_img.size != (1024, 1024):
@@ -1165,9 +1296,9 @@ class CustomImageTab(QWidget):
         """Select which layer to transform."""
         self.active_layer = layer
 
-        # Update button states
-        self.bg_layer_btn.setChecked(layer == 'background')
-        self.logo_layer_btn.setChecked(layer == 'logo')
+        # Update active layer indicator label
+        if hasattr(self, 'active_layer_label'):
+            self.active_layer_label.setText("BG" if layer == 'background' else "Logo")
 
         # Update preview handles
         self.preview_view.set_active_layer(layer)
@@ -1204,7 +1335,7 @@ class CustomImageTab(QWidget):
 
         self.preview_cache = None
         self._update_transform_info()
-        self._do_update_preview()
+        self._schedule_update()
 
     def _on_handle_rotation(self, angle_delta: float):
         """Handle rotation change from transform handles."""
@@ -1218,7 +1349,7 @@ class CustomImageTab(QWidget):
             self.rotation = new_rotation
             self.preview_cache = None
             self._update_transform_info()
-            self._do_update_preview()
+            self._schedule_update()
         # Logo doesn't have rotation in this implementation
 
     def _on_handle_position(self, delta_x: float, delta_y: float):
@@ -1239,7 +1370,7 @@ class CustomImageTab(QWidget):
             self.logo_offset_y = max(0.0, min(1.0, self.logo_offset_y - delta_y))
 
         self._update_transform_info()
-        self._do_update_preview()
+        self._schedule_update()
 
     def _on_wheel_zoom(self, zoom_delta: float):
         """Handle mouse wheel zoom for source image."""
@@ -1254,7 +1385,7 @@ class CustomImageTab(QWidget):
 
         self.preview_cache = None
         self._update_transform_info()
-        self._do_update_preview()
+        self._schedule_update()
 
     def _on_logo_opacity_changed(self, value: int):
         """Handle logo opacity slider change."""
@@ -1271,7 +1402,7 @@ class CustomImageTab(QWidget):
             self.logo_scale = value / 100.0
         self.preview_cache = None
         self._update_handle_bounds()
-        self._do_update_preview()
+        self._schedule_update()
 
     def _update_transform_info(self):
         """Update the transform info display labels and spinbox."""
@@ -1279,12 +1410,12 @@ class CustomImageTab(QWidget):
         self.scale_spinbox.blockSignals(True)
         if self.active_layer == 'background':
             self.scale_spinbox.setValue(self.zoom * 100)
-            self.rotation_value_label.setText(f"{self.rotation:.1f}°")
-            self.position_value_label.setText(f"({self.offset_x * 100:.0f}%, {self.offset_y * 100:.0f}%)")
+            self.rotation_value_label.setText(f"{self.rotation:.0f}°")
+            self.position_value_label.setText(f"{self.offset_x * 100:.0f}%, {self.offset_y * 100:.0f}%")
         else:
             self.scale_spinbox.setValue(self.logo_scale * 100)
-            self.rotation_value_label.setText("N/A")  # Logo doesn't rotate
-            self.position_value_label.setText(f"({self.logo_offset_x * 100:.0f}%, {self.logo_offset_y * 100:.0f}%)")
+            self.rotation_value_label.setText("—")  # Logo doesn't rotate
+            self.position_value_label.setText(f"{self.logo_offset_x * 100:.0f}%, {self.logo_offset_y * 100:.0f}%")
         self.scale_spinbox.blockSignals(False)
 
     def _update_handle_bounds(self):
@@ -1394,6 +1525,74 @@ class CustomImageTab(QWidget):
         self.update_timer.stop()
         self.update_timer.start(self.debounce_ms)
 
+    def _ensure_border_cache(self):
+        """Load and cache border images if needed. Only runs when platform changes."""
+        if self.current_border is None or not self.current_border.exists():
+            return
+        if self.border_cache is not None:
+            return  # Already cached
+
+        border = safe_load_image(self.current_border, "RGBA")
+        border = ImageOps.exif_transpose(border)
+
+        # Preview size cache
+        if border.size != (self.preview_size, self.preview_size):
+            preview_border = border.resize((self.preview_size, self.preview_size), Image.BILINEAR)
+        else:
+            preview_border = border.copy()
+        self.border_cache = preview_border
+        self.border_mask_cache = corner_mask_from_border(preview_border, threshold=18, shrink_px=8, feather=0.8)
+
+        # Full size cache
+        if border.size != (1024, 1024):
+            full_border = border.resize((1024, 1024), Image.LANCZOS)
+        else:
+            full_border = border.copy()
+        self.border_cache_full = full_border
+        self.border_mask_cache_full = corner_mask_from_border(full_border, threshold=18, shrink_px=8, feather=0.8)
+
+    def _start_preview_worker(self):
+        """Start a worker thread to generate the preview."""
+        if self.background_image is None and self.logo_image is None:
+            return
+
+        # Cancel any existing worker
+        if self._preview_worker is not None and self._preview_worker.isRunning():
+            self._preview_worker.cancel()
+            self._preview_worker.quit()
+            self._preview_worker.wait(200)
+
+        # Ensure border caches are loaded
+        self._ensure_border_cache()
+
+        # Create worker with param copies
+        worker = PreviewWorker()
+        worker.set_params({
+            'background_image': self.background_image.copy() if self.background_image else None,
+            'logo_image': self.logo_image.copy() if self.logo_image else None,
+            'rotation': self.rotation,
+            'zoom': self.zoom,
+            'offset_x': self.offset_x,
+            'offset_y': self.offset_y,
+            'logo_scale': self.logo_scale,
+            'logo_offset_x': self.logo_offset_x,
+            'logo_offset_y': self.logo_offset_y,
+            'logo_opacity': self.logo_opacity,
+            'border_cache': self.border_cache,
+            'border_mask_cache': self.border_mask_cache,
+            'preview_size': self.preview_size,
+        })
+        worker.preview_ready.connect(self._on_preview_ready)
+        worker.error.connect(lambda msg: print(f"Preview worker error: {msg}"))
+        self._preview_worker = worker
+        worker.start()
+
+    def _on_preview_ready(self, qimage: QImage):
+        """Handle preview result from worker thread (runs on main thread)."""
+        pixmap = QPixmap.fromImage(qimage)
+        self.preview_view.set_image(pixmap)
+        self._update_handle_bounds()
+
     def _apply_transformations(self, img: Image.Image, use_high_quality: bool = False) -> Image.Image:
         """Apply rotation and zoom transformations to the image."""
         resample_method = Image.LANCZOS if use_high_quality else Image.BILINEAR
@@ -1456,8 +1655,8 @@ class CustomImageTab(QWidget):
         if out_size == self.preview_size:
             # Preview size - use preview cache
             if self.border_cache is None:
-                border = Image.open(border_path)
-                border = ImageOps.exif_transpose(border).convert("RGBA")
+                border = safe_load_image(border_path, "RGBA")
+                border = ImageOps.exif_transpose(border)
                 if border.size != (out_size, out_size):
                     border = border.resize((out_size, out_size), Image.BILINEAR)
                 self.border_cache = border
@@ -1468,8 +1667,8 @@ class CustomImageTab(QWidget):
         else:
             # Full size - use full cache
             if self.border_cache_full is None:
-                border = Image.open(border_path)
-                border = ImageOps.exif_transpose(border).convert("RGBA")
+                border = safe_load_image(border_path, "RGBA")
+                border = ImageOps.exif_transpose(border)
                 if border.size != (out_size, out_size):
                     border = border.resize((out_size, out_size), Image.LANCZOS)
                 self.border_cache_full = border
@@ -1564,8 +1763,8 @@ class CustomImageTab(QWidget):
             if self.current_border and self.current_border.exists():
                 # Load and prepare border (use cache)
                 if self.border_cache is None:
-                    border = Image.open(self.current_border)
-                    border = ImageOps.exif_transpose(border).convert("RGBA")
+                    border = safe_load_image(self.current_border, "RGBA")
+                    border = ImageOps.exif_transpose(border)
                     if border.size != (self.preview_size, self.preview_size):
                         border = border.resize((self.preview_size, self.preview_size), Image.BILINEAR)
                     self.border_cache = border
@@ -1664,8 +1863,8 @@ class CustomImageTab(QWidget):
                 canvas = self._composite_logo_on_canvas(canvas, 1024, use_high_quality=True)
 
             # Load and prepare border at full resolution
-            border = Image.open(self.current_border)
-            border = ImageOps.exif_transpose(border).convert("RGBA")
+            border = safe_load_image(self.current_border, "RGBA")
+            border = ImageOps.exif_transpose(border)
             if border.size != (1024, 1024):
                 border = border.resize((1024, 1024), Image.LANCZOS)
 
