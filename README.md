@@ -1,6 +1,6 @@
 # iiSU Asset Tool
 
-<img src="https://github.com/viik4/iisu-asset-tool/blob/809a64d3c86609240f0dddf959fc4dc1f584dd60/AssetToolGitHub.png" width="450" height="250">
+<img src="[https://github.com/viik4/iisu-asset-tool/blob/0b2c001c127d1c4859242a9c744296cf619e6e2c/AssetToolGitHub.png]" width="450" height="250">
 
 Create custom icons, heroes, logos, and covers for your game library. Built for the [iiSU](https://iisu.network/) community.
 
