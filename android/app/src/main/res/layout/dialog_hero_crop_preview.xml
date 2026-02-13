@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@color/theme_surface">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Custom Hero Crop"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="@color/accent_cyan"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Slide to adjust the horizontal crop position"
+        android:textSize="13sp"
+        android:textColor="@color/theme_text_secondary"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Preview area: shows the full source image with a 16:9 crop overlay -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginBottom="12dp"
+        android:background="#1A1E22"
+        android:clipChildren="true">
+
+        <com.iisu.assettool.ui.HeroCropPreviewView
+            android:id="@+id/heroCropPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+    </FrameLayout>
+
+    <!-- Position slider -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Left"
+            android:textSize="12sp"
+            android:textColor="@color/theme_text_secondary" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/sliderPosition"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="8dp"
+            android:valueFrom="0.0"
+            android:valueTo="1.0"
+            android:value="0.5"
+            app:trackColorActive="@color/accent_cyan"
+            app:thumbColor="@color/accent_cyan" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Right"
+            android:textSize="12sp"
+            android:textColor="@color/theme_text_secondary" />
+
+    </LinearLayout>
+
+    <!-- Quick position buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLeft"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="Left"
+            android:textSize="12sp"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            app:strokeColor="@color/theme_border_color" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCenter"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:text="Center"
+            android:textSize="12sp"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            app:strokeColor="@color/theme_border_color" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRight"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:text="Right"
+            android:textSize="12sp"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            app:strokeColor="@color/theme_border_color" />
+
+    </LinearLayout>
+
+</LinearLayout>

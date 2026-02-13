@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="8dp"
+    android:background="@drawable/bg_list_item_selector"
+    android:focusable="true"
+    android:clickable="true">
+
+    <!-- Platform Icon -->
+    <ImageView
+        android:id="@+id/imagePlatformIcon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:scaleType="fitCenter"
+        android:contentDescription="Platform icon"
+        tools:src="@drawable/ic_iisu_home" />
+
+    <!-- Platform Info -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textPlatformName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="@color/theme_text_primary"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            tools:text="PlayStation" />
+
+        <TextView
+            android:id="@+id/textPlatformPath"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="@color/theme_text_secondary"
+            android:maxLines="1"
+            android:ellipsize="middle"
+            tools:text="/storage/emulated/0/ROMs/psx" />
+
+    </LinearLayout>
+
+    <!-- Edit Button -->
+    <ImageButton
+        android:id="@+id/btnEditPlatform"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_edit"
+        android:contentDescription="Edit platform"
+        app:tint="@color/theme_text_secondary" />
+
+    <!-- Delete Button -->
+    <ImageButton
+        android:id="@+id/btnDeletePlatform"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_close"
+        android:contentDescription="Delete platform"
+        app:tint="@color/theme_text_secondary" />
+
+</LinearLayout>

@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/theme_background">
+
+    <!-- Top App Bar -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/theme_background"
+        app:elevation="0dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="@dimen/spacing_md"
+            android:paddingVertical="@dimen/spacing_sm">
+
+            <ImageButton
+                android:id="@+id/btnClose"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_close"
+                android:contentDescription="Cancel"
+                app:tint="@color/theme_text_primary" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="@dimen/spacing_md"
+                android:text="Crop Image"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/accent_cyan"
+                android:fontFamily="@font/continuum" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSave"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:text="Save"
+                android:textSize="14sp"
+                style="@style/IisuPrimaryButton"
+                app:backgroundTint="@null"
+                app:icon="@drawable/ic_save"
+                app:iconSize="20dp" />
+
+        </LinearLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Main Content -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <!-- Crop Preview Area -->
+        <FrameLayout
+            android:id="@+id/cropContainer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#1A1E22">
+
+            <!-- The crop view will be added programmatically -->
+            <com.iisu.assettool.ui.CropImageView
+                android:id="@+id/cropView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- Grid overlay for alignment reference -->
+            <View
+                android:id="@+id/gridOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+        <!-- Controls Panel -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/spacing_md"
+            android:background="@color/theme_surface">
+
+            <!-- Zoom Control -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="60dp"
+                    android:layout_height="wrap_content"
+                    android:text="Zoom"
+                    android:textSize="14sp"
+                    android:textColor="@color/theme_text_secondary" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/sliderZoom"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:valueFrom="0.1"
+                    android:valueTo="5.0"
+                    android:value="1.0"
+                    android:stepSize="0.1"
+                    app:trackColorActive="@color/accent_cyan"
+                    app:thumbColor="@color/accent_cyan" />
+
+                <TextView
+                    android:id="@+id/textZoomValue"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:text="100%"
+                    android:textSize="14sp"
+                    android:textColor="@color/accent_cyan" />
+
+            </LinearLayout>
+
+            <!-- Rotation Control -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="60dp"
+                    android:layout_height="wrap_content"
+                    android:text="Rotate"
+                    android:textSize="14sp"
+                    android:textColor="@color/theme_text_secondary" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/sliderRotation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:valueFrom="-180"
+                    android:valueTo="180"
+                    android:value="0"
+                    android:stepSize="1"
+                    app:trackColorActive="@color/iisu_purple"
+                    app:thumbColor="@color/iisu_purple" />
+
+                <TextView
+                    android:id="@+id/textRotationValue"
+                    android:layout_width="50dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:text="0°"
+                    android:textSize="14sp"
+                    android:textColor="@color/iisu_purple" />
+
+            </LinearLayout>
+
+            <!-- Quick Action Buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_md"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRotateLeft"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:icon="@drawable/ic_rotate_left"
+                    app:iconSize="24dp"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconTint="@color/theme_text_primary"
+                    style="@style/Widget.Material3.Button.IconButton.Outlined"
+                    app:strokeColor="@color/theme_border_color" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRotateRight"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="@dimen/spacing_sm"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:icon="@drawable/ic_rotate_right"
+                    app:iconSize="24dp"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconTint="@color/theme_text_primary"
+                    style="@style/Widget.Material3.Button.IconButton.Outlined"
+                    app:strokeColor="@color/theme_border_color" />
+
+                <View
+                    android:layout_width="24dp"
+                    android:layout_height="1dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnFitToSquare"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:text="Fit"
+                    android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    app:strokeColor="@color/theme_border_color" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnFillSquare"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="@dimen/spacing_sm"
+                    android:text="Fill"
+                    android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    app:strokeColor="@color/theme_border_color" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnReset"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="@dimen/spacing_sm"
+                    android:text="Reset"
+                    android:textSize="12sp"
+                    android:textColor="@color/accent_magenta"
+                    style="@style/Widget.Material3.Button.TextButton" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

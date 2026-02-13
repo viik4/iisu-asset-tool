@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Appearance Options tab content -->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_lg">
+
+        <!-- API Keys Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_section_api"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_api_desc"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <!-- SteamGridDB API Key -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/inputLayoutSgdbApiKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/settings_sgdb_key"
+                    app:boxBackgroundColor="@color/theme_input_background"
+                    app:boxStrokeColor="@color/theme_accent"
+                    app:hintTextColor="@color/theme_text_secondary"
+                    app:endIconMode="password_toggle"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editSgdbApiKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/theme_text_primary" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:layout_marginBottom="@dimen/spacing_md"
+                    android:text="@string/settings_sgdb_help"
+                    android:textSize="11sp"
+                    android:textColor="@color/theme_accent" />
+
+                <!-- IGDB Client ID -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/inputLayoutIgdbClientId"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/settings_igdb_client"
+                    app:boxBackgroundColor="@color/theme_input_background"
+                    app:boxStrokeColor="@color/theme_accent"
+                    app:hintTextColor="@color/theme_text_secondary"
+                    app:endIconMode="password_toggle"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editIgdbClientId"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/theme_text_primary" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- IGDB Client Secret -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/inputLayoutIgdbClientSecret"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:hint="@string/settings_igdb_secret"
+                    app:boxBackgroundColor="@color/theme_input_background"
+                    app:boxStrokeColor="@color/theme_accent"
+                    app:hintTextColor="@color/theme_text_secondary"
+                    app:endIconMode="password_toggle"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editIgdbClientSecret"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/theme_text_primary" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="@string/settings_igdb_help"
+                    android:textSize="11sp"
+                    android:textColor="@color/theme_accent" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveApiKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:text="@string/settings_save_keys"
+                    style="@style/IisuPrimaryButton"
+                    app:backgroundTint="@null"
+                    app:cornerRadius="@dimen/card_corner_radius" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+</ScrollView>

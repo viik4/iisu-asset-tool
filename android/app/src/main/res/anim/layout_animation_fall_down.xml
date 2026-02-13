@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Staggered layout animation for RecyclerView items -->
+<layoutAnimation xmlns:android="http://schemas.android.com/apk/res/android"
+    android:animation="@anim/item_fade_in"
+    android:delay="5%"
+    android:animationOrder="normal" />

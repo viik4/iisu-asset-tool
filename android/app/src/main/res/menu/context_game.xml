@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/action_preview_assets"
+        android:title="Preview Assets"
+        android:icon="@drawable/ic_icons" />
+
+    <item
+        android:id="@+id/action_edit_search_query"
+        android:title="Edit Search Query"
+        android:icon="@drawable/ic_edit" />
+
+    <item
+        android:id="@+id/action_generate_icon"
+        android:title="Generate Icon"
+        android:icon="@drawable/ic_icons" />
+
+    <item
+        android:id="@+id/action_generate_hero"
+        android:title="Generate Hero"
+        android:icon="@drawable/ic_hero" />
+
+    <item
+        android:id="@+id/action_generate_logo"
+        android:title="Generate Logo"
+        android:icon="@drawable/ic_logo" />
+
+    <item
+        android:id="@+id/action_manual_search"
+        android:title="Manual Search"
+        android:icon="@drawable/ic_search" />
+
+    <item
+        android:id="@+id/action_add_soundbyte"
+        android:title="Add Soundbyte"
+        android:icon="@drawable/ic_music" />
+
+    <item
+        android:id="@+id/action_hide_title"
+        android:title="Hide Title" />
+
+</menu>

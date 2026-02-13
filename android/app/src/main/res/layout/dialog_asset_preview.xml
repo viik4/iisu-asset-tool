@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog"
+    android:padding="@dimen/spacing_md">
+
+    <!-- Header with game title -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/textGameTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="@dimen/text_subtitle"
+            android:textStyle="bold"
+            android:textColor="@color/theme_text_primary"
+            android:ellipsize="end"
+            android:maxLines="2" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClose"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:padding="0dp"
+            app:icon="@drawable/ic_close"
+            app:iconSize="20dp"
+            app:iconTint="@color/theme_text_secondary"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            style="@style/Widget.Material3.Button.TextButton" />
+
+    </LinearLayout>
+
+    <!-- Asset type tabs -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayoutAssets"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:background="@android:color/transparent"
+        app:tabMode="fixed"
+        app:tabGravity="fill"
+        app:tabTextColor="@color/theme_text_secondary"
+        app:tabSelectedTextColor="@color/accent_cyan"
+        app:tabIndicatorColor="@color/accent_cyan"
+        app:tabIndicatorHeight="2dp" />
+
+    <!-- Preview container -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:minHeight="200dp">
+
+        <ImageView
+            android:id="@+id/imagePreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:maxHeight="300dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:background="@drawable/rounded_corners_bg"
+            android:padding="4dp" />
+
+        <TextView
+            android:id="@+id/textNoAsset"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:textSize="@dimen/text_body"
+            android:textColor="@color/theme_text_secondary"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    <!-- Asset info -->
+    <TextView
+        android:id="@+id/textAssetInfo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:textSize="@dimen/text_caption"
+        android:textColor="@color/theme_text_secondary" />
+
+    <!-- Action buttons row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:orientation="horizontal">
+
+        <!-- Generate/Search button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGenerate"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="@dimen/spacing_sm"
+            android:text="Search"
+            android:textColor="@color/theme_text_primary"
+            app:icon="@drawable/ic_icons"
+            app:iconTint="@color/accent_cyan"
+            app:strokeColor="@color/accent_cyan"
+            app:cornerRadius="8dp"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <!-- Upload button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnUpload"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Upload"
+            android:textColor="@color/theme_text_primary"
+            app:icon="@drawable/ic_folder"
+            app:iconTint="@color/iisu_purple"
+            app:strokeColor="@color/iisu_purple"
+            app:cornerRadius="8dp"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Output Options tab content -->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_lg">
+
+        <!-- Output Format -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_format"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <RadioGroup
+                    android:id="@+id/radioGroupExportFormat"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <RadioButton
+                        android:id="@+id/radioFormatPng"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:text="@string/settings_format_png"
+                        android:textSize="13sp"
+                        android:button="@null"
+                        android:gravity="center"
+                        android:focusable="true"
+                        android:background="@drawable/selector_chip" />
+
+                    <RadioButton
+                        android:id="@+id/radioFormatJpeg"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/spacing_sm"
+                        android:text="@string/settings_format_jpeg"
+                        android:textSize="13sp"
+                        android:button="@null"
+                        android:gravity="center"
+                        android:focusable="true"
+                        android:background="@drawable/selector_chip" />
+
+                </RadioGroup>
+
+                <!-- JPEG Quality (visible when JPEG selected) -->
+                <LinearLayout
+                    android:id="@+id/layoutJpegQuality"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/settings_jpeg_quality"
+                            android:textSize="14sp"
+                            android:textColor="@color/theme_text_primary" />
+
+                        <TextView
+                            android:id="@+id/textJpegQuality"
+                            android:layout_width="50dp"
+                            android:layout_height="wrap_content"
+                            android:text="95%"
+                            android:textSize="16sp"
+                            android:textColor="@color/theme_accent"
+                            android:textStyle="bold"
+                            android:gravity="center" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/sliderJpegQuality"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:valueFrom="50"
+                        android:valueTo="100"
+                        android:stepSize="5"
+                        android:focusable="true"
+                        app:labelBehavior="gone"
+                        app:thumbColor="@color/theme_accent"
+                        app:trackColorActive="@color/theme_accent"
+                        app:trackColorInactive="@color/theme_border" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Custom Border -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <!-- Custom Border Toggle -->
+                <LinearLayout
+                    android:id="@+id/rowUseCustomBorder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:minHeight="56dp"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:background="?attr/selectableItemBackground">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_custom_border"
+                            android:textSize="15sp"
+                            android:textColor="@color/theme_text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_custom_border_desc"
+                            android:textSize="12sp"
+                            android:textColor="@color/theme_text_secondary" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchUseCustomBorder"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:focusable="false" />
+
+                </LinearLayout>
+
+                <!-- Custom Border Picker (visible when enabled) -->
+                <LinearLayout
+                    android:id="@+id/layoutCustomBorder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:id="@+id/imageCustomBorderPreview"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:scaleType="fitCenter"
+                            android:background="@color/theme_surface_variant"
+                            android:contentDescription="@string/cd_preview" />
+
+                        <TextView
+                            android:id="@+id/textCustomBorderPath"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="@dimen/spacing_md"
+                            android:text="No border selected"
+                            android:textSize="12sp"
+                            android:textColor="@color/theme_text_secondary"
+                            android:ellipsize="middle"
+                            android:singleLine="true" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/spacing_sm"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSelectCustomBorder"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:text="@string/settings_select_border"
+                            android:focusable="true"
+                            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnClearCustomBorder"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="@dimen/spacing_sm"
+                            android:text="@string/settings_clear_border"
+                            android:focusable="true"
+                            style="@style/Widget.Material3.Button.TextButton" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Asset Directory -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_asset_dir"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_asset_dir_desc"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <TextView
+                    android:id="@+id/textCustomAssetDir"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_asset_dir_default"
+                    android:textSize="13sp"
+                    android:textColor="@color/theme_accent"
+                    android:background="@color/theme_input_background"
+                    android:padding="@dimen/spacing_md"
+                    android:ellipsize="middle"
+                    android:singleLine="true" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSelectAssetDir"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/settings_select_dir"
+                        android:focusable="true"
+                        style="@style/IisuPrimaryButton"
+                        app:backgroundTint="@null"
+                        app:cornerRadius="@dimen/card_corner_radius" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnClearAssetDir"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="@dimen/spacing_sm"
+                        android:text="@string/settings_reset_dir"
+                        android:textColor="@color/theme_text_secondary"
+                        android:focusable="true"
+                        style="@style/Widget.Material3.Button.TextButton" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+</ScrollView>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iiSU Network chip color selector -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Checked state - cyan accent -->
+    <item android:state_checked="true" android:color="@color/accent_cyan" />
+    <!-- Pressed state -->
+    <item android:state_pressed="true" android:color="@color/selection_background" />
+    <!-- Default state - surface variant -->
+    <item android:color="@color/theme_surface_variant" />
+</selector>

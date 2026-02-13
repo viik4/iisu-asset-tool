@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingVertical="6dp"
+    android:paddingHorizontal="4dp"
+    android:background="?attr/selectableItemBackground"
+    android:minHeight="44dp">
+
+    <CheckBox
+        android:id="@+id/checkboxHiddenTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:buttonTint="@color/accent_cyan" />
+
+    <!-- Platform badge -->
+    <TextView
+        android:id="@+id/textHiddenPlatform"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_platform_badge"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="2dp"
+        android:textSize="10sp"
+        android:textColor="@color/accent_cyan"
+        android:textAllCaps="true"
+        android:layout_marginEnd="8dp" />
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/textHiddenTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:textColor="@color/theme_text_primary"
+        android:ellipsize="end"
+        android:maxLines="1" />
+
+</LinearLayout>

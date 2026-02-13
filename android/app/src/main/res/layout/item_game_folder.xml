@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp">
+
+    <!-- Game name -->
+    <TextView
+        android:id="@+id/textGameName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_primary"
+        android:textSize="14sp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/textAssetStatus"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Platform name -->
+    <TextView
+        android:id="@+id/textPlatform"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/textAssetStatus"
+        app:layout_constraintTop_toBottomOf="@id/textGameName" />
+
+    <!-- Asset status indicator (shows I/H/L for games with assets) -->
+    <TextView
+        android:id="@+id/textAssetStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:textColor="@color/accent_cyan"
+        android:textStyle="bold"
+        android:visibility="gone"
+        android:layout_marginEnd="4dp"
+        app:layout_constraintEnd_toStartOf="@id/iconMusic"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Music indicator (shows if game already has music) -->
+    <ImageView
+        android:id="@+id/iconMusic"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:src="@drawable/ic_music"
+        android:contentDescription="Has music"
+        android:visibility="gone"
+        app:tint="@color/badge_gamerip"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

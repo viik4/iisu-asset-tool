@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iiSU Network list item selector with gradient underline indicator -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Selected state - subtle background with gradient bottom border -->
+    <item android:state_selected="true">
+        <layer-list>
+            <!-- Background tint -->
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#1500DDFF" />
+                </shape>
+            </item>
+            <!-- Gradient bottom border (iiSU signature) -->
+            <item android:gravity="bottom">
+                <shape android:shape="rectangle">
+                    <size android:height="2dp" />
+                    <gradient
+                        android:type="linear"
+                        android:angle="0"
+                        android:startColor="#00DDFF"
+                        android:centerColor="#2B1FD0"
+                        android:endColor="#B71AEB" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Activated state (same as selected) -->
+    <item android:state_activated="true">
+        <layer-list>
+            <!-- Background tint -->
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#1500DDFF" />
+                </shape>
+            </item>
+            <!-- Gradient bottom border -->
+            <item android:gravity="bottom">
+                <shape android:shape="rectangle">
+                    <size android:height="2dp" />
+                    <gradient
+                        android:type="linear"
+                        android:angle="0"
+                        android:startColor="#00DDFF"
+                        android:centerColor="#2B1FD0"
+                        android:endColor="#B71AEB" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Pressed state -->
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#0D00DDFF" />
+        </shape>
+    </item>
+    <!-- Focused state -->
+    <item android:state_focused="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#0800DDFF" />
+                </shape>
+            </item>
+            <item android:gravity="bottom">
+                <shape android:shape="rectangle">
+                    <size android:height="1dp" />
+                    <solid android:color="#4000DDFF" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Default state - subtle bottom border -->
+    <item>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@android:color/transparent" />
+                </shape>
+            </item>
+            <item android:gravity="bottom">
+                <shape android:shape="rectangle">
+                    <size android:height="1dp" />
+                    <solid android:color="#14FFFFFF" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>

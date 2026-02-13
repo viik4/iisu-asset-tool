@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/theme_background">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/theme_background"
+        app:elevation="0dp">
+
+        <!-- Collapsible search section -->
+        <com.google.android.material.appbar.CollapsingToolbarLayout
+            android:id="@+id/collapsingToolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_scrollFlags="scroll|exitUntilCollapsed|snap"
+            app:contentScrim="@color/theme_background">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_lg"
+                app:layout_collapseMode="parallax">
+
+                <!-- Header with iiSU styling -->
+                <TextView
+                    android:id="@+id/textTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent_cyan"
+                    android:fontFamily="@font/calsans"
+                    tools:text="Search Game" />
+
+                <TextView
+                    android:id="@+id/textSubtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textSize="15sp"
+                    android:textColor="@color/theme_text_secondary"
+                    tools:text="Search for the correct game to get accurate artwork" />
+
+                <!-- Search Input -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/textInputLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_lg"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    app:boxStrokeColor="@color/accent_cyan"
+                    app:hintTextColor="@color/accent_cyan"
+                    android:hint="Game name or SteamGridDB URL/ID"
+                    app:helperTextEnabled="true"
+                    app:helperText="Tip: Paste steamgriddb.com/game/XXXXX or just the ID"
+                    app:helperTextTextColor="@color/theme_text_secondary">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editTextSearch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="56dp"
+                        android:inputType="text|textUri"
+                        android:imeOptions="actionSearch"
+                        android:textSize="17sp"
+                        android:textColor="@color/theme_text_primary" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Search Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSearch"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:text="Search"
+                    android:textSize="16sp"
+                    style="@style/IisuPrimaryButton"
+                    app:backgroundTint="@null"
+                    app:icon="@drawable/ic_search"
+                    app:iconGravity="textStart"
+                    app:iconSize="24dp" />
+
+            </LinearLayout>
+
+        </com.google.android.material.appbar.CollapsingToolbarLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Main content area -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="@dimen/spacing_lg"
+            android:paddingBottom="80dp">
+
+            <!-- Loading indicator -->
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/progressBar"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="@dimen/spacing_xl"
+                android:indeterminate="true"
+                android:visibility="gone" />
+
+            <!-- No results message -->
+            <TextView
+                android:id="@+id/textNoResults"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="No games found. Try a different search term."
+                android:textSize="16sp"
+                android:textColor="@color/theme_text_secondary"
+                android:padding="@dimen/spacing_lg"
+                android:visibility="gone" />
+
+            <!-- Results Label -->
+            <TextView
+                android:id="@+id/textResultsLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_md"
+                android:text="Search Results:"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/accent_cyan"
+                android:fontFamily="@font/calsans"
+                android:visibility="gone" />
+
+            <!-- Results List -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerResults"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:nestedScrollingEnabled="false"
+                android:clipToPadding="false"
+                android:visibility="gone"
+                tools:listitem="@layout/item_game_search" />
+
+            <!-- Spacer when no results -->
+            <View
+                android:id="@+id/spacer"
+                android:layout_width="match_parent"
+                android:layout_height="100dp" />
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Buttons at bottom - fixed position -->
+    <LinearLayout
+        android:id="@+id/buttonBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:padding="@dimen/spacing_lg"
+        android:background="@color/theme_background"
+        android:elevation="8dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:text="Cancel"
+            android:textSize="15sp"
+            android:textColor="@color/theme_text_primary"
+            android:fontFamily="@font/continuum"
+            style="@style/Widget.Material3.Button.TextButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelect"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="@dimen/spacing_md"
+            android:text="Select Game"
+            android:textSize="15sp"
+            android:enabled="false"
+            style="@style/IisuPrimaryButton"
+            app:backgroundTint="@null" />
+
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

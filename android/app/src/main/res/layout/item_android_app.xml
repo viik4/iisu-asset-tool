@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="4dp"
+    app:cardBackgroundColor="@color/theme_surface"
+    app:strokeWidth="1dp"
+    app:strokeColor="@color/theme_border_color"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="12dp">
+
+        <!-- App Icon -->
+        <ImageView
+            android:id="@+id/imageAppIcon"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:scaleType="fitCenter"
+            android:contentDescription="App icon"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:src="@drawable/ic_android_app" />
+
+        <!-- App Name - Continuum Bold style like platforms -->
+        <TextView
+            android:id="@+id/textAppName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            style="@style/IisuTextAppearance.PlatformLabel"
+            android:textColor="@color/theme_text_primary"
+            android:maxLines="1"
+            android:ellipsize="end"
+            app:layout_constraintTop_toBottomOf="@id/imageAppIcon"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="Netflix" />
+
+        <!-- Package Name (smaller subtitle) -->
+        <TextView
+            android:id="@+id/textPackageName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            style="@style/IisuTextAppearance.Description"
+            android:textSize="10sp"
+            android:maxLines="1"
+            android:ellipsize="middle"
+            app:layout_constraintTop_toBottomOf="@id/textAppName"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="com.netflix.mediaclient" />
+
+        <!-- Missing Badge (shown if missing assets) -->
+        <TextView
+            android:id="@+id/textMissingBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="2dp"
+            android:background="@drawable/badge_missing"
+            android:textSize="10sp"
+            android:textColor="@color/theme_text_primary"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/textPackageName"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="3 missing"
+            tools:visibility="visible" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>

@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Upload Asset Bottom Sheet - iiSU Asset Server Upload Form -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog"
+    android:padding="@dimen/spacing_md">
+
+    <!-- Drag Handle -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="@dimen/spacing_md"
+        android:background="@drawable/rounded_corners_bg" />
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="@dimen/spacing_sm">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Upload Asset"
+            android:textSize="@dimen/text_subtitle"
+            android:textStyle="bold"
+            android:textColor="@color/accent_cyan" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCloseUpload"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:padding="0dp"
+            app:icon="@drawable/ic_close"
+            app:iconSize="20dp"
+            app:iconTint="@color/theme_text_secondary"
+            style="@style/Widget.Material3.Button.TextButton" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Share your themed assets with the iiSU community!"
+        android:textSize="@dimen/text_caption"
+        android:textColor="@color/text_secondary"
+        android:layout_marginBottom="@dimen/spacing_md" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- File Selection -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:background="@drawable/rounded_corners_bg"
+                android:layout_marginBottom="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Asset File"
+                    android:textSize="@dimen/text_caption"
+                    android:textColor="@color/theme_text_secondary"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <!-- Image Preview -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/preview_size_medium"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    android:background="@drawable/bg_asset_placeholder">
+
+                    <ImageView
+                        android:id="@+id/imageUploadPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="fitCenter"
+                        android:padding="4dp"
+                        android:contentDescription="Asset preview" />
+
+                    <TextView
+                        android:id="@+id/textNoFileSelected"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="Tap to select a file"
+                        android:textSize="@dimen/text_caption"
+                        android:textColor="@color/theme_text_tertiary" />
+                </FrameLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelectFile"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Choose File"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    app:strokeColor="@color/accent_cyan"
+                    app:cornerRadius="@dimen/radius_sm"
+                    android:textColor="@color/accent_cyan"
+                    app:icon="@drawable/ic_image_placeholder"
+                    app:iconTint="@color/accent_cyan" />
+
+                <TextView
+                    android:id="@+id/textSelectedFilename"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_tertiary"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- Game Info Form -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:background="@drawable/rounded_corners_bg"
+                android:layout_marginBottom="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Asset Details"
+                    android:textSize="@dimen/text_caption"
+                    android:textColor="@color/theme_text_secondary"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <!-- Game Name -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutGameName"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Game Name"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    app:boxStrokeColor="@color/accent_cyan"
+                    app:hintTextColor="@color/accent_cyan">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editGameName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/theme_text_primary" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Platform Dropdown -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutUploadPlatform"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Platform"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    app:boxStrokeColor="@color/accent_cyan"
+                    app:hintTextColor="@color/accent_cyan">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/spinnerUploadPlatform"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none"
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/theme_text_primary" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Asset Type -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutAssetType"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Asset Type"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    app:boxStrokeColor="@color/accent_cyan"
+                    app:hintTextColor="@color/accent_cyan">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/spinnerAssetType"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none"
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/theme_text_primary" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Variant Number -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutVariantNumber"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Variant Number"
+                    app:boxStrokeColor="@color/accent_cyan"
+                    app:hintTextColor="@color/accent_cyan">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/spinnerVariantNumber"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none"
+                        android:textSize="@dimen/text_body"
+                        android:textColor="@color/theme_text_primary" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Upload Status -->
+    <TextView
+        android:id="@+id/textUploadStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/theme_text_secondary"
+        android:layout_marginTop="@dimen/spacing_sm"
+        android:visibility="gone" />
+
+    <ProgressBar
+        android:id="@+id/progressUpload"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_xs"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="@dimen/spacing_md"
+        android:gravity="end">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancelUpload"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancel"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:textColor="@color/theme_text_secondary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnUploadAsset"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:text="Upload"
+            android:enabled="false"
+            app:backgroundTint="@color/accent_cyan"
+            app:cornerRadius="@dimen/radius_sm" />
+    </LinearLayout>
+
+</LinearLayout>

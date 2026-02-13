@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_lg">
+
+    <!-- Platform ID (folder name) -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutPlatformId"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_md"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:hint="Platform ID (folder name)">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editPlatformId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:inputType="text"
+            android:singleLine="true" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Display Name -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutDisplayName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_md"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:hint="Display Name">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editDisplayName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:inputType="text"
+            android:singleLine="true" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Custom Path -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutCustomPath"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_sm"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:hint="Custom ROM Path (optional)"
+        app:endIconMode="custom"
+        app:endIconDrawable="@drawable/ic_folder"
+        app:endIconTint="@color/theme_text_secondary">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editCustomPath"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:inputType="text"
+            android:singleLine="true" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Leave path empty to use default iiSU location"
+        android:textSize="11sp"
+        android:textColor="@color/theme_text_secondary" />
+
+</LinearLayout>

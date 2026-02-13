@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/theme_background">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/theme_background"
+        app:elevation="0dp"
+        app:liftOnScroll="false">
+
+        <!-- Entire Header Section - All Collapsible -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="@dimen/spacing_md"
+            android:paddingTop="@dimen/spacing_md"
+            android:paddingBottom="@dimen/spacing_sm"
+            app:layout_scrollFlags="scroll|enterAlways|snap">
+
+            <!-- Header Row -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/textTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:text="@string/existing_assets_title"
+                    style="@style/IisuTextAppearance.PageTitle"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toStartOf="@id/btnRefresh" />
+
+                <TextView
+                    android:id="@+id/textSubtitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="@string/existing_assets_subtitle"
+                    android:textSize="14sp"
+                    android:textColor="@color/theme_text_secondary"
+                    app:layout_constraintTop_toBottomOf="@id/textTitle"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toStartOf="@id/btnRefresh" />
+
+                <ImageButton
+                    android:id="@+id/btnRefresh"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_refresh"
+                    android:contentDescription="@string/cd_refresh"
+                    app:tint="@color/theme_accent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <View
+                android:id="@+id/accentLine"
+                android:layout_width="match_parent"
+                android:layout_height="2dp"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:background="@drawable/bg_accent_line" />
+
+            <!-- Stats Bar -->
+            <LinearLayout
+                android:id="@+id/layoutStats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/textPlatformCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="13sp"
+                    android:textColor="@color/theme_text_secondary"
+                    tools:text="12 platforms" />
+
+                <View
+                    android:layout_width="4dp"
+                    android:layout_height="4dp"
+                    android:layout_marginHorizontal="@dimen/spacing_sm"
+                    android:background="@drawable/dot_separator" />
+
+                <TextView
+                    android:id="@+id/textAssetCount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="13sp"
+                    android:textColor="@color/theme_accent"
+                    tools:text="156 items" />
+
+                <!-- Cancel button - visible only during scraping -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCancelScraping"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="@string/cancel"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    app:icon="@drawable/ic_close"
+                    app:iconSize="16dp"
+                    app:backgroundTint="@color/status_error"
+                    app:cornerRadius="8dp"
+                    style="@style/Widget.Material3.Button" />
+
+            </LinearLayout>
+
+            <!-- Search/Filter Row -->
+            <LinearLayout
+                android:id="@+id/layoutSearch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <!-- Platform Dropdown -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutPlatformSpinner"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    app:boxStrokeColor="@color/theme_accent">
+
+                    <AutoCompleteTextView
+                        android:id="@+id/spinnerPlatform"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="All Platforms"
+                        android:inputType="none"
+                        android:textColor="@color/theme_text_primary"
+                        android:textSize="12sp" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Search Input -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutSearchInput"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="@dimen/spacing_sm"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    app:startIconDrawable="@drawable/ic_search"
+                    app:startIconTint="@color/theme_text_hint">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editSearch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Search…"
+                        android:inputType="text"
+                        android:textColor="@color/theme_text_primary"
+                        android:textSize="12sp" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+
+            <!-- Selection Actions Row -->
+            <LinearLayout
+                android:id="@+id/layoutSelectionActions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_sm"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/textSelectionInfo"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/existing_assets_hint"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_hint" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelectAll"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:text="@string/select_all"
+                    android:textSize="11sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="@dimen/spacing_sm"
+                    style="@style/Widget.Material3.Button.TextButton" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSelectNone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:text="@string/select_none"
+                    android:textSize="11sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="@dimen/spacing_sm"
+                    style="@style/Widget.Material3.Button.TextButton" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRescrapeSelected"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:text="@string/rescrape"
+                    android:textSize="11sp"
+                    android:enabled="false"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="@dimen/spacing_sm"
+                    app:icon="@drawable/ic_refresh"
+                    app:iconSize="14dp"
+                    app:strokeColor="@color/theme_accent"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="6dp"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Main Content Area - RecyclerView with scroll behavior -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <!-- Asset Grid -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewAssets"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingHorizontal="@dimen/spacing_md"
+            android:paddingBottom="@dimen/spacing_md"
+            android:clipToPadding="false"
+            tools:listitem="@layout/item_existing_asset" />
+
+        <!-- Loading Indicator -->
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/loadingIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminate="true"
+            android:visibility="gone"
+            app:indicatorColor="@color/theme_accent" />
+
+        <!-- Empty State -->
+        <LinearLayout
+            android:id="@+id/layoutEmptyState"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@drawable/ic_image_placeholder"
+                app:tint="@color/theme_text_hint"
+                android:alpha="0.5"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/textEmptyState"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_md"
+                android:gravity="center"
+                android:text="@string/existing_assets_empty"
+                android:textSize="14sp"
+                android:textColor="@color/theme_text_secondary"
+                android:lineSpacingExtra="4dp" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- Progress Section - Floating at bottom -->
+    <LinearLayout
+        android:id="@+id/layoutProgress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_md"
+        android:background="@color/theme_surface"
+        android:elevation="8dp"
+        android:visibility="gone">
+
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progressBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:indicatorColor="@color/theme_accent"
+            app:trackColor="@color/theme_surface_variant" />
+
+        <TextView
+            android:id="@+id/textStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xs"
+            android:textSize="11sp"
+            android:textColor="@color/theme_text_hint"
+            tools:text="Processing 12 of 45..." />
+
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

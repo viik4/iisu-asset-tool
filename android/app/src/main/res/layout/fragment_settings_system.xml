@@ -1,0 +1,562 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- System Options tab content -->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_lg">
+
+        <!-- Replace Launcher Assets -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_replace_assets"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_replace_assets_desc"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <!-- Replace Covers -->
+                <LinearLayout
+                    android:id="@+id/rowReplaceCovers"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:minHeight="56dp"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:background="?attr/selectableItemBackground">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_replace_covers"
+                            android:textSize="15sp"
+                            android:textColor="@color/theme_text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_replace_covers_desc"
+                            android:textSize="12sp"
+                            android:textColor="@color/theme_text_secondary" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchReplaceCovers"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:focusable="false" />
+
+                </LinearLayout>
+
+                <!-- Replace Borders -->
+                <LinearLayout
+                    android:id="@+id/rowReplaceBorders"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:minHeight="56dp"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:background="?attr/selectableItemBackground">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_replace_borders"
+                            android:textSize="15sp"
+                            android:textColor="@color/theme_text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_replace_borders_desc"
+                            android:textSize="12sp"
+                            android:textColor="@color/theme_text_secondary" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchReplaceBorders"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:focusable="false" />
+
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnReplaceAllAssets"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="@dimen/spacing_md"
+                    android:text="@string/settings_replace_all"
+                    style="@style/IisuPrimaryButton"
+                    app:backgroundTint="@null"
+                    app:cornerRadius="@dimen/card_corner_radius" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Android Apps Path -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_android_apps"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_android_apps_desc"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <!-- Current Path Display -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    app:boxStrokeColor="@color/theme_border"
+                    app:hintTextColor="@color/theme_text_secondary">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editAndroidAppsPath"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/settings_android_apps_default"
+                        android:textSize="13sp"
+                        android:textColor="@color/theme_text_primary"
+                        android:inputType="text"
+                        android:singleLine="true" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Buttons Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="end">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnResetAndroidAppsPath"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_reset_dir"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:textColor="@color/theme_text_secondary" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSaveAndroidAppsPath"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/save"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:textColor="@color/theme_accent" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ROM Source Path -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_rom_source"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_rom_source_desc"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <!-- ROM Source Path Input -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    app:boxStrokeColor="@color/theme_border"
+                    app:hintTextColor="@color/theme_text_secondary">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editRomSourcePath"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/settings_rom_source_hint"
+                        android:textSize="13sp"
+                        android:textColor="@color/theme_text_primary"
+                        android:inputType="text"
+                        android:singleLine="true" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Sync status text -->
+                <TextView
+                    android:id="@+id/textRomSyncStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_tertiary"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    android:visibility="gone" />
+
+                <!-- Buttons Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="end">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnResetRomSourcePath"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_reset_dir"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:textColor="@color/theme_text_secondary" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSaveRomSourcePath"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/save"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:textColor="@color/theme_accent" />
+
+                </LinearLayout>
+
+                <!-- Sync Now Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSyncRomFolders"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:text="@string/settings_rom_sync_now"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:textColor="@color/accent_cyan"
+                    app:strokeColor="@color/theme_border"
+                    app:cornerRadius="@dimen/card_corner_radius" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Hidden Titles -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hidden Titles"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Titles hidden from the game list via long-press. Unhide them here."
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <!-- Hidden count -->
+                <TextView
+                    android:id="@+id/textHiddenCount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_tertiary"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    android:text="No hidden titles" />
+
+                <!-- Hidden titles list -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerHiddenTitles"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:visibility="gone" />
+
+                <!-- Empty state (shown when no hidden titles) -->
+                <TextView
+                    android:id="@+id/textNoHiddenTitles"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No hidden titles. Long-press a game in the browser to hide it."
+                    android:textSize="13sp"
+                    android:textColor="@color/theme_text_tertiary"
+                    android:gravity="center"
+                    android:paddingVertical="@dimen/spacing_md"
+                    android:visibility="visible" />
+
+                <!-- Action buttons -->
+                <LinearLayout
+                    android:id="@+id/layoutHiddenTitleButtons"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:orientation="horizontal"
+                    android:gravity="end"
+                    android:visibility="gone">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUnhideSelected"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="Unhide Selected"
+                        android:textSize="12sp"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:textColor="@color/accent_cyan"
+                        app:strokeColor="@color/theme_border"
+                        app:cornerRadius="@dimen/card_corner_radius" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnClearAllHidden"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="@dimen/spacing_sm"
+                        android:text="Clear All"
+                        android:textSize="12sp"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:textColor="@color/accent_magenta" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Platform Configuration -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Platform Configuration"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Configure platform display names and custom paths"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_md" />
+
+                <!-- Platform List -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerPlatforms"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
+                <!-- Add Platform Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAddPlatform"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:text="Add Platform"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:textColor="@color/theme_text_primary"
+                    app:strokeColor="@color/theme_border"
+                    app:icon="@drawable/ic_add"
+                    app:iconGravity="textStart"
+                    app:iconTint="@color/theme_text_secondary"
+                    app:cornerRadius="@dimen/card_corner_radius" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Platform Images -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/spacing_md"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_md">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Platform Images"
+                    style="@style/IisuTextAppearance.SectionHeader"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="View and replace console icons, list images, and title banners"
+                    android:textSize="12sp"
+                    android:textColor="@color/theme_text_secondary"
+                    android:layout_marginBottom="@dimen/spacing_sm" />
+
+                <!-- Status / path info -->
+                <TextView
+                    android:id="@+id/textPlatformImagesStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="11sp"
+                    android:textColor="@color/theme_text_tertiary"
+                    android:layout_marginBottom="@dimen/spacing_sm"
+                    android:ellipsize="middle"
+                    android:singleLine="true" />
+
+                <!-- Platform images grid -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerPlatformImages"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
+                <!-- Refresh button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRefreshPlatformImages"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:text="Refresh"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:textColor="@color/theme_text_primary"
+                    app:strokeColor="@color/theme_border"
+                    app:icon="@drawable/ic_refresh"
+                    app:iconGravity="textStart"
+                    app:iconTint="@color/theme_text_secondary"
+                    app:cornerRadius="@dimen/card_corner_radius" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+</ScrollView>

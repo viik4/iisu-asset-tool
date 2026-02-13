@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/cardAsset"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:checkable="true"
+    app:cardBackgroundColor="@color/theme_surface"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="2dp"
+    app:strokeColor="@color/theme_border_color"
+    app:checkedIconTint="@color/accent_cyan">
+
+    <LinearLayout
+        android:layout_width="140dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="6dp">
+
+        <!-- Icon preview with selection overlay -->
+        <FrameLayout
+            android:layout_width="128dp"
+            android:layout_height="128dp"
+            android:layout_gravity="center_horizontal">
+
+            <ImageView
+                android:id="@+id/imageIcon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:background="@drawable/rounded_corners_bg"
+                android:clipToOutline="true"
+                tools:src="@drawable/ic_iisu_home" />
+
+            <!-- Selection checkmark overlay -->
+            <ImageView
+                android:id="@+id/iconSelected"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="4dp"
+                android:src="@drawable/ic_check_circle"
+                android:visibility="gone"
+                app:tint="@color/accent_cyan" />
+
+        </FrameLayout>
+
+        <!-- Game title -->
+        <TextView
+            android:id="@+id/textGameTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="2"
+            android:textSize="10sp"
+            android:textColor="@color/theme_text_secondary"
+            tools:text="Super Mario Bros. 3" />
+
+        <!-- Platform badge -->
+        <TextView
+            android:id="@+id/textPlatform"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/badge_background"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:textSize="8sp"
+            android:textColor="@color/accent_cyan"
+            tools:text="NES" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

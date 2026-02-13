@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iiSU multi-gradient button (Cyan -> Blue -> Purple -> Pink) -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33FFFFFF">
+    <item>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:startColor="#00DDFF"
+                        android:centerColor="#067DBA"
+                        android:endColor="#2B1FD0"
+                        android:angle="0" />
+                    <corners android:radius="@dimen/radius_md" />
+                </shape>
+            </item>
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient
+                        android:startColor="#00000000"
+                        android:centerColor="#00000000"
+                        android:endColor="#80B71AEB"
+                        android:angle="0" />
+                    <corners android:radius="@dimen/radius_md" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</ripple>

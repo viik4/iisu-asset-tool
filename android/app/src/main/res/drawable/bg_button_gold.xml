@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gold gradient button matching website design -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#FFE57C">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#FFE57C"
+                android:endColor="#E59E18"
+                android:angle="0" />
+            <corners android:radius="@dimen/radius_md" />
+        </shape>
+    </item>
+</ripple>

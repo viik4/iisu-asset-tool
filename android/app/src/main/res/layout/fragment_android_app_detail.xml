@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/theme_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_md">
+
+        <!-- Header with back button and app name -->
+        <LinearLayout
+            android:id="@+id/layoutHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_arrow_back"
+                android:contentDescription="Back"
+                app:tint="@color/theme_text_primary" />
+
+            <ImageView
+                android:id="@+id/imageAppIcon"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="@dimen/spacing_sm"
+                android:scaleType="fitCenter"
+                tools:src="@drawable/ic_android_app" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="@dimen/spacing_md"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/textAppName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/text_title"
+                    android:textStyle="bold"
+                    android:textColor="@color/theme_text_primary"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    tools:text="Netflix" />
+
+                <TextView
+                    android:id="@+id/textPackageName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/text_caption"
+                    android:textColor="@color/theme_text_secondary"
+                    android:maxLines="1"
+                    android:ellipsize="middle"
+                    tools:text="com.netflix.mediaclient" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Accent line under header -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:background="@drawable/bg_accent_line" />
+
+        <!-- Asset Status -->
+        <TextView
+            android:id="@+id/textAssetStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:textSize="@dimen/text_body"
+            android:textColor="@color/accent_cyan"
+            tools:text="2 missing assets" />
+
+        <!-- Icon Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardIcon"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border_color">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="@dimen/spacing_md"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:id="@+id/imageIconPreview"
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/bg_asset_placeholder"
+                    tools:src="@drawable/ic_android_app" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="@dimen/spacing_md"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Icon"
+                        android:textSize="@dimen/text_subtitle"
+                        android:textStyle="bold"
+                        android:textColor="@color/theme_text_primary" />
+
+                    <TextView
+                        android:id="@+id/textIconStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textSize="@dimen/text_caption"
+                        android:textColor="@color/theme_text_secondary"
+                        tools:text="Present" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGenerateIcon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Search"
+                        android:textSize="12sp"
+                        android:textColor="@color/theme_text_primary"
+                        app:icon="@drawable/ic_icons"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/accent_cyan"
+                        app:cornerRadius="8dp"
+                        app:strokeColor="@color/accent_cyan"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUploadIcon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_marginTop="4dp"
+                        android:text="Upload"
+                        android:textSize="12sp"
+                        android:textColor="@color/theme_text_primary"
+                        app:icon="@drawable/ic_folder"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/iisu_purple"
+                        app:cornerRadius="8dp"
+                        app:strokeColor="@color/iisu_purple"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Hero Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardHero"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border_color">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="@dimen/spacing_md"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:id="@+id/imageHeroPreview"
+                    android:layout_width="120dp"
+                    android:layout_height="68dp"
+                    android:scaleType="centerCrop"
+                    android:background="@drawable/bg_asset_placeholder"
+                    tools:src="@drawable/ic_hero" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="@dimen/spacing_md"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Hero"
+                        android:textSize="@dimen/text_subtitle"
+                        android:textStyle="bold"
+                        android:textColor="@color/theme_text_primary" />
+
+                    <TextView
+                        android:id="@+id/textHeroStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textSize="@dimen/text_caption"
+                        android:textColor="@color/theme_text_secondary"
+                        tools:text="Missing" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGenerateHero"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Search"
+                        android:textSize="12sp"
+                        android:textColor="@color/theme_text_primary"
+                        app:icon="@drawable/ic_hero"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/accent_cyan"
+                        app:cornerRadius="8dp"
+                        app:strokeColor="@color/accent_cyan"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUploadHero"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_marginTop="4dp"
+                        android:text="Upload"
+                        android:textSize="12sp"
+                        android:textColor="@color/theme_text_primary"
+                        app:icon="@drawable/ic_folder"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/iisu_purple"
+                        app:cornerRadius="8dp"
+                        app:strokeColor="@color/iisu_purple"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Logo Section -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardLogo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/theme_surface"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/theme_border_color">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="@dimen/spacing_md"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:id="@+id/imageLogoPreview"
+                    android:layout_width="120dp"
+                    android:layout_height="40dp"
+                    android:scaleType="fitCenter"
+                    android:background="@drawable/bg_asset_placeholder"
+                    tools:src="@drawable/ic_logo" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="@dimen/spacing_md"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Logo"
+                        android:textSize="@dimen/text_subtitle"
+                        android:textStyle="bold"
+                        android:textColor="@color/theme_text_primary" />
+
+                    <TextView
+                        android:id="@+id/textLogoStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textSize="@dimen/text_caption"
+                        android:textColor="@color/theme_text_secondary"
+                        tools:text="Missing" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnGenerateLogo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Search"
+                        android:textSize="12sp"
+                        android:textColor="@color/theme_text_primary"
+                        app:icon="@drawable/ic_logo"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/accent_cyan"
+                        app:cornerRadius="8dp"
+                        app:strokeColor="@color/accent_cyan"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUploadLogo"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:layout_marginTop="4dp"
+                        android:text="Upload"
+                        android:textSize="12sp"
+                        android:textColor="@color/theme_text_primary"
+                        app:icon="@drawable/ic_folder"
+                        app:iconSize="16dp"
+                        app:iconTint="@color/iisu_purple"
+                        app:cornerRadius="8dp"
+                        app:strokeColor="@color/iisu_purple"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Generate All Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGenerateAll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_lg"
+            android:text="Generate All Assets"
+            android:textColor="@color/white"
+            app:icon="@drawable/ic_save"
+            app:iconTint="@color/white"
+            app:backgroundTint="@color/accent_cyan"
+            app:cornerRadius="12dp"
+            style="@style/Widget.Material3.Button" />
+
+        <!-- Progress indicator -->
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progressBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_md"
+            android:indeterminate="true"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</ScrollView>
