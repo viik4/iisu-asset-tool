@@ -17,25 +17,27 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        # Theme and styling
-        ('iisu_theme.qss', '.'),
-        ('iisu_theme_light.qss', '.'),
-        # Logo
-        ('logo.png', '.'),
-        # Configuration
-        ('config.yaml', '.'),
-        # Fonts directory
-        ('fonts', 'fonts'),
-        # Source assets (icons, grid pattern)
-        ('src', 'src'),
-        # Platform icons
-        ('platform_icons', 'platform_icons'),
-        # Fallback icons
-        ('fallback_icons', 'fallback_icons'),
-        # Border templates
-        ('borders', 'borders'),
-        # PSD templates
-        ('templates', 'templates'),
+        entry for entry in [
+            # Theme and styling
+            ('iisu_theme.qss', '.'),
+            ('iisu_theme_light.qss', '.'),
+            # Logo
+            ('logo.png', '.'),
+            # Configuration
+            ('config.yaml', '.'),
+            # Fonts directory
+            ('fonts', 'fonts'),
+            # Source assets (icons, grid pattern)
+            ('src', 'src'),
+            # Platform icons
+            ('platform_icons', 'platform_icons'),
+            # Fallback icons
+            ('fallback_icons', 'fallback_icons'),
+            # Border templates
+            ('borders', 'borders'),
+            # PSD templates
+            ('templates', 'templates'),
+        ] if os.path.exists(entry[0])
     ] + psd_tools_datas,  # Include psd_tools data files
     hiddenimports=[
         'PySide6.QtCore',
