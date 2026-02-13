@@ -8,7 +8,7 @@ Create custom icons, heroes, logos, and covers for your game library. Built for 
 
 ## Download
 
-Grab the latest release from the [Releases](https://github.com/viik-4/iisu-asset-tool/releases) page.
+Grab the latest release from the [Releases](https://github.com/viik4/iisu-asset-tool/releases) page.
 
 | Platform | File |
 |----------|------|
