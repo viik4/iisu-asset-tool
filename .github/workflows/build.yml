@@ -213,6 +213,12 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
 
+    - name: Fix Gradle properties for CI
+      working-directory: android
+      run: |
+        # Remove local Java home path that doesn't exist on CI runners
+        sed -i '/org.gradle.java.home/d' gradle.properties
+
     - name: Build Android APK
       working-directory: android
       run: |
