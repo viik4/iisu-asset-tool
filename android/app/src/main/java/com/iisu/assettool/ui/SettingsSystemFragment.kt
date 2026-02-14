@@ -22,6 +22,8 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.iisu.assettool.BuildConfig
+import com.iisu.assettool.MainActivity
 import com.iisu.assettool.R
 import com.iisu.assettool.databinding.DialogEditPlatformBinding
 import com.iisu.assettool.databinding.FragmentSettingsSystemBinding
@@ -90,6 +92,7 @@ class SettingsSystemFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        setupAppInfo()
         setupReplaceLauncherAssets()
         setupAndroidAppsPath()
         setupRomSourcePath()
@@ -103,6 +106,15 @@ class SettingsSystemFragment : Fragment() {
         // Refresh hidden titles in case user hid titles from the game list
         if (hiddenTitleAdapter != null) {
             loadHiddenTitles()
+        }
+    }
+
+    // ==================== App Info ====================
+
+    private fun setupAppInfo() {
+        binding.textAppVersion.text = "iiSU Asset Tool v${BuildConfig.VERSION_NAME}"
+        binding.btnCheckUpdates.setOnClickListener {
+            (activity as? MainActivity)?.checkForUpdates(silent = false)
         }
     }
 

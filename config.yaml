@@ -4,7 +4,7 @@ art_sources:
   providers:
   - enabled: true
     id: steamgriddb
-  - enabled: true
+  - enabled: false
     id: igdb
   - enabled: true
     id: libretro
@@ -477,4 +477,7 @@ thegamesdb:
   request_timeout_seconds: 30
 ui:
   dark_mode: true
-  last_seen_version: 2.0.0
+  last_seen_version: 2.0.1
+updater:
+  check_on_startup: true
+  last_update_check: null

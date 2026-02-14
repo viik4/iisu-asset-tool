@@ -106,8 +106,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingHorizontal="@dimen/spacing_lg"
-            android:paddingBottom="80dp">
+            android:paddingHorizontal="@dimen/spacing_md"
+            android:paddingBottom="64dp">
 
             <!-- Loading indicator -->
             <com.google.android.material.progressindicator.CircularProgressIndicator
@@ -159,7 +159,7 @@
             <View
                 android:id="@+id/spacer"
                 android:layout_width="match_parent"
-                android:layout_height="100dp" />
+                android:layout_height="16dp" />
 
         </LinearLayout>
 

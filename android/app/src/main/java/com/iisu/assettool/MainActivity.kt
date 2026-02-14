@@ -28,8 +28,15 @@ import com.iisu.assettool.ui.SettingsFragment
 import com.iisu.assettool.ui.CommunityDbFragment
 import com.iisu.assettool.ui.MusicFragment
 import com.iisu.assettool.ui.OnboardingActivity
+import com.iisu.assettool.data.UpdateChecker
 import com.iisu.assettool.util.BackgroundMusicManager
 import com.iisu.assettool.util.IisuDirectoryManager
+import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -94,6 +101,12 @@ class MainActivity : AppCompatActivity() {
 
         // Initialize background music (iiSU OST by Thaddeus Silva)
         BackgroundMusicManager.initialize(this)
+
+        // Auto-check for updates after a short delay
+        lifecycleScope.launch {
+            delay(5000)
+            checkForUpdates(silent = true)
+        }
     }
 
     /**
@@ -356,6 +369,162 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "Storage access required to manage iiSU files", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    // ==================== In-App Updater ====================
+
+    private val updateChecker = UpdateChecker()
+
+    /**
+     * Check for updates. If [silent], only shows dialog when an update is found.
+     * If not silent (manual check), also shows "up to date" or error messages.
+     */
+    fun checkForUpdates(silent: Boolean = true) {
+        lifecycleScope.launch {
+            try {
+                if (silent && !updateChecker.shouldCheckForUpdates(this@MainActivity)) {
+                    return@launch
+                }
+
+                val currentVersion = BuildConfig.VERSION_NAME
+                val info = withContext(Dispatchers.IO) {
+                    updateChecker.checkForUpdates(currentVersion)
+                }
+                updateChecker.saveLastCheckTime(this@MainActivity)
+
+                if (info != null && info.isUpdateAvailable) {
+                    showUpdateDialog(info)
+                } else if (!silent) {
+                    if (info != null) {
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(this@MainActivity)
+                            .setTitle("Up to Date")
+                            .setMessage("iiSU Asset Tool v${BuildConfig.VERSION_NAME} is the latest version.")
+                            .setPositiveButton("OK", null)
+                            .show()
+                    } else {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Could not check for updates. Check your internet connection.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Update check failed", e)
+                if (!silent) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Update check failed: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun showUpdateDialog(info: UpdateChecker.UpdateInfo) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_update_available, null)
+
+        val textNewVersion = dialogView.findViewById<android.widget.TextView>(R.id.textNewVersion)
+        val textCurrentVersion = dialogView.findViewById<android.widget.TextView>(R.id.textCurrentVersion)
+        val textChangelog = dialogView.findViewById<android.widget.TextView>(R.id.textChangelog)
+        val textDownloadSize = dialogView.findViewById<android.widget.TextView>(R.id.textDownloadSize)
+        val progressDownload = dialogView.findViewById<com.google.android.material.progressindicator.LinearProgressIndicator>(R.id.progressDownload)
+        val textProgressLabel = dialogView.findViewById<android.widget.TextView>(R.id.textProgressLabel)
+
+        textNewVersion.text = "v${info.latestVersion}"
+        textCurrentVersion.text = "You have v${info.currentVersion}"
+
+        // Format changelog — convert markdown bullets to plain text
+        val changelog = info.changelog
+            .replace(Regex("^## (.+)$", RegexOption.MULTILINE), "$1:")
+            .replace(Regex("^# (.+)$", RegexOption.MULTILINE), "$1:")
+            .replace(Regex("^[*-] ", RegexOption.MULTILINE), "• ")
+        textChangelog.text = changelog
+
+        if (info.downloadSize > 0) {
+            textDownloadSize.text = "Download size: ${updateChecker.formatSize(info.downloadSize)}"
+            textDownloadSize.visibility = View.VISIBLE
+        }
+
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setView(dialogView)
+            .setPositiveButton("Update Now", null)  // null to prevent auto-dismiss
+            .setNeutralButton("View on GitHub") { _, _ ->
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.releaseUrl))
+                startActivity(intent)
+            }
+            .setNegativeButton("Later", null)
+            .create()
+
+        dialog.show()
+
+        // Override positive button to handle download
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (info.downloadUrl.isNullOrEmpty()) {
+                Toast.makeText(this, "No APK available. Opening release page.", Toast.LENGTH_SHORT).show()
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.releaseUrl))
+                startActivity(intent)
+                dialog.dismiss()
+                return@setOnClickListener
+            }
+
+            // Start download
+            it.isEnabled = false
+            (it as? android.widget.Button)?.text = "Downloading..."
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).isEnabled = false
+            progressDownload.visibility = View.VISIBLE
+            textProgressLabel.visibility = View.VISIBLE
+
+            lifecycleScope.launch {
+                val updatesDir = File(getExternalFilesDir(null), "updates")
+                val outputFile = File(updatesDir, "iiSU_Asset_Tool_Android.apk")
+
+                val success = updateChecker.downloadApk(
+                    info.downloadUrl,
+                    outputFile
+                ) { downloaded, total ->
+                    runOnUiThread {
+                        if (total > 0) {
+                            val pct = (downloaded * 100 / total).toInt()
+                            progressDownload.progress = pct
+                            textProgressLabel.text = "${updateChecker.formatSize(downloaded)} / ${updateChecker.formatSize(total)} ($pct%)"
+                        }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    if (success) {
+                        dialog.dismiss()
+                        installApk(outputFile)
+                    } else {
+                        it.isEnabled = true
+                        (it as? android.widget.Button)?.text = "Retry"
+                        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).isEnabled = true
+                        progressDownload.visibility = View.GONE
+                        textProgressLabel.text = "Download failed. Please try again."
+                    }
+                }
+            }
+        }
+    }
+
+    private fun installApk(apkFile: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${BuildConfig.APPLICATION_ID}.fileprovider",
+                apkFile
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to install APK", e)
+            Toast.makeText(this, "Failed to install update: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 

@@ -1108,6 +1108,25 @@ class ROMBrowserTab(QWidget):
         except Exception as e:
             print(f"Failed to save hidden titles: {e}")
 
+    def _save_rom_path(self):
+        """Save the current rom_path to config for persistence."""
+        cfg_path = Path(self.config_path)
+        try:
+            cfg = {}
+            if cfg_path.exists():
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+
+            if "rom_directory" not in cfg:
+                cfg["rom_directory"] = {}
+            cfg["rom_directory"]["rom_path"] = self.rom_path
+
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
+            invalidate_config_cache()
+        except Exception as e:
+            print(f"Failed to save ROM path: {e}")
+
     def _hide_game(self, game_data: Dict):
         """Hide a game from the library view."""
         title = game_data.get("title", "")
@@ -1218,6 +1237,7 @@ class ROMBrowserTab(QWidget):
         if path:
             self.path_input.setText(path)
             self.rom_path = path
+            self._save_rom_path()
             self._scan_directory()
 
     def _show_drive_selector(self):
@@ -1286,6 +1306,7 @@ class ROMBrowserTab(QWidget):
                     if path:
                         self.path_input.setText(path)
                         self.rom_path = path
+                        self._save_rom_path()
                         self._scan_directory()
 
     def _browse_mtp_device(self, shell_path: str):

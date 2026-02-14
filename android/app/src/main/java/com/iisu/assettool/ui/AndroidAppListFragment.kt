@@ -6,9 +6,12 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -180,6 +183,10 @@ class AndroidAppListFragment : Fragment() {
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
+                R.id.action_edit_search_query -> {
+                    showEditSearchQueryDialog(app)
+                    true
+                }
                 R.id.action_generate_icon -> {
                     generateIconForApp(app)
                     true
@@ -190,6 +197,10 @@ class AndroidAppListFragment : Fragment() {
                 }
                 R.id.action_generate_logo -> {
                     generateLogoForApp(app)
+                    true
+                }
+                R.id.action_manual_search -> {
+                    manualSearch(app)
                     true
                 }
                 R.id.action_generate_all -> {
@@ -227,10 +238,339 @@ class AndroidAppListFragment : Fragment() {
         )
     }
 
+    // ==================== Manual Search & Edit Query ====================
+
+    /**
+     * Show dialog to edit the search query for an app
+     */
+    private fun showEditSearchQueryDialog(app: AndroidAppInfo) {
+        val gameInfo = appToGameInfo(app)
+
+        val editText = EditText(requireContext()).apply {
+            setText(gameInfo.searchName)
+            setTextColor(resources.getColor(R.color.theme_text_primary, null))
+            setHintTextColor(resources.getColor(R.color.theme_text_secondary, null))
+            hint = "Enter search query..."
+            setSingleLine(false)
+            maxLines = 3
+            setSelection(text.length)
+        }
+
+        val container = FrameLayout(requireContext()).apply {
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding / 2, padding, 0)
+            addView(editText)
+        }
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("Edit Search Query")
+            .setMessage("Enter the app title to search for artwork.\nOriginal: ${app.displayName}")
+            .setView(container)
+            .setPositiveButton("Search") { _, _ ->
+                val query = editText.text.toString().trim()
+                if (query.isNotEmpty()) {
+                    val modifiedGame = gameInfo.copy(name = query)
+
+                    Toast.makeText(
+                        requireContext(),
+                        "Searching for: $query",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    generateIconForApp(app, modifiedGame)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Manual search - let user search for a different game and generate all assets
+     */
+    private fun manualSearch(app: AndroidAppInfo) {
+        val gameInfo = appToGameInfo(app)
+
+        GameSearchDialog.show(
+            context = requireContext(),
+            gameInfo = gameInfo,
+            artworkScraper = artworkScraper
+        ) { selectedResult ->
+            viewLifecycleOwner.lifecycleScope.launch {
+                Toast.makeText(
+                    requireContext(),
+                    "Searching all artwork for: ${selectedResult.name}",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                val modifiedGame = gameInfo.copy(name = selectedResult.name)
+                generateAllAssetsForAppById(modifiedGame, selectedResult.id)
+            }
+        }
+    }
+
+    /**
+     * Generate all assets (icon, hero, logo) for an app using a known SteamGridDB game ID.
+     * Shows pickers for each asset type in sequence.
+     */
+    private fun generateAllAssetsForAppById(game: GameInfo, sgdbGameId: Int) {
+        showIconPickerForAppById(game, sgdbGameId) {
+            showHeroPickerForAppById(game, sgdbGameId) {
+                showLogoPickerForAppById(game, sgdbGameId) {
+                    Toast.makeText(
+                        requireContext(),
+                        "All assets complete for ${game.displayName}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    loadApps()
+                }
+            }
+        }
+    }
+
+    /**
+     * Show icon picker for an app using SteamGridDB game ID
+     */
+    private fun showIconPickerForAppById(game: GameInfo, sgdbGameId: Int, onComplete: () -> Unit) {
+        var dialogCompleted = false
+        var currentPickerDialog: ArtworkPickerDialog? = null
+        var currentSquareOnly = SettingsFragment.isSquareIconsOnly(requireContext())
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, "android", currentSquareOnly)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                if (currentSquareOnly) {
+                    withContext(Dispatchers.Main) {
+                        AlertDialog.Builder(requireContext())
+                            .setTitle("No Square Icons Found")
+                            .setMessage("No square icons found.\n\nWould you like to try all icons?")
+                            .setPositiveButton("Try All Icons") { _, _ ->
+                                showIconPickerForAppByIdWithFilter(game, sgdbGameId, false, onComplete)
+                            }
+                            .setNegativeButton("Skip") { _, _ ->
+                                onComplete()
+                            }
+                            .show()
+                    }
+                } else {
+                    Toast.makeText(requireContext(), "No icons found", Toast.LENGTH_SHORT).show()
+                    onComplete()
+                }
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                currentPickerDialog = ArtworkPickerDialog.showForIconWithFilter(
+                    context = requireContext(),
+                    searchResult = searchResult,
+                    initialSquareOnly = currentSquareOnly,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val success = withContext(Dispatchers.IO) {
+                                artworkScraper.saveIconFromOption(selectedOption, game, "android")
+                            }
+                            if (success) {
+                                Toast.makeText(requireContext(), "Icon saved", Toast.LENGTH_SHORT).show()
+                            }
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    },
+                    onFilterChanged = { newSquareOnly ->
+                        currentSquareOnly = newSquareOnly
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val newResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, "android", newSquareOnly)
+                            withContext(Dispatchers.Main) {
+                                currentPickerDialog?.updateSearchResult(newResult)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Helper to show icon picker with a specific filter setting (used for retry)
+     */
+    private fun showIconPickerForAppByIdWithFilter(game: GameInfo, sgdbGameId: Int, squareOnly: Boolean, onComplete: () -> Unit) {
+        var dialogCompleted = false
+        var currentPickerDialog: ArtworkPickerDialog? = null
+        var currentSquareOnly = squareOnly
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, "android", currentSquareOnly)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                Toast.makeText(requireContext(), "No icons found", Toast.LENGTH_SHORT).show()
+                onComplete()
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                currentPickerDialog = ArtworkPickerDialog.showForIconWithFilter(
+                    context = requireContext(),
+                    searchResult = searchResult,
+                    initialSquareOnly = currentSquareOnly,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val success = withContext(Dispatchers.IO) {
+                                artworkScraper.saveIconFromOption(selectedOption, game, "android")
+                            }
+                            if (success) {
+                                Toast.makeText(requireContext(), "Icon saved", Toast.LENGTH_SHORT).show()
+                            }
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    },
+                    onFilterChanged = { newSquareOnly ->
+                        currentSquareOnly = newSquareOnly
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val newResult = artworkScraper.searchIconOptionsByGameId(sgdbGameId, game, "android", newSquareOnly)
+                            withContext(Dispatchers.Main) {
+                                currentPickerDialog?.updateSearchResult(newResult)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Show hero picker for an app using SteamGridDB game ID
+     */
+    private fun showHeroPickerForAppById(game: GameInfo, sgdbGameId: Int, onComplete: () -> Unit) {
+        var dialogCompleted = false
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchHeroOptionsByGameId(sgdbGameId, game)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                Toast.makeText(requireContext(), "No heroes found", Toast.LENGTH_SHORT).show()
+                onComplete()
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                ArtworkPickerDialog.showWithSkip(
+                    context = requireContext(),
+                    artworkType = ArtworkPickerDialog.ArtworkType.HERO,
+                    searchResult = searchResult,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val success = artworkScraper.saveHeroFromOption(selectedOption, game)
+                            if (success) {
+                                Toast.makeText(requireContext(), "Hero saved", Toast.LENGTH_SHORT).show()
+                            }
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    /**
+     * Show logo picker for an app using SteamGridDB game ID
+     */
+    private fun showLogoPickerForAppById(game: GameInfo, sgdbGameId: Int, onComplete: () -> Unit) {
+        var dialogCompleted = false
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val searchResult = artworkScraper.searchLogoOptionsByGameId(sgdbGameId, game)
+
+            if (_binding == null) return@launch
+
+            if (searchResult.options.isEmpty()) {
+                Toast.makeText(requireContext(), "No logos found", Toast.LENGTH_SHORT).show()
+                onComplete()
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
+
+                ArtworkPickerDialog.showWithSkip(
+                    context = requireContext(),
+                    artworkType = ArtworkPickerDialog.ArtworkType.LOGO,
+                    searchResult = searchResult,
+                    onOptionSelected = { selectedOption ->
+                        dialogCompleted = true
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val success = artworkScraper.saveLogoFromOption(selectedOption, game)
+                            if (success) {
+                                Toast.makeText(requireContext(), "Logo saved", Toast.LENGTH_SHORT).show()
+                            }
+                            onComplete()
+                        }
+                    },
+                    onSkip = {
+                        dialogCompleted = true
+                        onComplete()
+                    },
+                    onCancel = {
+                        if (!dialogCompleted) {
+                            dialogCompleted = true
+                            onComplete()
+                        }
+                    }
+                )
+            }
+        }
+    }
+
     // ==================== Asset Generation ====================
 
-    private fun generateIconForApp(app: AndroidAppInfo) {
-        val gameInfo = appToGameInfo(app)
+    /**
+     * Generate icon for app, optionally using a modified GameInfo (from edit search query)
+     */
+    private fun generateIconForApp(app: AndroidAppInfo, overrideGameInfo: GameInfo? = null) {
+        val gameInfo = overrideGameInfo ?: appToGameInfo(app)
         val squareOnly = SettingsFragment.isSquareIconsOnly(requireContext())
 
         Toast.makeText(requireContext(), "Searching for icons...", Toast.LENGTH_SHORT).show()

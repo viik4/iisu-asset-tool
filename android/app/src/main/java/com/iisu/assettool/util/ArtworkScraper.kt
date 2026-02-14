@@ -697,15 +697,15 @@ class ArtworkScraper(private val context: Context) {
             // Check for custom border setting
             val customBorderPath = SettingsFragment.getCustomBorderPath(context)
 
-            // Apply iiSU border if platform is provided
+            // Apply iiSU border if platform is provided (use high-res 1024x1024)
             val finalBitmap = if (platform.isNotEmpty()) {
-                iconGenerator.generateIconWithBorder(bitmap, platform, ICON_SIZE, Pair(0.5f, 0.5f), customBorderPath) ?: run {
+                iconGenerator.generateIconWithBorder(bitmap, platform, HIGH_RES_ICON_SIZE, Pair(0.5f, 0.5f), customBorderPath) ?: run {
                     Log.w(TAG, "Border generation failed, using plain icon")
-                    resizeToSquare(bitmap, ICON_SIZE)
+                    resizeToSquare(bitmap, HIGH_RES_ICON_SIZE)
                 }
             } else {
                 // No platform specified, just resize
-                resizeToSquare(bitmap, ICON_SIZE)
+                resizeToSquare(bitmap, HIGH_RES_ICON_SIZE)
             }
 
             // Delete existing icon files (png and jpg) to avoid conflicts
@@ -1147,10 +1147,10 @@ class ArtworkScraper(private val context: Context) {
             // Check for custom border setting
             val customBorderPath = SettingsFragment.getCustomBorderPath(context)
 
-            // Apply iiSU border
-            val finalBitmap = iconGenerator.generateIconWithBorder(bitmap, platform, ICON_SIZE, Pair(0.5f, 0.5f), customBorderPath) ?: run {
+            // Apply iiSU border (use high-res 1024x1024)
+            val finalBitmap = iconGenerator.generateIconWithBorder(bitmap, platform, HIGH_RES_ICON_SIZE, Pair(0.5f, 0.5f), customBorderPath) ?: run {
                 Log.w(TAG, "Border generation failed, using plain fallback icon")
-                resizeToSquare(bitmap, ICON_SIZE)
+                resizeToSquare(bitmap, HIGH_RES_ICON_SIZE)
             }
 
             // Delete existing icon files

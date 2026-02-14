@@ -574,6 +574,8 @@ class OnboardingOverlay(QWidget):
 class MainWindowWithTabs(QMainWindow):
     """Main window with tabbed interface for Icon Generator and Border Generator."""
 
+    APP_VERSION = "2.0.1"
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("iiSU Asset Tool")
@@ -723,6 +725,10 @@ class MainWindowWithTabs(QMainWindow):
         # Check for onboarding (show after a short delay to let the UI settle)
         self._check_onboarding()
 
+        # Auto-check for updates on startup (frozen builds only, after UI settles)
+        if getattr(sys, 'frozen', False):
+            QTimer.singleShot(5000, self._startup_update_check)
+
     def _init_background_music(self):
         """Initialize background music playback."""
         try:
@@ -739,7 +745,7 @@ class MainWindowWithTabs(QMainWindow):
         try:
             cfg = get_config()
             last_seen = cfg.get("ui", {}).get("last_seen_version", "0.0.0")
-            current_version = "2.0.0"
+            current_version = self.APP_VERSION
 
             if self._version_compare(last_seen, current_version) < 0:
                 from PySide6.QtCore import QTimer
@@ -789,6 +795,66 @@ class MainWindowWithTabs(QMainWindow):
                 invalidate_config_cache()
         except Exception as e:
             print(f"Failed to save version: {e}")
+
+    # ------------------------------------------------------------------
+    # In-app updater
+    # ------------------------------------------------------------------
+    def _startup_update_check(self):
+        """Silent update check on startup (runs in background thread)."""
+        try:
+            cfg = get_config()
+            if not cfg.get("updater", {}).get("check_on_startup", True):
+                return
+            from updater import should_check_for_updates
+            if not should_check_for_updates(cfg):
+                return
+            import threading
+            threading.Thread(target=self._do_update_check, args=(True,), daemon=True).start()
+        except Exception as e:
+            print(f"Startup update check failed: {e}")
+
+    def _do_update_check(self, silent: bool):
+        """Background thread: check for updates, then show dialog on main thread."""
+        try:
+            from updater import check_for_updates, save_last_check_time
+            from app_paths import get_config_path
+            info = check_for_updates(self.APP_VERSION)
+            save_last_check_time(get_config_path())
+            if info and info.is_update_available:
+                QTimer.singleShot(0, lambda: self._show_update_dialog(info))
+            elif not silent:
+                QTimer.singleShot(0, lambda: self._show_up_to_date())
+        except Exception as e:
+            if not silent:
+                QTimer.singleShot(0, lambda: self._show_update_error())
+            print(f"Update check error: {e}")
+
+    def _show_update_dialog(self, info):
+        """Show the update available dialog."""
+        from update_dialog import UpdateDialog
+        dialog = UpdateDialog(info, parent=self)
+        dialog.exec()
+
+    def _show_up_to_date(self):
+        """Show 'up to date' dialog for manual checks."""
+        from update_dialog import UpToDateDialog
+        dialog = UpToDateDialog(self.APP_VERSION, parent=self)
+        dialog.exec()
+
+    def _show_update_error(self):
+        """Show error message when update check fails."""
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.warning(
+            self, "Update Check Failed",
+            "Could not check for updates.\nPlease check your internet connection."
+        )
+
+    def _manual_update_check(self, parent_dialog=None):
+        """Triggered from About dialog or Settings — manual update check."""
+        if parent_dialog:
+            parent_dialog.close()
+        import threading
+        threading.Thread(target=self._do_update_check, args=(False,), daemon=True).start()
 
     # ------------------------------------------------------------------
     # Lazy tab loading + fade transition
@@ -1068,10 +1134,17 @@ class MainWindowWithTabs(QMainWindow):
         Ensure compliance with artwork source terms of service.</p>
 
         <p style="color: #666; font-size: 10px; margin-top: 20px;">
-        Version 2.0.0 | Desktop + Android companion app available
+        Version {self.APP_VERSION} | Desktop + Android companion app available
         </p>
         """)
         layout.addWidget(text)
+
+        # Check for Updates button (only in frozen/packaged builds)
+        if getattr(sys, 'frozen', False):
+            btn_update = QPushButton("Check for Updates")
+            btn_update.setMinimumHeight(36)
+            btn_update.clicked.connect(lambda: self._manual_update_check(dialog))
+            layout.addWidget(btn_update)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Close)
         button_box.rejected.connect(dialog.reject)

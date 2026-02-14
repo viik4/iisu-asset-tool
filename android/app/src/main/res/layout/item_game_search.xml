@@ -5,11 +5,11 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="12dp"
-    android:layout_marginHorizontal="4dp"
+    android:layout_marginBottom="6dp"
+    android:layout_marginHorizontal="2dp"
     app:cardBackgroundColor="@color/theme_surface"
-    app:cardCornerRadius="12dp"
-    app:cardElevation="2dp"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="1dp"
     app:strokeWidth="1dp"
     app:strokeColor="@color/theme_border_color">
 
@@ -18,8 +18,9 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="16dp"
-        android:minHeight="72dp">
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
+        android:minHeight="48dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -27,17 +28,17 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <!-- Game Name - large and readable with good contrast -->
+            <!-- Game Name - readable with good contrast -->
             <TextView
                 android:id="@+id/textGameName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="17sp"
+                android:textSize="15sp"
                 android:textColor="@color/theme_text_primary"
                 android:textStyle="bold"
-                android:maxLines="3"
+                android:maxLines="2"
                 android:ellipsize="end"
-                android:lineSpacingMultiplier="1.15"
+                android:lineSpacingMultiplier="1.1"
                 tools:text="Spider-Man: The Video Game" />
 
             <!-- Game Types (steam, origin, etc.) - purple accent color -->
@@ -45,8 +46,8 @@
                 android:id="@+id/textGameTypes"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:textSize="13sp"
+                android:layout_marginTop="2dp"
+                android:textSize="12sp"
                 android:textColor="@color/iisu_purple"
                 android:maxLines="1"
                 android:ellipsize="end"
@@ -61,11 +62,11 @@
             android:id="@+id/textGameYear"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp"
+            android:layout_marginStart="8dp"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="2dp"
             android:background="@drawable/badge_background"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textColor="@color/accent_cyan"
             android:textStyle="bold"
             android:visibility="gone"

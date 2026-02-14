@@ -4,9 +4,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/cardOption"
-    android:layout_width="180dp"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginEnd="@dimen/spacing_sm"
+    android:layout_marginEnd="0dp"
     android:clickable="true"
     android:focusable="true"
     app:cardBackgroundColor="@color/theme_surface"
@@ -19,14 +19,14 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="8dp">
+        android:padding="6dp">
 
-        <!-- Thumbnail - Bigger for better visibility -->
+        <!-- Thumbnail -->
         <FrameLayout
             android:id="@+id/frameThumbnail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="120dp">
+            android:minHeight="80dp">
 
             <ImageView
                 android:id="@+id/imageThumbnail"

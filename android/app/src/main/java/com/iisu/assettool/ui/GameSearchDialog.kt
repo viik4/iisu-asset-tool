@@ -139,6 +139,9 @@ class GameSearchDialog(
                     binding.recyclerResults.visibility = View.VISIBLE
                     binding.textResultsLabel.visibility = View.VISIBLE
 
+                    // Collapse the search section to show more results
+                    binding.appBarLayout.setExpanded(false, true)
+
                     // Show different label for ID search vs name search
                     binding.textResultsLabel.text = if (isIdSearch && results.size == 1) {
                         "Found Game by ID:"

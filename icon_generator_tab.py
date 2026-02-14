@@ -953,9 +953,10 @@ class IconGeneratorTab(QWidget):
             self.workers_value = dialog.get_workers()
             self.limit_value = dialog.get_limit()
 
-            # Update source priority
+            # Update source priority and save to config
             source_order = dialog.get_source_order()
             self.source_priority.set_source_order(source_order)
+            self.save_source_order_to_config(source_order)
 
             # Save export settings to config
             export_settings = dialog.get_export_settings()

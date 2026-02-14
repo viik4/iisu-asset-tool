@@ -83,35 +83,35 @@ ROM_EXTENSIONS = {
 # iiSU expected folder naming conventions (platform folder names in iiSU structure)
 # Includes common naming variants: proper case, lowercase, no spaces, abbreviations
 IISU_PLATFORM_FOLDERS = {
-    "NES": ["NES", "Nintendo Entertainment System", "Famicom", "nes", "famicom", "fc"],
-    "SNES": ["SNES", "Super Nintendo", "Super Famicom", "snes", "supernintendo", "superfamicom", "sfc"],
-    "N64": ["N64", "Nintendo 64", "n64", "nintendo64"],
+    "NES": ["NES", "Nintendo Entertainment System", "Famicom", "nes", "famicom", "fc", "NESGames"],
+    "SNES": ["SNES", "Super Nintendo", "Super Famicom", "snes", "supernintendo", "superfamicom", "sfc", "SNESGames"],
+    "N64": ["N64", "Nintendo 64", "n64", "nintendo64", "N64Games"],
     "N64DD": ["N64DD", "Nintendo 64DD", "64DD", "n64dd"],
-    "GAMECUBE": ["GameCube", "GC", "NGC", "gamecube", "gc", "ngc"],
-    "WII": ["Wii", "wii"],
-    "WII_U": ["Wii U", "WiiU", "wiiu"],
-    "SWITCH": ["Switch", "Nintendo Switch", "NSW", "switch", "nsw"],
-    "GAME_BOY": ["Game Boy", "GB", "gameboy", "gb"],
-    "GAME_BOY_COLOR": ["Game Boy Color", "GBC", "gameboycolor", "gbc"],
-    "GAME_BOY_ADVANCE": ["Game Boy Advance", "GBA", "gameboyadvance", "gba"],
-    "NINTENDO_DS": ["Nintendo DS", "DS", "NDS", "nintendods", "ds", "nds"],
-    "NINTENDO_3DS": ["Nintendo 3DS", "3DS", "3ds", "n3ds"],
-    "PS1": ["PlayStation", "PS1", "PSX", "PS One", "playstation", "ps1", "psx", "psone"],
-    "PS2": ["PlayStation 2", "PS2", "playstation2", "ps2"],
-    "PS3": ["PlayStation 3", "PS3", "playstation3", "ps3"],
-    "PS4": ["PlayStation 4", "PS4", "playstation4", "ps4"],
+    "GAMECUBE": ["GameCube", "GC", "NGC", "gamecube", "gc", "ngc", "GAMECUBEGames"],
+    "WII": ["Wii", "wii", "WIIGames"],
+    "WII_U": ["Wii U", "WiiU", "wiiu", "WII_UGames"],
+    "SWITCH": ["Switch", "Nintendo Switch", "NSW", "switch", "nsw", "SWITCHGames"],
+    "GAME_BOY": ["Game Boy", "GB", "gameboy", "gb", "GBGames"],
+    "GAME_BOY_COLOR": ["Game Boy Color", "GBC", "gameboycolor", "gbc", "GBCGames"],
+    "GAME_BOY_ADVANCE": ["Game Boy Advance", "GBA", "gameboyadvance", "gba", "GBAGames"],
+    "NINTENDO_DS": ["Nintendo DS", "DS", "NDS", "nintendods", "ds", "nds", "DSGames"],
+    "NINTENDO_3DS": ["Nintendo 3DS", "3DS", "3ds", "n3ds", "3DSGames"],
+    "PS1": ["PlayStation", "PS1", "PSX", "PS One", "playstation", "ps1", "psx", "psone", "PS1Games"],
+    "PS2": ["PlayStation 2", "PS2", "playstation2", "ps2", "PS2Games"],
+    "PS3": ["PlayStation 3", "PS3", "playstation3", "ps3", "PS3Games"],
+    "PS4": ["PlayStation 4", "PS4", "playstation4", "ps4", "PS4Games"],
     "PS5": ["PlayStation 5", "PS5", "playstation5", "ps5"],
-    "PSP": ["PSP", "PlayStation Portable", "psp", "playstationportable"],
-    "PS_VITA": ["PS Vita", "PlayStation Vita", "Vita", "psvita", "playstationvita", "vita"],
-    "XBOX": ["Xbox", "Original Xbox", "xbox", "originalxbox"],
-    "XBOX_360": ["Xbox 360", "X360", "xbox360", "x360"],
-    "MASTER_SYSTEM": ["Master System", "Sega Master System", "SMS", "mastersystem", "segamastersystem", "sms"],
-    "GENESIS": ["Genesis", "Mega Drive", "Sega Genesis", "genesis", "megadrive", "segagenesis", "md"],
-    "SEGA_CD": ["Sega CD", "Mega CD", "segacd", "megacd"],
-    "SEGA_32X": ["32X", "Sega 32X", "32x", "sega32x"],
-    "SATURN": ["Saturn", "Sega Saturn", "saturn", "segasaturn"],
-    "DREAMCAST": ["Dreamcast", "Sega Dreamcast", "DC", "dreamcast", "segadreamcast", "dc"],
-    "GAME_GEAR": ["Game Gear", "GG", "gamegear", "gg"],
+    "PSP": ["PSP", "PlayStation Portable", "psp", "playstationportable", "PSPGames"],
+    "PS_VITA": ["PS Vita", "PlayStation Vita", "Vita", "psvita", "playstationvita", "vita", "PS_VITAGames"],
+    "XBOX": ["Xbox", "Original Xbox", "xbox", "originalxbox", "XBOXGames"],
+    "XBOX_360": ["Xbox 360", "X360", "xbox360", "x360", "XBOX_360Games"],
+    "MASTER_SYSTEM": ["Master System", "Sega Master System", "SMS", "mastersystem", "segamastersystem", "sms", "MASTER_SYSTEMGames"],
+    "GENESIS": ["Genesis", "Mega Drive", "Sega Genesis", "genesis", "megadrive", "segagenesis", "md", "GENESISGames"],
+    "SEGA_CD": ["Sega CD", "Mega CD", "segacd", "megacd", "SEGA_CDGames"],
+    "SEGA_32X": ["32X", "Sega 32X", "32x", "sega32x", "SEGA32XGames"],
+    "SATURN": ["Saturn", "Sega Saturn", "saturn", "segasaturn", "SATURNGames"],
+    "DREAMCAST": ["Dreamcast", "Sega Dreamcast", "DC", "dreamcast", "segadreamcast", "dc", "DREAMCASTGames"],
+    "GAME_GEAR": ["Game Gear", "GG", "gamegear", "gg", "GAMEGEARGames"],
     "NEO_GEO": ["Neo Geo", "NeoGeo", "neogeo", "ng"],
     "NEO_GEO_CD": ["Neo Geo CD", "NeoGeoCD", "neogeocd", "ngcd"],
     "NEO_GEO_POCKET": ["Neo Geo Pocket", "NGP", "neogeopocket", "ngp"],
@@ -128,8 +128,11 @@ IISU_PLATFORM_FOLDERS = {
     "WONDERSWAN": ["WonderSwan", "wonderswan", "ws"],
     "WONDERSWAN_COLOR": ["WonderSwan Color", "wonderswancolor", "wsc"],
     "VIRTUAL_BOY": ["Virtual Boy", "virtualboy", "vb"],
-    "MAME": ["MAME", "Arcade", "mame", "arcade"],
+    "ARCADE": ["ARCADE", "ArcadeGames"],
+    "MAME": ["MAME", "mame"],
+    "PC": ["PC", "PCGames", "Windows"],
     "FBA": ["FBA", "Final Burn Alpha", "fba", "finalburnalpha", "fbneo"],
+    "STEAM": ["Steam", "steam", "STEAM", "SteamGames"],
     "SCUMMVM": ["ScummVM", "scummvm"],
     "DOS": ["DOS", "DOSBox", "dos", "dosbox"],
     "ANDROID": ["Android", "android"],
@@ -682,14 +685,36 @@ def detect_platform_from_folder(folder_name: str) -> Optional[str]:
     """
     folder_lower = folder_name.lower().strip()
 
-    # Direct match
+    # Direct match (exact)
     if folder_lower in FOLDER_TO_PLATFORM:
         return FOLDER_TO_PLATFORM[folder_lower]
 
-    # Try partial matching
+    # Strip common suffixes like "Games", "Roms", "ROMs" and try again
+    for suffix in ["games", "roms", "rom"]:
+        if folder_lower.endswith(suffix):
+            stripped = folder_lower[:-len(suffix)].rstrip("_- ")
+            if stripped and stripped in FOLDER_TO_PLATFORM:
+                return FOLDER_TO_PLATFORM[stripped]
+
+    # Try partial matching with longest-match-first to avoid false positives
+    # e.g., "snes" should match before "nes", "gba" before "gb"
+    candidates = []
     for folder_variant, platform_key in FOLDER_TO_PLATFORM.items():
-        if folder_variant in folder_lower or folder_lower in folder_variant:
+        # Only match if the variant is a complete word boundary match within the folder name
+        # This prevents "nes" from matching "genesis" or "gb" from matching "gba"
+        if folder_lower == folder_variant:
             return platform_key
+        # Check if the folder name starts with the variant (e.g., "switchgames" starts with "switch")
+        if folder_lower.startswith(folder_variant):
+            candidates.append((len(folder_variant), platform_key))
+        # Check if the variant starts with the folder name (e.g., "switch" starts with input "swi")
+        elif folder_variant.startswith(folder_lower):
+            candidates.append((len(folder_lower), platform_key))
+
+    if candidates:
+        # Return the longest match (most specific)
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
 
     return None
 

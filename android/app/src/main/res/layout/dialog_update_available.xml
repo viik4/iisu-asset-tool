@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Update available dialog with version info, changelog, and download progress -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/theme_surface"
+    android:padding="20dp"
+    android:maxHeight="400dp">
+
+    <!-- Version header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/textNewVersion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/accent_cyan"
+            android:fontFamily="@font/continuum" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="  is available"
+            android:textSize="14sp"
+            android:textColor="@color/theme_text_secondary" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/textCurrentVersion"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/theme_text_secondary"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Changelog section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="What's New:"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="@color/theme_text_primary"
+        android:fontFamily="@font/continuum"
+        android:layout_marginBottom="4dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="12dp"
+        android:maxHeight="200dp">
+
+        <TextView
+            android:id="@+id/textChangelog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="@color/theme_text_secondary"
+            android:fontFamily="@font/calsans"
+            android:lineSpacingExtra="4dp" />
+
+    </ScrollView>
+
+    <!-- Download size -->
+    <TextView
+        android:id="@+id/textDownloadSize"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/theme_text_secondary"
+        android:layout_marginBottom="8dp"
+        android:visibility="gone" />
+
+    <!-- Download progress (hidden initially) -->
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/progressDownload"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:visibility="gone"
+        app:indicatorColor="@color/accent_cyan"
+        app:trackColor="@color/theme_border"
+        app:trackCornerRadius="4dp" />
+
+    <TextView
+        android:id="@+id/textProgressLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:textColor="@color/theme_text_secondary"
+        android:gravity="center"
+        android:visibility="gone" />
+
+</LinearLayout>

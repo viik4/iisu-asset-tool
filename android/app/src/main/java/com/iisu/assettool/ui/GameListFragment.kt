@@ -1244,7 +1244,7 @@ class GameListFragment : Fragment() {
                 val iconGenerator = com.iisu.assettool.util.IconGenerator(requireContext())
                 val finalBitmap = iconGenerator.generateIconWithBorder(
                     bitmap, platformName,
-                    com.iisu.assettool.util.ArtworkScraper.ICON_SIZE,
+                    com.iisu.assettool.util.ArtworkScraper.HIGH_RES_ICON_SIZE,
                     Pair(0.5f, 0.5f),
                     customBorderPath
                 )

@@ -31,7 +31,7 @@ class OnboardingActivity : AppCompatActivity() {
     companion object {
         private const val PREFS_NAME = "iisu_asset_tool_prefs"
         private const val PREF_LAST_SEEN_VERSION = "last_seen_version"
-        private const val CURRENT_VERSION = "2.0.0"
+        private const val CURRENT_VERSION = "2.0.1"
 
         fun shouldShowOnboarding(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

@@ -158,12 +158,13 @@
     </LinearLayout>
 
     <!-- Main Content Area -->
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/scrollContent"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="@dimen/spacing_lg"
         android:fillViewport="true"
+        android:overScrollMode="always"
         app:layout_constraintTop_toBottomOf="@id/layoutSteps"
         app:layout_constraintBottom_toTopOf="@id/buttonAction"
         app:layout_constraintStart_toStartOf="parent"
@@ -280,7 +281,7 @@
 
         </LinearLayout>
 
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
     <!-- Action Button (changes based on step) -->
     <com.google.android.material.button.MaterialButton

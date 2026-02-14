@@ -3743,13 +3743,22 @@ def run_job(
     _emit_log(callbacks, f"[CONFIG] Provider order: {provider_order}")
     _emit_log(callbacks, f"[CONFIG] Provider settings: {provider_settings}")
 
-    # Validate required API keys for enabled providers
+    # Skip providers with missing API keys instead of blocking the entire job
+    providers_to_remove = []
     if "steamgriddb" in provider_order and not api_key:
-        return False, f"Missing SteamGridDB API key env var: {api_env}"
+        _emit_log(callbacks, f"[WARN] SteamGridDB API key not set - skipping SteamGridDB")
+        providers_to_remove.append("steamgriddb")
     if "igdb" in provider_order and (not igdb_client_id or not igdb_client_secret):
-        return False, f"Missing IGDB credentials: {igdb_client_id_env}, {igdb_client_secret_env}"
+        _emit_log(callbacks, f"[WARN] IGDB credentials not set - skipping IGDB")
+        providers_to_remove.append("igdb")
     if "thegamesdb" in provider_order and not tgdb_api_key:
-        return False, f"Missing TheGamesDB API key env var: {tgdb_api_key_env}"
+        _emit_log(callbacks, f"[WARN] TheGamesDB API key not set - skipping TheGamesDB")
+        providers_to_remove.append("thegamesdb")
+    for p in providers_to_remove:
+        provider_order.remove(p)
+        provider_settings.pop(p, None)
+    if not provider_order:
+        return False, "No artwork providers available - configure at least one API key in Settings"
 
     # Log API key status
     _emit_log(callbacks, f"[CONFIG] SteamGridDB API key: {'SET' if api_key else 'NOT SET'}")

@@ -2,6 +2,11 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item
+        android:id="@+id/action_edit_search_query"
+        android:title="Edit Search Query"
+        android:icon="@drawable/ic_edit" />
+
+    <item
         android:id="@+id/action_generate_icon"
         android:title="Generate Icon"
         android:icon="@drawable/ic_icons" />
@@ -15,6 +20,11 @@
         android:id="@+id/action_generate_logo"
         android:title="Generate Logo"
         android:icon="@drawable/ic_logo" />
+
+    <item
+        android:id="@+id/action_manual_search"
+        android:title="Manual Search"
+        android:icon="@drawable/ic_search" />
 
     <item
         android:id="@+id/action_generate_all"

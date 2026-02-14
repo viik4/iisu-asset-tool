@@ -233,15 +233,74 @@ class ArtworkPickerDialog(
         binding.scrollOptions.visibility = View.VISIBLE
         binding.textNoOptions.visibility = View.GONE
 
-        for (option in searchResult.options) {
-            val optionView = createOptionView(option)
-            binding.layoutOptions.addView(optionView)
+        val isLandscape = context.resources.configuration.orientation ==
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+        if (isLandscape) {
+            // Landscape: horizontal layout inside HorizontalScrollView (handled by XML)
+            for (option in searchResult.options) {
+                val optionView = createOptionView(option, 1)
+                // In landscape, use fixed width for horizontal scroll
+                val lp = LinearLayout.LayoutParams(160.dpToPx(), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    marginEnd = 8.dpToPx()
+                }
+                optionView.layoutParams = lp
+                binding.layoutOptions.addView(optionView)
+            }
+        } else {
+            // Portrait: grid layout with adaptive columns
+            val displayMetrics = context.resources.displayMetrics
+            val screenWidthDp = displayMetrics.widthPixels / displayMetrics.density
+            // Subtract dialog padding (16dp * 2) to get usable width
+            val usableWidthDp = screenWidthDp - 32f
+            val cardWidthDp = when (artworkType) {
+                ArtworkType.ICON -> 140f   // Compact icon cards
+                ArtworkType.HERO -> 220f   // Wide hero cards
+                ArtworkType.LOGO -> 160f   // Medium logo cards
+            }
+            val columns = maxOf(2, (usableWidthDp / cardWidthDp).toInt())
+
+            // Arrange options in grid rows
+            var currentRow: LinearLayout? = null
+            for ((index, option) in searchResult.options.withIndex()) {
+                if (index % columns == 0) {
+                    currentRow = LinearLayout(context).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                    binding.layoutOptions.addView(currentRow)
+                }
+
+                val optionView = createOptionView(option, columns)
+                currentRow?.addView(optionView)
+            }
+
+            // Fill last row with invisible spacers if needed
+            val remaining = searchResult.options.size % columns
+            if (remaining > 0 && currentRow != null) {
+                for (i in 0 until (columns - remaining)) {
+                    val spacer = View(context)
+                    spacer.layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+                    currentRow.addView(spacer)
+                }
+            }
         }
     }
 
-    private fun createOptionView(option: ArtworkOption): View {
+    private fun createOptionView(option: ArtworkOption, columns: Int = 1): View {
         val inflater = LayoutInflater.from(context)
-        val view = inflater.inflate(R.layout.item_artwork_option, binding.layoutOptions, false)
+        val view = inflater.inflate(R.layout.item_artwork_option, null, false)
+
+        // Use weight-based layout to fill available width evenly
+        val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = 4.dpToPx()
+            marginStart = 4.dpToPx()
+            bottomMargin = 8.dpToPx()
+        }
+        view.layoutParams = lp
 
         val card = view.findViewById<MaterialCardView>(R.id.cardOption)
         val frameThumbnail = view.findViewById<FrameLayout>(R.id.frameThumbnail)
@@ -251,15 +310,18 @@ class ArtworkPickerDialog(
         val textSource = view.findViewById<TextView>(R.id.textSource)
         val textDimensions = view.findViewById<TextView>(R.id.textDimensions)
 
-        // Adjust thumbnail size based on artwork type for better preview
-        // Heroes are wide banners (~3:1), logos vary, icons are square
-        val (thumbnailWidth, thumbnailHeight) = when (artworkType) {
-            ArtworkType.ICON -> Pair(100.dpToPx(), 100.dpToPx())
-            ArtworkType.HERO -> Pair(200.dpToPx(), 65.dpToPx())  // ~3:1 aspect ratio for heroes
-            ArtworkType.LOGO -> Pair(150.dpToPx(), 80.dpToPx())  // Logos are typically wider than tall
+        // Note: card IS the root view (MaterialCardView), so the weight-based
+        // layoutParams set above on `view` already apply to `card` — don't override them.
+
+        // Adjust thumbnail height based on artwork type for better preview
+        // Width fills card; height is fixed for consistent grid rows
+        val thumbnailHeight = when (artworkType) {
+            ArtworkType.ICON -> 90.dpToPx()
+            ArtworkType.HERO -> 60.dpToPx()  // ~3:1 aspect ratio for heroes
+            ArtworkType.LOGO -> 70.dpToPx()  // Logos are typically wider than tall
         }
         val frameParams = frameThumbnail.layoutParams
-        frameParams.width = thumbnailWidth
+        frameParams.width = ViewGroup.LayoutParams.MATCH_PARENT
         frameParams.height = thumbnailHeight
         frameThumbnail.layoutParams = frameParams
 

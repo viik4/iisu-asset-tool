@@ -157,7 +157,7 @@
         android:visibility="gone" />
 
     <!-- Options Grid (vertical scroll) -->
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:id="@+id/scrollOptions"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -172,13 +172,13 @@
             android:orientation="vertical"
             android:paddingVertical="@dimen/spacing_sm" />
 
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
     <!-- Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/spacing_lg"
+        android:layout_marginTop="@dimen/spacing_sm"
         android:gravity="end"
         android:orientation="horizontal">
 

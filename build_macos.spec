@@ -16,6 +16,7 @@ for src, dst in [
     ('iisu_theme.qss', '.'),
     ('iisu_theme_light.qss', '.'),
     ('logo.png', '.'),
+    ('audio.mp3', '.'),
     ('config.yaml', '.'),
     ('fonts', 'fonts'),
     ('platform_icons', 'platform_icons'),
@@ -110,8 +111,8 @@ app = BUNDLE(
         'NSPrincipalClass': 'NSApplication',
         'NSAppleScriptEnabled': False,
         'CFBundleDocumentTypes': [],
-        'CFBundleShortVersionString': '1.3.0',
-        'CFBundleVersion': '1.3.0',
+        'CFBundleShortVersionString': '2.0.1',
+        'CFBundleVersion': '2.0.1',
         # Icon will be set by the workflow post-build
         'CFBundleIconFile': 'app_icon',
     },

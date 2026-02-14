@@ -827,6 +827,34 @@ class OptionsDialog(QDialog):
         processing_group.setLayout(processing_layout)
         scroll_layout.addWidget(processing_group)
 
+        # Updates Group (only in frozen/packaged builds)
+        import sys
+        if getattr(sys, 'frozen', False):
+            from app_paths import get_config
+            updates_group = QGroupBox("Updates")
+            updates_layout = QVBoxLayout()
+            updates_layout.setSpacing(8)
+            updates_layout.setContentsMargins(10, 14, 10, 10)
+
+            updates_desc = QLabel("Check for new versions of iiSU Asset Tool")
+            updates_desc.setObjectName("label_muted")
+            updates_layout.addWidget(updates_desc)
+
+            cfg = get_config()
+            updater_cfg = cfg.get("updater", {})
+
+            self.check_updates_startup = QCheckBox("Check for updates on startup")
+            self.check_updates_startup.setChecked(updater_cfg.get("check_on_startup", True))
+            updates_layout.addWidget(self.check_updates_startup)
+
+            btn_check_updates = QPushButton("Check for Updates Now")
+            btn_check_updates.setMinimumHeight(36)
+            btn_check_updates.clicked.connect(self._manual_check_for_updates)
+            updates_layout.addWidget(btn_check_updates)
+
+            updates_group.setLayout(updates_layout)
+            scroll_layout.addWidget(updates_group)
+
         # Config File Group
         config_group = QGroupBox("Config File")
         config_layout = QFormLayout()
@@ -926,6 +954,12 @@ class OptionsDialog(QDialog):
         if reply == QMessageBox.Yes:
             self.hidden_titles.clear()
             self._populate_hidden_titles_list()
+
+    def _manual_check_for_updates(self):
+        """Manually check for updates from the Settings dialog."""
+        from update_dialog import show_update_check
+        from ui_app_with_tabs import MainWindowWithTabs
+        show_update_check(MainWindowWithTabs.APP_VERSION, parent=self, silent=False)
 
     def _on_music_enabled_changed(self, checked: bool):
         """Handle music enabled toggle."""
@@ -1123,7 +1157,7 @@ class OptionsDialog(QDialog):
                 self._load_platforms_for_border_selector()
 
     def _apply_and_accept(self):
-        """Save API keys, music settings, and accept dialog."""
+        """Save API keys, music settings, updater settings, and accept dialog."""
         key_manager = get_manager()
         key_manager.set_key("steamgriddb", self.sgdb_key.text().strip())
         key_manager.set_key("igdb_client_id", self.igdb_client_id.text().strip())
@@ -1132,6 +1166,25 @@ class OptionsDialog(QDialog):
         # Save music volume setting
         music_manager = get_music_manager()
         music_manager.save_volume()
+
+        # Save updater preference (frozen builds only)
+        import sys
+        if getattr(sys, 'frozen', False) and hasattr(self, 'check_updates_startup'):
+            try:
+                import yaml
+                from app_paths import get_config_path, invalidate_config_cache
+                cfg_path = Path(get_config_path())
+                if cfg_path.exists():
+                    with open(cfg_path, "r", encoding="utf-8") as f:
+                        cfg = yaml.safe_load(f) or {}
+                    if "updater" not in cfg:
+                        cfg["updater"] = {}
+                    cfg["updater"]["check_on_startup"] = self.check_updates_startup.isChecked()
+                    with open(cfg_path, "w", encoding="utf-8") as f:
+                        yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+                    invalidate_config_cache()
+            except Exception as e:
+                print(f"Failed to save updater settings: {e}")
 
         self.accept()
 
