@@ -101,6 +101,10 @@ The iiSU Workshop runs on a FastAPI + SQLite backend at [assets.iisu.community](
 - 60+ platforms supported
 - System assets (collection icons, platform covers, borders)
 
+## Supporting
+
+Servers aren't free, you know! If you're feeling generous, I have a ko-fi set up [here](https://ko-fi.com/viik4_)
+
 ## Credits
 
 - Logo by **Caddypillar**
